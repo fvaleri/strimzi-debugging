@@ -1,0 +1,12 @@
+apiVersion: registry.apicur.io/v1
+kind: ApicurioRegistry
+metadata:
+  name: my-registry
+spec:
+  configuration:
+    persistence: sql
+    sql:
+      dataSource:
+        url: "jdbc:postgresql://my-pgsql-svc:5432/testdb"
+        userName: "admin"
+        password: "admin"

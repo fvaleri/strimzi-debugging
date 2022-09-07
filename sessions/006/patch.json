@@ -1,0 +1,30 @@
+{
+  "spec": {
+    "containers": [
+      {
+        "name": "strimzi-debug",
+        "image": "registry.access.redhat.com/ubi8/ubi:8.4",
+        "imagePullPolicy": "IfNotPresent",
+        "command": [
+          "/bin/bash",
+          "-c",
+          "trap : TERM INT; sleep infinity & wait"
+        ],
+        "volumeMounts": [
+          {
+            "name": "data",
+            "mountPath": "/data"
+          }
+        ]
+      }
+    ],
+    "volumes": [
+      {
+        "name": "data",
+        "persistentVolumeClaim": {
+          "claimName": "#VALUE0#"
+        }
+      }
+    ]
+  }
+}

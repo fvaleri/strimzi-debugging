@@ -1,0 +1,78 @@
+apiVersion: kafka.strimzi.io/v1beta2
+kind: KafkaMirrorMaker2
+metadata:
+  name: my-mm2
+spec:
+  replicas: 0
+  version: 3.1.0
+  connectCluster: my-cluster-tgt
+  clusters:
+    - alias: my-cluster
+      bootstrapServers: my-cluster-kafka-bootstrap.test.svc:9093
+      tls:
+        trustedCertificates:
+          - certificate: ca.crt
+            secretName: my-cluster-cluster-ca-cert
+    - alias: my-cluster-tgt
+      bootstrapServers: my-cluster-tgt-kafka-bootstrap.target.svc:9093
+      tls:
+        trustedCertificates:
+          - certificate: ca.crt
+            secretName: my-cluster-tgt-cluster-ca-cert
+      config:
+        # -1 means use default broker RF
+        config.storage.replication.factor: -1
+        offset.storage.replication.factor: -1
+        status.storage.replication.factor: -1
+        ssl.cipher.suites: TLS_ECDHE_RSA_WITH_AES_256_GCM_SHA384
+        ssl.enabled.protocols: TLSv1.2
+        ssl.protocol: TLSv1.2
+  mirrors:
+    - sourceCluster: my-cluster
+      targetCluster: my-cluster-tgt
+      topicsPattern: ".*"
+      groupsPattern: ".*"
+      sourceConnector:
+        tasksMax: 2
+        config:
+          replication.factor: 3
+          offset-syncs.topic.replication.factor: 3
+          refresh.topics.interval.seconds: 30
+          # disable replication of ACL rules
+          sync.topic.acls.enabled: false
+          # disable source cluster name prefix on target topic
+          replication.policy.separator: ""
+          replication.policy.class: "org.apache.kafka.connect.mirror.IdentityReplicationPolicy"
+          # high volumes: tune the producer for throughput (default x20)
+          #producer.override.batch.size: 327680
+      checkpointConnector:
+        tasksMax: 2
+        config:
+          checkpoints.topic.replication.factor: 3
+          # enable consumer offsets sync
+          sync.group.offsets.enabled: true
+          sync.group.offsets.interval.seconds: 30
+          emit.checkpoints.interval.seconds: 30
+          refresh.groups.interval.seconds: 30
+          # disable source cluster name prefix on target topic
+          replication.policy.separator: ""
+          replication.policy.class: "org.apache.kafka.connect.mirror.IdentityReplicationPolicy"
+  # enable unprotected JMX on port 9999
+  jmxOptions: { }
+  logging:
+    type: inline
+    loggers:
+      connect.root.logger.level: "INFO"
+  resources:
+    limits:
+      cpu: 2000m
+      memory: 2Gi
+    requests:
+      cpu: 1000m
+      memory: 1Gi
+  readinessProbe:
+    initialDelaySeconds: 120
+    timeoutSeconds: 60
+  livenessProbe:
+    initialDelaySeconds: 120
+    timeoutSeconds: 60

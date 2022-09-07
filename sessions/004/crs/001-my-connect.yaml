@@ -1,0 +1,58 @@
+apiVersion: kafka.strimzi.io/v1beta2
+kind: KafkaConnect
+metadata:
+  name: my-connect
+  annotations:
+    strimzi.io/use-connector-resources: "true"
+spec:
+  replicas: 1
+  version: 3.1.0
+  bootstrapServers: my-cluster-kafka-bootstrap:9092
+  config:
+    group.id: my-connect
+    offset.storage.topic: connect-cluster-offsets
+    config.storage.topic: connect-cluster-configs
+    status.storage.topic: connect-cluster-status
+    key.converter: org.apache.kafka.connect.storage.StringConverter
+    value.converter: org.apache.kafka.connect.storage.StringConverter
+    # -1 means use default broker RF
+    config.storage.replication.factor: -1
+    offset.storage.replication.factor: -1
+    status.storage.replication.factor: -1
+    # enable external configuration from file
+    config.providers: file
+    config.providers.file.class: org.apache.kafka.common.config.provider.FileConfigProvider
+  # enable unprotected JMX on port 9999
+  jmxOptions: { }
+  logging:
+    type: inline
+    loggers:
+      connect.root.logger.level: "INFO"
+  resources:
+    limits:
+      cpu: 2000m
+      memory: 2Gi
+    requests:
+      cpu: 1000m
+      memory: 1Gi
+  readinessProbe:
+    initialDelaySeconds: 60
+    timeoutSeconds: 10
+  livenessProbe:
+    initialDelaySeconds: 60
+    timeoutSeconds: 10
+  build:
+    output:
+      type: docker
+      image: #VALUE0#
+      pushSecret: registry-authn
+    plugins:
+      - name: debezium-mysql
+        artifacts:
+          - type: zip
+            url: https://maven.repository.redhat.com/ga/io/debezium/debezium-connector-mysql/1.9.5.Final-redhat-00001/debezium-connector-mysql-1.9.5.Final-redhat-00001-plugin.zip
+  externalConfiguration:
+    volumes:
+      - name: connectors
+        secret:
+          secretName: connectors

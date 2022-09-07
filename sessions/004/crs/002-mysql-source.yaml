@@ -1,0 +1,28 @@
+apiVersion: kafka.strimzi.io/v1beta2
+kind: KafkaConnector
+metadata:
+  name: mysql-source
+  labels:
+    # must match the connect name
+    strimzi.io/cluster: my-connect
+spec:
+  tasksMax: 1
+  class: io.debezium.connector.mysql.MySqlConnector
+  config:
+    # the server.id must be unique for each server or replication client
+    database.server.id: "222222"
+    # never change server.name after connector startup
+    database.server.name: "my-mysql"
+    database.dbname: "testdb"
+    database.hostname: "my-mysql-svc"
+    database.port: 3306
+    database.user: "${file:/opt/kafka/external-configuration/connectors/config.properties:mysql.username}"
+    database.password: "${file:/opt/kafka/external-configuration/connectors/config.properties:mysql.password}"
+    database.include.list: "testdb"
+    table.include.list: "testdb.customers"
+    database.allowPublicKeyRetrieval: true
+    database.history.kafka.bootstrap.servers: "my-cluster-kafka-bootstrap:9092"
+    database.history.kafka.topic: "testdb.history"
+    # commit progress even when there are no changes
+    heartbeat.interval.ms: 10000
+    snapshot.mode: "when_needed"

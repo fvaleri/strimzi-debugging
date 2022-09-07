@@ -1,0 +1,94 @@
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: my-pgsql-init
+data:
+  initdb.sql: |
+    \connect testdb;
+    GRANT ALL PRIVILEGES ON DATABASE testdb to admin;
+    GRANT ALL PRIVILEGES ON ALL TABLES IN SCHEMA cdc TO admin;
+    GRANT ALL PRIVILEGES ON ALL SEQUENCES IN SCHEMA cdc TO admin;
+---
+apiVersion: v1
+kind: PersistentVolumeClaim
+metadata:
+  name: my-pgsql-data
+spec:
+  accessModes:
+    - ReadWriteOnce
+  resources:
+    requests:
+      storage: 10Gi
+---
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: my-pgsql-env
+data:
+  POSTGRESQL_DATABASE: testdb
+  POSTGRESQL_USER: admin
+  POSTGRESQL_PASSWORD: admin
+---
+apiVersion: apps/v1
+kind: StatefulSet
+metadata:
+  name: my-pgsql-ss
+spec:
+  replicas: 1
+  serviceName: postgres
+  selector:
+    matchLabels:
+      app: pgsql
+  template:
+    metadata:
+      labels:
+        app: pgsql
+    spec:
+      containers:
+        - name: postgres
+          image: registry.redhat.io/rhel8/postgresql-12
+          resources:
+            limits:
+              memory: 1Gi
+          envFrom:
+            - configMapRef:
+                name: my-pgsql-env
+          ports:
+            - containerPort: 5432
+              protocol: TCP
+          volumeMounts:
+            - name: my-pgsql-data
+              mountPath: /var/lib/postgresql
+            - name: my-pgsql-init
+              mountPath: /tmp/sql
+          readinessProbe:
+            exec:
+              command: [ "psql", "template1", "-c", "SELECT 1" ]
+            initialDelaySeconds: 60
+            timeoutSeconds: 10
+          livenessProbe:
+            exec:
+              command: [ "psql", "template1", "-c", "SELECT 1" ]
+            initialDelaySeconds: 60
+            timeoutSeconds: 10
+      volumes:
+        - name: my-pgsql-data
+          persistentVolumeClaim:
+            claimName: my-pgsql-data
+        - name: my-pgsql-init
+          configMap:
+            name: my-pgsql-init
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: my-pgsql-svc
+spec:
+  ports:
+    - name: pgsql
+      port: 5432
+      protocol: TCP
+      targetPort: 5432
+  selector:
+    app: pgsql
+---
