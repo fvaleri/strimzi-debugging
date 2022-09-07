@@ -1,0 +1,7 @@
+apiVersion: registry.apicur.io/v1
+kind: ApicurioRegistry
+metadata:
+  name: my-registry
+spec:
+  configuration:
+    persistence: mem

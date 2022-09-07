@@ -1,0 +1,22 @@
+apiVersion: kafka.strimzi.io/v1beta2
+kind: KafkaNodePool
+metadata:
+  name: kafka-tgt
+  labels:
+    # must match the cluster name
+    strimzi.io/cluster: my-cluster-tgt
+spec:
+  replicas: 3
+  roles:
+    - broker
+  resources:
+    limits:
+      cpu: 500m
+      memory: 2Gi
+    requests:
+      cpu: 500m
+      memory: 2Gi
+  storage:
+    size: 10Gi
+    type: persistent-claim
+    deleteClaim: false

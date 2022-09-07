@@ -1,0 +1,18 @@
+spec:
+  nodeSelector:
+    kubernetes.io/hostname: HOSTNAME
+  containers:
+    - name: busybox
+      image: busybox
+      imagePullPolicy: IfNotPresent
+      command:
+        - /bin/sh
+        - -c
+        - rm -rfv /zookeeper/data/version-2/*
+      volumeMounts:
+        - name: data
+          mountPath: /zookeeper
+  volumes:
+    - name: data
+      persistentVolumeClaim:
+        claimName: CLAIM

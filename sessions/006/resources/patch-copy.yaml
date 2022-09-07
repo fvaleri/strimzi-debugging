@@ -1,0 +1,21 @@
+spec:
+  containers:
+    - name: busybox
+      image: busybox
+      imagePullPolicy: IfNotPresent
+      command:
+        - /bin/sh
+        - -c
+        - cp -auvR /old/* /new
+      volumeMounts:
+        - name: old
+          mountPath: /old
+        - name: new
+          mountPath: /new
+  volumes:
+    - name: old
+      persistentVolumeClaim:
+        claimName: OLD_CLAIM
+    - name: new
+      persistentVolumeClaim:
+        claimName: NEW_CLAIM

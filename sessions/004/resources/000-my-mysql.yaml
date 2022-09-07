@@ -1,0 +1,127 @@
+apiVersion: v1
+kind: PersistentVolumeClaim
+metadata:
+  name: my-mysql-data
+spec:
+  accessModes:
+    - ReadWriteOnce
+  resources:
+    requests:
+      storage: 10Gi
+---
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: my-mysql-cfg
+data:
+  # the server_id must be unique for each server or replication client
+  my.cnf: |
+    !include /etc/my.cnf
+    [mysqld]
+    server_id = 111111
+    log_bin = mysql-bin
+    binlog_format = ROW
+    binlog_row_image = FULL
+    binlog_rows_query_log_events = ON
+    expire_logs_days = 10
+    gtid_mode = ON
+    enforce_gtid_consistency = ON
+---
+apiVersion: v1
+kind: Secret
+metadata:
+  name: my-mysql-env
+type: Opaque
+stringData:
+  MYSQL_DEFAULTS_FILE: /config/configdb.d/my.cnf
+  MYSQL_DATABASE: testdb
+  MYSQL_USER: admin
+  MYSQL_PASSWORD: changeit
+  MYSQL_ALLOW_EMPTY_PASSWORD: "true"
+---
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: my-mysql-init
+data:
+  initdb.sql: |
+    use testdb;
+    CREATE TABLE IF NOT EXISTS customers (
+      id INTEGER NOT NULL AUTO_INCREMENT PRIMARY KEY,
+      first_name VARCHAR(255) NOT NULL,
+      last_name VARCHAR(255) NOT NULL,
+      email VARCHAR(255) NOT NULL UNIQUE
+    );
+
+    CREATE USER IF NOT EXISTS 'debezium'@'%' IDENTIFIED WITH caching_sha2_password BY 'changeit';
+    GRANT SELECT, RELOAD, SHOW DATABASES, REPLICATION SLAVE, REPLICATION CLIENT ON *.* TO 'debezium'@'%';
+    FLUSH PRIVILEGES;
+---
+apiVersion: apps/v1
+kind: StatefulSet
+metadata:
+  name: my-mysql
+spec:
+  replicas: 1
+  serviceName: my-mysql
+  selector:
+    matchLabels:
+      app: my-mysql
+  template:
+    metadata:
+      labels:
+        app: my-mysql
+    spec:
+      containers:
+        - name: mysql
+          image: quay.io/centos7/mysql-80-centos7:20230712
+          resources:
+            limits:
+              memory: 1Gi
+          envFrom:
+            - secretRef:
+                name: my-mysql-env
+          ports:
+            - containerPort: 3306
+              protocol: TCP
+          volumeMounts:
+            - name: my-mysql-data
+              mountPath: /var/lib/mysql
+            - name: my-mysql-cfg
+              mountPath: /config/configdb.d
+            - name: my-mysql-init
+              mountPath: /tmp/sql
+          readinessProbe:
+            exec:
+              command: [ "mysqladmin", "-uroot", "ping" ]
+            initialDelaySeconds: 60
+            timeoutSeconds: 10
+          livenessProbe:
+            exec:
+              command: [ "mysqladmin", "-uroot", "ping" ]
+            initialDelaySeconds: 60
+            timeoutSeconds: 10
+      volumes:
+        - name: my-mysql-data
+          persistentVolumeClaim:
+            claimName: my-mysql-data
+        - name: my-mysql-cfg
+          configMap:
+            name: my-mysql-cfg
+        - name: my-mysql-init
+          configMap:
+            name: my-mysql-init
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: my-mysql-svc
+spec:
+  ports:
+    - name: mysql
+      port: 3306
+      protocol: TCP
+      targetPort: 3306
+  selector:
+    app: my-mysql
+---
