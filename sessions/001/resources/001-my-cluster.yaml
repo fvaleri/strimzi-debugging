@@ -1,0 +1,80 @@
+apiVersion: kafka.strimzi.io/v1beta2
+kind: Kafka
+metadata:
+  name: my-cluster
+  annotations:
+    strimzi.io/node-pools: enabled
+spec:
+  kafka:
+    # set one of the supported Kafka versions
+    #version: x.x.x
+    config:
+      num.partitions: 3
+      default.replication.factor: 3
+      min.insync.replicas: 2
+      offsets.topic.replication.factor: 3
+      transaction.state.log.replication.factor: 3
+      transaction.state.log.min.isr: 2
+    listeners:
+      - name: plain
+        port: 9092
+        type: internal
+        tls: false
+      - name: tls
+        port: 9093
+        type: internal
+        tls: true
+    logging:
+      type: inline
+      loggers:
+        kafka.root.logger.level: INFO
+        log4j.logger.kafka.coordinator.transaction: INFO
+        log4j.logger.kafka.log.LogCleanerManager: INFO
+        log4j.logger.kafka.request.logger: INFO
+  zookeeper:
+    replicas: 3
+    logging:
+      type: inline
+      loggers:
+        zookeeper.root.logger: INFO
+        log4j.logger.org.apache.zookeeper.server.ZooKeeperServer: INFO
+    resources:
+      limits:
+        cpu: 500m
+        memory: 1Gi
+      requests:
+        cpu: 500m
+        memory: 1Gi
+    storage:
+      size: 5Gi
+      type: persistent-claim
+      deleteClaim: false
+  entityOperator:
+    topicOperator:
+      logging:
+        type: inline
+        loggers:
+          rootLogger.level: INFO
+          logger.top.name: io.strimzi.operator.topic
+          logger.top.level: INFO
+      resources:
+        limits:
+          cpu: 500m
+          memory: 512Mi
+        requests:
+          cpu: 500m
+          memory: 256Mi
+    userOperator:
+      logging:
+        type: inline
+        loggers:
+          rootLogger.level: INFO
+          logger.uop.name: io.strimzi.operator.user
+          logger.uop.level: INFO
+      resources:
+        limits:
+          cpu: 500m
+          memory: 512Mi
+        requests:
+          cpu: 500m
+          memory: 256Mi
