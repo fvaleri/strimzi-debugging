@@ -1,10 +1,11 @@
 ## Transactions and how to rollback them
 
-By default, Kafka provides at-least-once semantics and duplicates can arise due to either producer retries or consumer
-restarts after failure. The idempotent producer feature (default in Kafka 3) solves the duplicates problem, but does not
-guarantee the atomicity when you need to write to multiple partitions at the same time. This is what a typical streaming
-application does with its cycles of read-process-write. The Kafka exactly-once semantics (EOS) helps to achieve all or
-nothing behavior, much like you need transactions to atomically write to two or more tables in a relational database.
+By default, Kafka provides **at-least-once** semantics and duplicates can arise due to either producer retries or
+consumer restarts after failure. The **idempotent producer** feature (default in Kafka 3) solves the duplicates problem,
+but does not guarantee the atomicity when you need to write to multiple partitions at the same time. This is what a
+typical streaming application does with its cycles of read-process-write. The Kafka **exactly-once** semantics (EOS)
+helps to achieve all or nothing behavior when writing to multiple topics, much like you need transactions to atomically
+write to two or more tables in a relational database.
 
 Algorithm overview:
 
@@ -15,18 +16,19 @@ Algorithm overview:
 
 ![](images/trans.png)
 
-The producer configure a static and unique `transactional.id` (TID), that the transaction coordinator maps to a producer
-ID (PID) and epoch used for zombie fencing. A producer can only have one ongoing transaction (ordering guarantee).
-Consumers with `isolation.level=read_committed` receive committed messages only, ignoring ongoing and aborted
-transactions. Transactions overhead is minimal and the biggest impact is on producers. Consumers only receive few
-additional metadata related to aborted transactions, so that they are able to discard them. You can balance overhead
-with latency by tuning the `commit.interval.ms`.
+The producer has to configure a static and unique `transactional.id` (TID), that is mapped to a producer ID (PID) and
+epoch, used for zombie fencing. A producer can only have one ongoing transaction (ordering guarantee). Consumers
+with `isolation.level=read_committed` receive committed messages only, ignoring ongoing and discarding aborted
+transactions (they get few additional metadata to do that). Transactions overhead is minimal and the biggest impact is
+on producers. You can balance overhead with latency by tuning the `commit.interval.ms`. Compared to suing the low level
+API, enabling transactions is much easier when using the Streams API, as we just need to
+set `processing.guarantee=exactly_once_v2`.
 
-The transaction state is stored in a specific `__transaction_state` partition, whose leader is a broker called the
-transaction coordinator. This partition is determined in a similar way as the consumer group coordinating partition.
+The **transaction state** is stored in a specific `__transaction_state` partition, whose leader is a broker called the
+**transaction coordinator**. This partition is determined in a similar way as the consumer group coordinating partition.
 Each partition also contains `.snapshot` logs which helps in rebuilding producers state in case of broker crash or
 restart. A single Kafka transaction cannot span different Kafka clusters or external systems (2PC is not supported). The
-offset of the first still-open transaction is called the last stable offset (LSO <= HW). The transaction coordinator
+offset of the first still-open transaction is called the **last stable offset** (LSO <= HW). The transaction coordinator
 automatically aborts any ongoing transaction that is not committed or aborted within `transaction.timeout.ms`.
 
 Trap: Before Kafka 2.5.0 the TID had to be a static encoding of the input partition (i.e. `my-app.my-group.my-topic.0`)
@@ -35,18 +37,14 @@ logic. This was ugely inefficient, because you couldn't reuse a single thread-sa
 create one for each input partition. This was fixed by forcing the producer to send the consumer group metadata along
 with the offsets to commit.
 
-### Transaction API in action
-
-We are going to run a basic word count application using the low level transaction API to see how it works and what
-happens at the partitions level. Enabling transactions is much easier when using the Streams API, you just need to
-set `processing.guarantee=exactly_once_v2`.
+### Example: word count with low level transaction API
 
 [Deploy a Kafka cluster on localhost](/sessions/001). This time, we use a local deployment just because it's more
 convenient for inspecting partition content. Let's run the application on a different shell, send one sentence to the
-input topic and check the result on the output topic. [Look at the code](kafka-trans) to see how the transaction API is
-used within the read-process-write process.
+input topic and check the result on the output topic. [Look at the code](/sessions/008/kafka-trans) to see how the
+transaction API is used within the read-process-write process.
 
-```
+```sh
 $ kafka-topics.sh --bootstrap-server :9092 --create --topic wc-input --partitions 1 --replication-factor 1 \
   && kafka-topics.sh --bootstrap-server :9092 --create --topic wc-output --partitions 1 --replication-factor 1
 Created topic wc-input.
@@ -91,7 +89,7 @@ we know where our records landed, but what about the internal `__consumer_offset
 coordinating partitions? Well, we can reuse the same tool we learned in the first session against the
 configured `group.id` and `transactional.id`.
 
-```
+```sh
 $ find_cp my-group
 12
 
@@ -106,7 +104,7 @@ id and epoch that have been generated with the init transaction API call. In the
 partition offset commit (`payload: offset=1`) record is also marked as transactional and followed by a similar end
 transaction marker.
 
-```
+```sh
 $ kafka-dump-log.sh --deep-iteration --print-data-log \
   --files /tmp/kafka-logs/wc-output-0/00000000000000000000.log
 Dumping /tmp/kafka-logs/wc-output-0/00000000000000000000.log
@@ -150,7 +148,7 @@ in `state=Empty`, then we have two `state=Ongoing` records where involved partit
 application calls commit, a `state=PrepareCommit` record is added and the broker is now doomed to commit, that is what
 happens with the `state=CompleteCommit` record that closes the transaction.
 
-```
+```sh
 $ kafka-dump-log.sh --deep-iteration --print-data-log --transaction-log-decoder \
   --files /tmp/kafka-logs/__transaction_state-33/00000000000000000000.log
 Dumping /tmp/kafka-logs/__transaction_state-33/00000000000000000000.log
@@ -167,13 +165,13 @@ baseOffset: 4 lastOffset: 4 count: 1 baseSequence: -1 lastSequence: -1 producerI
 | offset: 4 CreateTime: 1664531387388 keySize: 24 valueSize: 37 sequence: -1 headerKeys: [] key: transaction_metadata::transactionalId=my-unique-static-tid payload: producerId:0,producerEpoch:0,state=CompleteCommit,partitions=[],txnLastUpdateTimestamp=1664531387373,txnTimeoutMs=60000
 ```
 
-### Rollback hanging transactions
+### Example: rollback hanging transactions
 
 A hanging transaction is one which has a missing or an out of order control record due to a bug in the transaction
 handling. If a transaction is being left in an open state, then the LSO is stuck, which means any `read_committed`
 consumer of that partition cannot consume past that offset.
 
-```
+```sh
 [Consumer clientId=my-client, groupId=my-group] The following partitions still have unstable offsets which are not cleared on the broker side: [my-topic-9], 
 this could be either transactional offsets waiting for completion, or normal offsets waiting for replication after appending to local log
 ```
@@ -183,7 +181,7 @@ stuck partition belongs to a compacted topic, you may also notice an unbounded p
 the log cleaner select the partition with the highest dirty ratio (dirty entries / total entries) and never clean beyond
 the LSO, so in this case that ratio remains constant and the partition is never cleaned.
 
-```
+```sh
 $ TOPIC_NAME="my-topic" 
 $ GID="my-group" 
 $ LOG_DIR="/opt/kafka/data/kafka-0"
@@ -207,7 +205,7 @@ First, dump the partition segment that includes the blocked/current offset and a
 determine this segment inside the partition folder, because it is named after the first offset it contains. Note that it
 is required to run these command inside the partition directory containing the row segments.
 
-```
+```sh
 $ cd /path/to/my-topic-9
 $ kafka-dump-log.sh --deep-iteration --files 00000000000912375285.log > 00000000000912375285.log.dump
 $ kafka-dump-log.sh --deep-iteration --files 00000000000933607637.snapshot > 00000000000933607637.snapshot.dump
@@ -217,7 +215,7 @@ In order to automate the tedious work of isolating the hanging transaction, we c
 able to parse the segment dump produced as explained above and identify any open transaction. Here we first install that
 tool and then we sue it to identify any `open_txn` and get its producer id and epoch.
 
-```
+```sh
 $ git clone https://github.com/tombentley/klog $KAFKA_HOME/klog
 $ pushd $KAFKA_HOME/klog && mvn clean package -DskipTests -Pnative -Dquarkus.native.container-build=true && popd 
 $ cp $KAFKA_HOME/klog/target/*-runner $KAFKA_HOME/bin/klog
@@ -230,14 +228,14 @@ simply delete all `.snapshot` files in the stuck partition's logs folder and do 
 you need to rollback the open transactions by using the Kafka command printed by `klog`. Note that the `CLUSTER_ACTION`
 operation is required if authorization is enabled.
 
-```
+```sh
 $ klog snapshot abort-cmd 00000000000933607637.snapshot.dump --pid 173101 --producer-epoch 14
 ```
 
-As an exercise, try to apply the above procedure to [this raw partition](raw). We know that `__consumer_offsets-27` LSO
-is 913095344 and some consumer applications are blocked. You should get the following result for the first hanging
-transaction.
+As additional exercise, try to apply the above procedure to [this raw partition](/sessions/008/raw). We know
+that `__consumer_offsets-27` LSO is 913095344 and some consumer applications are blocked. You should get the following
+result for the first hanging transaction.
 
-```
+```sh
 $KAFKA_HOME/bin/kafka-transactions.sh --bootstrap-server $BOOTSTRAP_URL abort --topic $TOPIC_NAME --partition $PART_NUM --producer-id 171100 --producer-epoch 1 --coordinator-epoch 34
 ```

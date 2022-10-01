@@ -1,42 +1,39 @@
 ## Storage requirements and volume recovery
 
-Kafka requires low latency block storage to store both broker commit logs and Zookeeper database. File storage like NFS
-does not work well (silly rename problem). Both Apache Kafka and Apache Zookeeper have data replication built in, so
-they do not need replicated storage to ensure data availability, which would only add network overhead. z\In case local
-storage is not available, Streams can also work with network attached block storage such as iSCSI or Fibre Channel, and
-with most block storage services such as Amazon EBS. JBOD (just a bunch of disks) is also supported, and can actually
-give good performance because you are using multiple disk in parallel. The recommended file system is XFS and you should
-disable the last access time file attribute (`noatime` mount option) to further improve the performance.
+Kafka requires **low latency block storage** to store both broker commit logs and Zookeeper database. File storage like
+NFS does not work well (silly rename problem). Both Apache Kafka and Apache Zookeeper have
+**built-in data replication**, so they do not need replicated storage to ensure data availability, which would only add
+network overhead. If local storage is not available, Streams can also work with network attached block storage, such as
+iSCSI or Fibre Channel, and with most block storage services such as Amazon EBS. JBOD (just a bunch of disks) is also
+supported, and can give good performance if you use multiple disk in parallel. The recommended file system is XFS and it
+is recommended to disable the last access time file attribute (`noatime` mount option) to improve performance.
 
-Ideally, replication factor and retention policy should be set properly when provisioning a new cluster/topic, based on
-requirements and the expected volume of messages (GB/s), so that the Kafka never runs out of space. A non active segment
-can be deleted based on `segment.ms` or `segment.bytes`. Even if one record is not yet eligible for deletion based
-on `retention.ms` or `retention.bytes` (whichever comes first), the broker will keep the entire segment file. Deletion
-timing also depends on the cluster load and how many `background.threads` are available in case of normal topics,
-and `log.cleaner.threads` in case of compacted topics.
+Ideally, **replication factor** and **retention policy** should be set properly when provisioning a new cluster/topic,
+based on requirements and the expected volume of messages (GB/s), so that the Kafka never runs out of space. A non
+active segment can be deleted based on `segment.ms` or `segment.bytes`. Even if one record is not yet eligible for
+deletion based on `retention.ms` or `retention.bytes` (whichever comes first), the broker will keep the entire segment
+file. Deletion timing also depends on the cluster load and how many `background.threads` are available in case of normal
+topics, and `log.cleaner.threads` in case of compacted topics.
 
-The amount of needed storage capacity can be calculated based on the message retention. For topics with time based
+The **required storage capacity** can be calculated based on the message retention. For topics with time based
 retention, you can calculate the required storage capacity
 as `storage_capacity (MB) = retention_sec * topic_write_rate (MB/s) * replication_factor`, while for topics with size
 based retention it is `storage_capacity (MB) = retention_mb * replication_factor * part_number`. When the topic combines
 both the time and size based retention policies, the size based policy defines the upper cap.
 
-On OpenShift, `PersistentVolume` (PV) resources are claimed using `PersistentVolumeClaim` (PVC) resources. You can
-specify the `StorageClass` used to provision the persistent volumes directly in the `Kafka` custom resource. Streams
-support increasing the size of persistent volumes, but this must be supported by the infrastructure. Only volumes
-created and managed by a `StorageClass` with `allowVolumeExpansion: true` can be increased, but not decreased. With
-JBOD, you can also remove a volume, but data needs to be migrated to other volumes upfront.
+On OpenShift, `PersistentVolume` (PV) live outside any namespace and are claimed by using `PersistentVolumeClaim` (PVC).
+You can specify the `StorageClass` used to provision required volumes directly in the `Kafka` custom resource. Only
+volumes created and managed by a `StorageClass` with `allowVolumeExpansion: true` can be increased, but not decreased.
+When using JBOD, you can also remove a volume, but data needs to be migrated to other volumes upfront. Volumes with
+either `persistentVolumeReclaimPolicy: Retain`, or using a storage class with `reclaimPolicy: Retain` are retained also
+when the Kafka cluster is deleted.
 
-Note that the following procedure may lead to data loss if not executed correctly. Another cause of service disruption
-or data loss is deleting Strimzi CRDs, which would cause the deletion of all deployed Kafka clusters on that OpenShift
-cluster by garbage collection mechanism.
+### Example: no space left on device
 
-### No space left on device
-
-[Deploy the Streams operator and Kafka cluster](/sessions/001). Once the cluster is ready, we break it by sending 14 GiB
+[Deploy the Streams operator and Kafka cluster](/sessions/001). When the cluster is ready, we break it by sending 14 GiB
 of data to a topic with RF=3, which exceeds the total available cluster disk capacity of 30 GiB.
 
-```
+```sh
 $ kubectl get pvc | grep kafka
 data-my-cluster-kafka-0       Bound    pvc-8c21101b-a7d0-4b57-922b-d79f0207ffdc   10Gi       RWO            gp2            28m
 data-my-cluster-kafka-1       Bound    pvc-100f7351-9d2c-4048-b3a4-e04685a3cd3d   10Gi       RWO            gp2            28m
@@ -70,14 +67,19 @@ If volume expansion is supported, you can simply edit the `Kafka` CR increasing 
 the rest (this may take some time). We didn't specify any storage class, so we have been assigned the default one, which
 support expansion.
 
-```
+```sh
 $ kubectl get pv pvc-100f7351-9d2c-4048-b3a4-e04685a3cd3d -o yaml | yq e '.spec.storageClassName'
 gp2
 
 $ kubectl get sc gp2 -o yaml | yq e '.allowVolumeExpansion'
 true
 
-
+$ kubectl patch k my-cluster --type json -p '
+  [{
+    "op": "replace",
+    "path": "/spec/kafka/storage/size",
+    "value": "20Gi"
+  }]'
 kafka.kafka.strimzi.io/my-cluster patched
 
 $ kubectl -n openshift-operators logs $(kubectl -n openshift-operators get po | grep cluster-operator | cut -d" " -f1) | grep "Resizing"
@@ -101,7 +103,7 @@ a risky procedure and should only be applied by experts as last resort and with 
 I'm only showing how to do it on one broker-0 here, but this should be done for every broker pod. Once you are done with
 all partitions and brokers, you can scale up again and unpause the operator (last 3 commands).
 
-```
+```sh
 $ kubectl annotate k my-cluster strimzi.io/pause-reconciliation="true"
 kafka.kafka.strimzi.io/my-cluster annotated
 
@@ -163,17 +165,12 @@ my-cluster-kafka-1                            1/1     Running   0          18m
 my-cluster-kafka-2                            1/1     Running   0          18m
 ```
 
-### Unintentional namespace deletion with retained volumes
-
-The following procedure helps in cases where the namespace has been unintentionally deleted or a whole OpenShift cluster
-has been lost, but volumes have been retained (either the persistent volume has `persistentVolumeReclaimPolicy: Retain`,
-or their storage class has `reclaimPolicy: Retain`). This is possible because persistent volumes live outside the
-namespace.
+### Example: unintentional namespace deletion with retained volumes
 
 [Deploy the Streams operator and Kafka cluster](/sessions/001). Once the cluster is ready, let's change the reclaim
-policy at the persistent volume level. Also note that the volume status is "Bound"
+policy at the persistent volume level. Also note that the volume status is "Bound".
 
-```
+```sh
 $ kubectl get pv
 NAME                                       CAPACITY   ACCESS MODES   RECLAIM POLICY   STATUS   CLAIM                              STORAGECLASS   REASON   AGE
 pvc-32b4c2cf-e4f1-453b-b86d-498324a3a1fa   5Gi        RWO            Delete           Bound    test/data-my-cluster-zookeeper-1   gp2                     10m
@@ -212,7 +209,7 @@ Now we send some data, delete the namespace and check if our volumes are still t
 changed from "Bound" to "Released", but we keep some information that is needed when reattaching them (capacity, claim,
 storage class).
 
-```
+```sh
 $ kubectl run client-$(date +%s) -it --rm --restart="Never" \
   --image="registry.redhat.io/amq7/amq-streams-kafka-31-rhel8:2.1.0" -- \
     bin/kafka-console-producer.sh --bootstrap-server my-cluster-kafka-bootstrap:9092 \
@@ -243,7 +240,7 @@ Our data is still there as expected, so now we have to reattach to a new Kafka c
 new Kafka cluster, we need to create the conditions so that the old volumes are reattached. We crated a script that
 collects required data from retained volumes, removes the old `claimRef` metadata and creates the new claims.
 
-```
+```sh
 $ kubectl create ns test
 namespace/test created
 
@@ -282,7 +279,7 @@ pvc-e05bb77e-9bc6-431c-9d59-bf2f5d664d95   10Gi       RWO            Retain     
 Our volumes are "Bound" again and deploying a new Kafka cluster with the same spec as the previous one should reattach
 them.
 
-```
+```sh
 $ kubectl create -f sessions/001/cluster
 kafka.kafka.strimzi.io/my-cluster created
 kafkatopic.kafka.strimzi.io/my-topic created
