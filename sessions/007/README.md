@@ -1,44 +1,36 @@
 ## Cruise Control and unbalanced clusters
 
-A Kafka cluster may become unbalanced (uneven distribution of load across brokers) as a consequence of some broker
-failure, the addition of new brokers, or simply because some partitions are used more than others. As part of regular
-maintenance, the administrators are supposed to monitor the cluster metrics and set appropriate alerts.
-The `kafka.server:type=KafkaRequestHandlerPool,name=RequestHandlerAvgIdlePercent` is a good overall load measurement
-metric for Kafka scaling decisions. Good rule of thumb is when it hits 20% (i.e. the request handler threads are busy
-80% of the time), then it's time to plan your cluster expansion, at 10% you need to scale it now.
+We have an unbalanced cluster when there is **uneven distribution of load across brokers**, so that some brokers are
+overloaded, while others are under utilized. This happens as a consequence of some failures, the addition of new
+brokers, or simply because some partitions are used more than others. The `RequestHandlerAvgIdlePercent` metric is a
+good overall load measurement metric for Kafka scaling decisions. Good rule of thumb is when it hits 20% (i.e. the
+request handler threads are busy 80% of the time), then it's time to plan your cluster expansion, at 10% you need to
+scale it now.
 
-Cluster rebalancing can only help if the unbalance is not caused by an ongoing issue. Rebalancing means to move
-partitions **between brokers** (inter brokers) and/or **between disks** on the same broker (intra broker). A cheaper way
-of rebalancing the cluster is to **change leader roles**, as they usually gets more traffic than followers. Usually you
-need some combination of partition movements and leadership changes.
-
-Kafka provides the `kafka-reassign-partitions.sh` command line tool that can be used to kick off a reassignments, but it
-leaves to the user the hard task of figuring out which changes are required and possible. Only experience and some well
-crafted formula can help here. [Cruise Control](https://github.com/linkedin/cruise-control) (CC) from LinkedIn automates
-this complex and time-consuming task, with the additional features of anomaly detection and self-healing.
+Rebalancing means moving partitions between brokers (inter brokers), between disks on the same broker (intra broker), or
+simply change leaders in order to restore the balance. Usually we need some combination of partition movements and
+leadership changes. When using `kafka-reassign-partitions.sh` for rebalancing, the task of figuring out which changes
+are required and possible is left to the user. This requires some calculations that may be hard and time consuming,
+especially on big clusters with lots of data. Automating this complex task is the reason
+why [Cruise Control](https://github.com/linkedin/cruise-control) (CC) was created.
 
 ![](images/cc.png)
 
 A replica level **workload model** is periodically updated from the resource utilization metrics (CPU, disk, bytes-in,
-bytes-out). The analyzer component uses the model to create a valid **rebalance proposal** when possible (one that must
-satisfy a number of hard goals, and possibly soft goals too). The executor ensures that there is only one active
-execution at a time, and enables graceful cancellation because changes are applied in batches, so rebalancing can be
-stopped at the end of each batch in a consistent state. If two equivalent changes are possible, the one that has the
-lower cost is selected (cost-based change priority: leadership move > replica move > replica swap).
+bytes-out). The analyzer component uses this model to create a valid **rebalance proposal** when possible (one that must
+satisfy configured hard goals, and possibly soft goals too). The executor ensures that there is only one active
+execution at a time, and enables graceful cancellation applying changes in batches. If two equivalent changes are
+possible, the one with the lower cost is selected (leadership change > replica move > replica swap).
 
 As of today, Streams still requires the manual approval of the auto-generated rebalance proposal, but we are working to
-enable full automation. In order to get accurate rebalance proposal when using CPU goals, you can set CPU requests equal
+enable full automation. In order to have accurate rebalance proposal when using CPU goals, we can set CPU requests equal
 to CPU limits in `spec.kafka.resources`. That way, all CPU resources are reserved upfront and are always available. This
 allows CC to properly evaluate the CPU utilization when preparing the rebalance proposals.
 
-When deploying CC with auto rebalance enabled, consider disabling the `auto.leader.rebalance.enable`
-configuration. If the broker is busy catching up some partitions (i.e. restarts) and it suddenly becomes the leader for
-one or multiple partitions, then this will make it much busier.
-
 ### Example: increase the topic replication factor
 
-[Deploy the Streams operator and Kafka cluster](/sessions/001). When the cluster is ready, let's try to change the topic
-replication factor by editing its specification.
+[Deploy Streams operator and Kafka cluster](/sessions/001). When the cluster is ready, let's try to change the topic
+replication factor by editing its specification. As you can see, the TO does not allow this change.
 
 ```sh
 $ kubectl get kt my-topic -o yaml | yq e '.spec'
@@ -67,17 +59,14 @@ observedGeneration: 5
 topicName: my-topic
 ```
 
-As you can see, the TO does not allow that. As a workaround, we can use the reassign tool to apply the above change at
-the Kafka level. The first replica you see for each partition in `reassign.json` is called preferred replicas and the
-cluster will try to elect this one as the leader. This is why we try to distribute them evenly among available brokers.
-Note that we are also throttling the movement of partitions to 5 MB/s to avoid disrupting other clients. If the
-partition movement is too slow, you can resubmit the execute command with `--additional` option and a new throttle
-value.
+As a workaround, we can use the reassign tool to apply the above change at Kafka level. The first replica you see for
+each partition in `reassign.json` is called preferred replicas and the cluster will try to elect this one as the leader.
+This is why we distribute them evenly among available brokers. Note that we are also throttling the movement of
+partitions to 5 MB/s to avoid disrupting other clients. If the partition movement is too slow, you can resubmit the
+execute command with the `--additional` option and a new throttle value.
 
 ```sh
-$ kubectl run client-$(date +%s) -it --rm --restart="Never" \
-  --image="registry.redhat.io/amq7/amq-streams-kafka-31-rhel8:2.1.0" -- bash
-
+$ krun_kafka
 [strimzi@client-1664115586 kafka]$ bin/kafka-topics.sh --bootstrap-server my-cluster-kafka-bootstrap:9092 --topic my-topic --describe
 Topic: my-topic	TopicId: 3n2nu6v9SS23xALR8yHADA	PartitionCount: 3	ReplicationFactor: 3	Configs: min.insync.replicas=2,message.format.version=3.0-IV1,retention.bytes=1073741824
 	Topic: my-topic	Partition: 0	Leader: 1	Replicas: 1,0,2	Isr: 1,0,2
@@ -108,8 +97,8 @@ Successfully started partition reassignments for my-topic-0,my-topic-1,my-topic-
 ```
 
 The old partitions will be only removed once the reassignment process is complete, so make sure that there is enough
-space to accommodate for this extra storage requirement. If the process completed successfully, we can check the topic
-configuration again.
+disk space to accommodate for this extra storage requirement. If the process completed successfully, we can check the
+topic configuration again.
 
 ```sh
 [strimzi@client-1664115586 kafka]$ bin/kafka-reassign-partitions.sh --bootstrap-server my-cluster-kafka-bootstrap:9092 \
@@ -141,14 +130,13 @@ topicName: my-topic
 
 ### Example: Cruise Control in action
 
-[Deploy the Streams operator and Kafka cluster](/sessions/001). When the cluster is ready, we add the `cruiseControl`
-specification to `KafkaTopic` custom resource and we also create `KafkaRebalance` with default goals. Kafka pods will be
-rolled in order to add the CC metric collection agents, and a new CC pod will be started. We also see that our proposal
-is ready. A new rebalance proposal will be created every 15 minutes based on the latest workload model.
+[Deploy Streams operator and Kafka cluster](/sessions/001). When the cluster is ready, add the `spec.cruiseControl`
+to Kafka CR and create a rebalance CR with default goals. Al Kafka pods will be rolled in order to add the CC metric
+agents, and a CC instance will be started. A new rebalance proposal ise created every 15 minutes based on the latest
+workload model.
 
 ```sh
 $ kubectl apply -f sessions/007/crs
-Warning: resource kafkas/my-cluster is missing the kubectl.kubernetes.io/last-applied-configuration annotation which is required by kubectl apply. kubectl apply should only be used on resources created declaratively by either kubectl create --save-config or kubectl apply. The missing annotation will be patched automatically.
 kafka.kafka.strimzi.io/my-cluster configured
 kafkarebalance.kafka.strimzi.io/my-rebalance created
 
@@ -195,15 +183,13 @@ optimizationResult:
 sessionId: c0d1e77e-9b0d-4871-ab30-6443b123307e
 ```
 
-Let's check the log end offsets of the test topic partitions. Now we send some messages in order to create some level of
+Let's check the log end offsets of the test topic partitions. Now we send some messages in order to create some
 imbalance and see if this is reflected in the auto generated reassignment proposal. We don't want to wait the periodic
-refresh, so we use the refresh annotation.
+proposal, so we use the refresh annotation.
 
 ```sh
-$ kubectl run client-$(date +%s) -it --rm --restart="Never" \
-  --image="registry.redhat.io/amq7/amq-streams-kafka-31-rhel8:2.1.0-5" -- \
-    bin/kafka-producer-perf-test.sh --topic my-topic --record-size 100 --num-records 1000000 \
-      --throughput -1 --producer-props acks=1 bootstrap.servers=my-cluster-kafka-bootstrap:9092
+$ krun_kafka bin/kafka-producer-perf-test.sh --topic my-topic --record-size 100 --num-records 1000000 \
+  --throughput -1 --producer-props acks=1 bootstrap.servers=my-cluster-kafka-bootstrap:9092
 If you don't see a command prompt, try pressing enter.
 1000000 records sent, 201126.307321 records/sec (19.18 MB/sec), 67.85 ms avg latency, 347.00 ms max latency, 44 ms 50th, 248 ms 95th, 302 ms 99th, 338 ms 99.9th.
 pod "client-1664122756" deleted
@@ -236,7 +222,7 @@ optimizationResult:
 sessionId: dd6247d4-ccff-4f90-9581-65bf032df115
 ```
 
-Ok, all good, so let's finally approve the auto generated rebalance proposal.
+All good, so let's finally approve the auto generated rebalance proposal so that it can be executed.
 
 ```sh
 $ kubectl annotate kr my-rebalance strimzi.io/rebalance=approve

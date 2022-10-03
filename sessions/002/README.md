@@ -1,34 +1,34 @@
 ## TLS authentication and custom certificates
 
-The TLS protocol provides communications **security over a computer network**. Encryption without proper identification
+The TLS protocol provides **communications security over a computer network**. Encryption without proper identification
 is insecure. Hostname verification through common name (CN) or subject alternative name (SAN) protects against man in
 the middle attacks, so it should never be disabled in production.
 
 A **public key infrastructure** (PKI) is an arrangement that binds public keys with respective identities of entities (
 e.g. organizations, people, applications). The binding is established through a process of registration and issuance of
 certificates by a **certificate authority** (CA). The server name indication (SNI) extension is used when having
-multiple certificates on the same IP address. This is also used by OpenShift to route external TLS connections (the
-Kafka TCP protocol is tunneled).
+multiple certificates on the same IP address. It is also used by OpenShift to route external TLS connections. Leveraging
+this feature, we can tunnel the Kafka TCP protocol through the OpenShift HTTP reverse proxy.
 
 A TLS certificate contains a public key along with the ownership data and expiration date. Cipher suites contain
-algorithms for key exchange, encryption and authentication. A self-signed certificate is secure enough, but only if it
-is trusted upfront by the application. It is also possible to create a **wildcard certificate** (e.g. CN=*.example.com),
-that can be used by all application running in a specific domain (e.g. OpenShift cluster).
+algorithms for key exchange, encryption and authentication. A **self-signed certificate** is secure enough, but only if
+it is trusted upfront by the application. It is also possible to create a **wildcard certificate** (e.g. CN=*
+.example.com), that can be used by all application running in a specific domain (e.g. an OpenShift cluster).
 
-Within a Kafka cluster, in addition to the **client-server communication**, you also need to protect **inter-cluster
-communication** and renew certificates when they expire. Most of this work is done by the cluster operator, which is an
-example of the added value of running a controller with domain knowledge.
+Within a Kafka cluster, in addition to the **client-server communication**, you also need to protect the **inter-cluster
+communication** and renew certificates when they expire. Most of this work is done by the Streams CO, which is a great
+example on how the operator simplifies cluster management.
 
 ![](images/connections.png)
 
-A Kafka client doesn't need to trust a server certificate when it is signed by a **well-known CA**, because it is
-already included in the system truststore (e.g. `$JAVA_HOME/jre/lib/security/cacerts`). Before the encryption starts,
-the peers agree to the protocol version and cipher suite to be used, exchange certificates and share encryption keys (
-connection overhead). Almost all the problems occur within this initial handshake.
+Kafka clients don't need to trust the server certificate when it is signed by a **well-known CA**, because it is already
+included in the system truststore (e.g. `$JAVA_HOME/jre/lib/security/cacerts`). Before the encryption starts, the peers
+agree to the protocol version and cipher suite to be used, exchange certificates and share encryption keys (connection
+overhead). Almost all the problems occur within this initial handshake.
 
 ### Example: TLS authentication (mTLS)
 
-[Deploy the Streams operator and Kafka cluster](/sessions/001). Then, apply the configuration changes to enable TLS
+[Deploy Streams operator and Kafka cluster](/sessions/001). Then, apply the configuration changes to enable TLS
 authentication and wait for the CO to restart all pods one by one (rolling update). If the Kafka cluster is operated
 correctly, it is possible to update the configuration with zero downtime.
 
@@ -38,8 +38,8 @@ kafka.kafka.strimzi.io/my-cluster configured
 kafkauser.kafka.strimzi.io/my-user created
 ```
 
-As you can see, the previous command adds a new authentication element to the external listener, which is the endpoint
-for clients connecting from outside OpenShift. It also creates a `KafkaUser` resource with a matching configuration.
+Previous command adds a new authentication element to the external listener, which is the endpoint used by clients
+connecting from outside OpenShift. It also creates a `KafkaUser` resource with a matching configuration.
 
 ```sh
 $ kubectl get k my-cluster -o yaml | yq e '.spec.kafka.listeners[2]'
@@ -55,10 +55,9 @@ authentication:
   type: tls
 ```
 
-External clients now need to retrieve the self-signed auto-generated cluster CA certificate and add it to their
-truststore. They also need to add the user certificate to their keystore. The cluster operator was kind enough to
-generate these stores for us and provide them inside a secret. We also need to retrieve the bootstrap URL from the
-passthrough route.
+All external clients need to retrieve the self-signed auto-generated cluster CA certificate and add it to their
+truststore. They also need to add the user certificate to their keystore. The CO was kind enough to generate these
+stores for us and provide them inside a secret. We also need to retrieve the bootstrap URL from the passthrough route.
 
 ```sh
 $ kubectl get secret my-user -o "jsonpath={.data['user\.p12']}" | base64 -d > /tmp/keystore.p12
@@ -73,8 +72,8 @@ $ echo $(kubectl get routes my-cluster-kafka-bootstrap -o=jsonpath='{.status.ing
 my-cluster-kafka-bootstrap-test.apps.cluster-8z6kz.8z6kz.sandbox425.opentlc.com:443
 ```
 
-We have all required data, so we can configure the client, connect to the cluster and send some messages in a secure
-way. Make sure to have the [Kafka client scripts in your path](/sessions/001).
+With all these data, we can now configure the client, connect to the cluster and try sending some messages in a secure
+way. Make sure to have the [Kafka scripts in your path](/sessions/001).
 
 ```sh
 $ cat <<EOF >/tmp/client.properties
@@ -93,7 +92,7 @@ $ kafka-console-producer.sh --producer.config /tmp/client.properties \
 >^C 
 ```
 
-When dealing with TLS issues, it is useful to look inside the certificate to verify the configuration and expiration.
+When dealing with TLS issues, it is useful to look inside the certificate to verify its configuration and expiration.
 For example, let's get the cluster CA certificate which is used to sign all server certificates. We can use
 use `kubectl` to do so, but let's suppose we have the output of the must-gather script.
 
@@ -130,8 +129,9 @@ Certificate:
         ...
 ```
 
-When the TLS handshake is failing, add `-Djavax.net.debug=ssl:handshake` as client Java option to get more information.
-As additional exercise, you can get the clients CA and user certificates to check if the first signs the second.
+When the TLS handshake is failing, we can add `-Djavax.net.debug=ssl:handshake` Java option to the client in order to
+get more details. As additional exercise, try to get the clients CA and user certificates to check if the first signs
+the second.
 
 ### Example: custom certificates
 
@@ -139,21 +139,20 @@ Often, security policies don't allow to run a Kafka cluster with self-signed cer
 certificates functionality can be used to configure a custom certificate signed by an external or well-known CA.
 
 Custom certificates are not managed by the operator, so you will be in charge of the renewal process, which requires to
-update the listener secret. A brokers rolling update will start automatically in order to make the new certificate
-available. This example only shows TLS encryption, but you can also add a custom client certificate for TLS
-authentication by setting `tls-external` type in the user custom resource and creating the user secret (subject can only
-contain `CN=$USER_NAME`).
+update the listener secret. A rolling update will start automatically in order to make the new certificate available.
+This example only shows TLS encryption, but you can add a custom client certificate for TLS authentication by
+setting `type: tls-external` in the user CR and creating the user secret (subject can only contain `CN=$USER_NAME`).
 
-Typically, the security team will provide a certificate bundle including the whole trust chain (i.e. root CA +
-intermediate CA + listener certificate) and the private key. If that's not the case, you can easily create the bundle
-from the individual certificates in PEM format.
+Typically, the security team will provide a certificate bundle which includes the whole trust chain (i.e. root CA +
+intermediate CA + listener certificate) and a private key. If that's not the case, you can easily create the bundle from
+individual certificates in PEM format.
 
 ```sh
 $ cat /tmp/listener.crt /tmp/intermca.crt /tmp/rootca.crt > /tmp/bundle.crt
 ```
 
-The most important things to verify here are that the listener certificate is not a CA certificate, and it includes a
-SAN for each broker route, plus one for the bootstrap route. Alternatively, you can use a wildcard certificate.
+Note that the listener certificate must not be a CA and it must includes a SAN for each broker route, plus one for the
+bootstrap route. Alternatively, you can use a wildcard certificate.
 
 ```sh
 $ kubectl get routes
@@ -177,7 +176,7 @@ X509v3 extensions:
 ```
 
 In order to try this configuration, we are going to generate our certificate bundle with just one self-signed wildcard
-certificate, pretending it was handed over by the security guys (alternatively, you can use Let's Encrypt service).
+certificate, pretending it was handed over by the security team.
 
 ```sh
 $ CONFIG="
@@ -199,7 +198,7 @@ $ openssl genrsa -out /tmp/listener.key 2048
 $ openssl req -new -x509 -days 3650 -key /tmp/listener.key -out /tmp/bundle.crt -config <(echo "$CONFIG")
 ```
 
-[Deploy the Streams operator](/sessions/001). Then, deploy the secret containing the custom certificate and the Kafka
+[Deploy Streams operator](/sessions/001). Then, deploy the secret containing the custom certificate and the Kafka
 cluster containing a reference to that secret.
 
 ```sh
@@ -221,4 +220,4 @@ pod/my-cluster-zookeeper-1                        1/1     Running   0          5
 pod/my-cluster-zookeeper-2                        1/1     Running   0          5m4s
 ```
 
-When the cluster is ready, clients need to trust the external CA and they will be able to connect.
+When the cluster is ready, clients just need to trust the external CA and they will be able to connect.

@@ -1,58 +1,57 @@
 ## Kafka Connect and change data capture
 
 Kafka Connect is a **configuration-driven fault-tolerant integration platform** based on the Kafka client APIs, which
-runs in standalone or distributed mode (cluster of workers). The platform can be extended using plugins which implements
-the connect API interfaces. Connectors, converters and transformations are the plugins that you can load into the
-runtime at startup. The recommended way to add them is by using the `plugin.path` property, which provides some level of
-isolation. Configuration and other metadata are stored in configurable internal topics on the target Kafka cluster in
-order to provide high availability.
+runs in standalone or distributed mode (cluster of workers). The platform can be extended by using connectors,
+converters and transformations plugins which implements the connect API interfaces. The recommended way to add them is
+by using the `plugin.path` property, which provides some level of isolation. When running in distributed mode,
+configurations and other metadata are stored in internal topics on the target Kafka cluster to provide HA.
 
-There are two kinds of connectors: **source connector** for moving data from an external system to Kafka and **sink
-connector** for moving data from Kafka to an external system. Only few connectors are officially part of Kafka, but
-there are many available on GitHub or on public registries like Confluent Hub. Each connector job is split into **single
-threaded tasks** and sent to workers, along with the required configuration. You can configure the max number of tasks
-that can be created by setting the `maxTasks` at the connector configuration level, but the actual number of tasks
-created depends on the specific connector and, for sink connectors, on how many partitions we have. Tasks rebalancing
-uses the consumer group rebalancing protocol and happens when a worker fails, every time a new connector is added or
-there is a configuration change, but not when a task fails.
+There are two kinds of connectors: **source connector** for importing data from an external system to Kafka and **sink
+connector** for exporting data from Kafka to an external system. Only few connectors are officially part of Kafka, but
+there are many available on GitHub or on public registries like Confluent Hub.
 
-**Converters** are used by connectors to serialize and deserialize data when talking to the Kafka cluster.
-**Transformations**, also called single message transformations (SMTs), can be optionally used to apply simple changes
-at the record level. When you need to do heavy transformations (e.g. stream joins, calls to external services), you
-should use a stream processing library such as Kafka Streams or Apache Camel.
+Each connector job is split into a number of **single thread tasks** which run on worker nodes. You can configure the
+max number of tasks that can be created by setting the `maxTasks` at the connector configuration level, but the actual
+number of tasks depends on the specific connector and, for sink connectors, on how many partitions we have. Tasks
+rebalancing uses the same rebalancing protocol of consumer groups and happens when a worker fails, a new connector is
+added or there is a configuration change, but not when a task fails.
 
-**Change data capture** (CDC) is a well-established software design pattern for a system that captures and emit data
-changes, so that other applications can respond to those events. [Debezium](https://debezium.io) is a CDC engine, which
-can run standalone, but works best when deployed on top of Kafka Connect. Debezium is actually a collection of source
-connectors that can be used to create data pipelines that bridge traditional data stores with Kafka. The connector
-produces change events by performing an initial consistent snapshot and then reads the internal transaction log from the
-point at which the snapshot was made. It is also possible to perform incremental snapshots.
+The **converters** are used by connectors to serialize and deserialize data when talking to the Kafka cluster, while
+**transformations**, also called single message transformations (SMTs), can be optionally used to apply simple changes
+at the record level. When you need to do heavy transformations (e.g. join streams, call external services), you should
+use a stream processing library such as Kafka Streams.
+
+The **change data capture** (CDC) pattern describe a system that captures and emit all data changes, so that other
+applications can respond to those events. [Debezium](https://debezium.io) is a CDC engine that run standalone, but works
+best when deployed on top of Kafka Connect. Debezium is actually a collection of source connectors that can be used to
+create data pipelines that bridge traditional data stores with Kafka. The connector produces change events by performing
+an initial consistent snapshot and then reads the internal transaction log from the point at which the snapshot was
+made. It is also possible to perform incremental snapshots.
 
 ![](images/debezium.png)
 
 The disadvantage of using Debezium is that every connector requires specific configurations to enable transaction log
-access, which is normally not available to clients. The advantages over a poll-based connectors/application are:
+access. Instead, the advantages over a poll-based connector or application are:
 
 - **Low overhead**: near real-time reaction to data changes avoids increased CPU load due to frequent polling.
-- **No lost changes**: using a poll loop you may miss intermediary changes (updates, deletes) between two runs.
+- **No lost changes**: using a poll loop you may miss intermediary changes between two runs (updates, deletes).
 - **No data model impact**: no need for timestamp columns to determine the last update of data.
 
-Change events are self contained because they include the JSON Schema, so that you can always consume them even if the
-data source schema changes over time. When you crate a data pipeline using various connectors, it may be hard to
-determine the delivery semantics, because this depends on the connector and the external system features. By default,
-Debezium provides at least once semantics, which means duplicates can arise in failure scenarios. If the source data
-store or Kafka fail, the connector will reconnect and resume once they are restored. If the connector stops for too long
-and the transaction log was purged, then the connector lose its position and performs another initial snapshot. If one
-of the Kafka Connect workers crashes, the task will be restarted in another worker and duplicates can arise. The change
-event contains elements that allows you to identify and filter out duplicates.
+Debezium Change events are self contained because they include the JSON Schema, so that you can always consume them even
+if the data source schema changes over time. By default, Debezium provides at-least-once semantics, which means
+duplicates can arise in failure scenarios. If the source data store or Kafka fail, the connector will reconnect and
+resume once they are restored. If the connector stops for too long and the transaction log is purged, then the connector
+lose its position and performs another initial snapshot. If one of the Kafka Connect workers crashes, the task will be
+restarted in another worker and duplicates can arise. The change event contains elements that allows you to identify and
+filter out duplicates (idempotency is always a good idea in distributed systems).
 
 ### Example: cloud-native CDC pipeline
 
-[Deploy the Streams operator and Kafka cluster](/sessions/001). When the cluster is ready, we can deploy MySQL and Kafka
-Connect with Debezium MySQL connector. The Kafka Connect image use an internal builder (kaniko) to build a custom image
-containing the configured connectors. This builder requires credentials for pushing to an external image registry, so we
-first need to create a secret for that (tip: you can use a quay.io robot account instead of your user account). Note
-that we are also initializing the database.
+[Deploy Streams operator and Kafka cluster](/sessions/001). When the cluster is ready, we can deploy MySQL and Kafka
+Connect with Debezium MySQL connector. The Kafka Connect image use an internal component (kaniko) to build a custom
+image containing the configured connectors. This component requires credentials for pushing to an external image
+registry, so we first need to create a secret for that (tip: you can use a quay.io robot account instead of your user
+account). Note that we are also initializing the database.
 
 ```sh
 $ kubectl create secret docker-registry registry-authn \
@@ -100,9 +99,9 @@ kafkatopic.kafka.strimzi.io/strimzi-topic-operator-kstreams-topic-store-changelo
 kafkatopic.kafka.strimzi.io/testdb.history                                                                                     my-cluster   1            3                    True
 ```
 
-As you may have guessed at this point, we are going to emit MySQL row changes to Kafka, so that other applications can
-pick them up and process. Let's check if the connector and its tasks are running fine by using the `KafkaConnector`
-resource.
+As you may have guessed at this point, we are going to emit MySQL row changes and import them into Kafka, so that other
+applications can pick them up and process. Let's check if the connector and its tasks are running fine by using
+the `KafkaConnector` resource, which is easier than interacting via REST requests.
 
 ```sh
 $ kubectl get kctr mysql-source -o yaml | yq e '.status'
@@ -127,10 +126,10 @@ topics:
   - my-mysql.testdb.customers
 ```
 
-Debezium configuration is specific to each connector and documented in details. In this case, MySQL user must have
+Debezium configuration is specific to each connector and it is documented in details. In this case, MySQL user must have
 appropriate permissions on all databases for which the connector captures changes. The value for the `server_id` must be
-unique for each server and replication client in MySQL cluster. Also note that we are externalizing the connector
-configuration, specifically username and password.
+unique for each server and replication client in MySQL cluster. Also note that we are externalizing some connector
+configurations, specifically username and password.
 
 ```sh
 $ kubectl get cm my-mysql-init -o yaml | yq e '.data'
@@ -200,7 +199,7 @@ mysql.username=debezium
 mysql.password=changeit
 ```
 
-Enough with configuration, now let's create some changes using the good old SQL.
+Enough with describing the configuration, now let's create some changes using the good old SQL.
 
 ```sh
 $ kubectl exec my-mysql-ss-0 -- sh -c 'MYSQL_PWD="changeit" mysql -u admin testdb -e "\
@@ -213,10 +212,10 @@ id	first_name	last_name	email
 2	Dylan	Dog	ddog@example.com
 ```
 
-MySQL connector writes change events that occur in a table to a single Kafka topic named
-like `serverName.databaseName.tableName`. In this case, we created 3 changes (insert-update-insert), so we have 3
-records in that topic. It's interesting to look at some record properties: `op` is the change type (c=create, r=read /
-snapshot only, u=update, d=delete), `gtid` is the global transaction identifiers tha is unique in a MySQL
+The MySQL connector writes change events that occur in a table to a Kafka topic named
+like `serverName.databaseName.tableName`. We created 3 changes (insert-update-insert), so we have 3 records in that
+topic. It's interesting to look at some record properties: `op` is the change type (c=create, r=read for snapshot only,
+u=update, d=delete), `gtid` is the global transaction identifiers tha is unique in a MySQL
 cluster, `payload.source.ts_ms` is the timestamp when the change was applied, `payload.ts_ms` is the timestamp when
 Debezium processed that event (the notification lag is the difference with the source ts).
 
@@ -228,5 +227,5 @@ Struct{after=Struct{id=1,first_name=John,last_name=Doe,email=jdoe@example.com},s
 Struct{before=Struct{id=1,first_name=John,last_name=Doe,email=jdoe@example.com},after=Struct{id=1,first_name=Jane,last_name=Doe,email=jdoe@example.com},source=Struct{version=1.9.5.Final-redhat-00001,connector=mysql,name=my-mysql,ts_ms=1663228576000,db=testdb,table=customers,server_id=224466,gtid=1c90a695-34cb-11ed-aba8-0a580a810216:15,file=mysql-bin.000002,pos=2103,row=0,thread=67},op=u,ts_ms=1663228576091}
 ```
 
-As additional exercise, you can extend this pipeline by configuring some sink connector and replicate the data to an
-external system like AMQ broker.
+As additional exercise, you can extend this data pipeline by configuring some sink connector and export these changes to
+an external system like AMQ broker.

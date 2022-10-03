@@ -1,24 +1,24 @@
 ## Kafka cluster deployments and tools
 
-[Apache Kafka](https://kafka.apache.org) is an open-source distributed event streaming platform, that was originally
-developed at Linkedin to solve their near real time processing and scalability requirements and later donated to the
-Apache Software Foundation. [AMQ Streams](https://www.redhat.com/en/resources/amq-streams-datasheet) is the Red Hat
-distribution of Kafka, which also provides a set of operators from the [CNCF Strimzi](https://strimzi.io) project, that
-allow to easily provision and manage Kafka clusters on top of Red Hat OpenShift Container Platform.
+[Apache Kafka](https://kafka.apache.org) is an Open Source distributed event streaming platform that lets you read,
+write, store, and process events (also called records or messages) across many
+machines. [Red Hat AMQ Streams](https://www.redhat.com/en/resources/amq-streams-datasheet) includes Kafka and a set of
+operators from the [CNCF Strimzi](https://strimzi.io) project. The operators are a way of extending the OpenShift or
+Kubernetes platforms by deploying application controllers with domain knowledge.
 
-Let's start by saying that not every use case justifies the additional complexity that Kafka brings to the table in
-order to enable scalability. It is best suited when you have a high throughput of relatively small messages, that a
-traditional message broker struggles to manage, or you need near realtime stream processing requirements.
+Let's start by saying that not every use case justifies the additional complexity that Kafka brings to the table. It is
+best suited when you have a high throughput of relatively small messages, that traditional message brokers struggle to
+manage, or you have near realtime stream processing requirements.
 
 Kafka provides two main layers that can scale independently: the **storage layer**, which stores messages efficiently in
 a cluster of brokers, and the **compute layer** which is built on top of the producer and consumer APIs. There are also
 two higher level APIs: the connect API for external systems integration and the streams API for stream processing.
 
-Within a cluster, we have the **control plane**, which handles cluster metadata, and the **data plane**, which handles
+Within a cluster, we have the **control plane**, which handles cluster metadata and the **data plane**, which handles
 user data. One of the brokers is elected as controller, which has the additional responsibility of managing the states
-of partitions and replicas and for performing administrative tasks like reassigning partitions. With ZooKeeper there is
-only one elected controller instance, while in the new KRaft implementation we have a quorum of controllers, where only
-one is active at any time.
+of partitions and replicas and for performing administrative tasks like reassigning partitions. In ZooKeeper mode there
+is only one elected controller, while in the new KRaft mode we have a quorum of controllers, where only one is active at
+any time, while the others are ready to take over in case of failure.
 
 ![](images/cluster.png)
 
@@ -27,20 +27,20 @@ includes both the message format and error codes. Clients send messages in the e
 write to disk. The protocol is backwards and forwards compatible, however there can be issues in case of message format
 changes. This hasn't happened for a long time, but there is no guarantee. Typically, every client opens N+1 connections,
 where N is the number of brokers in the cluster and 1 connection is for metadata updates. Client requests are processed
-in the same order they are sent by the client.
+in the same order they are sent.
 
 Each message is modeled as a **record** with timestamp, key, value and optional headers. Key and value are just byte
 arrays and this gives people the flexibility to encode the data in whatever format they want, using their favourite
 serializer. The timestamp is always present, but it can be set by the application when it sends (default), or by the
-Kafka runtime when it receives. Whenever possible, records are buffered and sent in **batches** (a single send request
-can include multiple batches, one for each partition).
+Kafka runtime when it receives. Whenever possible, records are buffered and sent in **batches** (a single request can
+include multiple batches, one for each partition).
 
 Records are stored in a **topic**, which is further divided into one or more **partitions**, distributed evenly across
-the brokers. Each partition is stored on disk as a series of fixed-size commit logs called **segments**. Record ordering
-is only guaranteed at the single partition level. Each record within a partition has a unique id called the **offset**,
-which is a monotonically increasing number that is never reused. To uniquely identify a record in Kafka you need the
-topic, the partition and the offset. The last committed offset of a partition is called the **high watermark** (HW).
-Records are guaranteed to be fully replicated up to this offset. Only committed records are exposed to consumers.
+the brokers. Each partition is stored on disk as a series of fixed-size commit logs called **segments**. Ordering is
+only guaranteed at the partition level. Each record within a partition has a unique id called the **offset**, which is a
+monotonically increasing number that is never reused. To uniquely identify a record in Kafka you need the topic, the
+partition and the offset. The last committed offset of a partition is called the **high watermark** (HW). Records are
+guaranteed to be fully replicated up to this offset. Only committed records are exposed to consumers.
 
 ![](images/replicas.png)
 
@@ -50,21 +50,21 @@ appropriate client configuration (topic with `replicas=3` and `min.insync.replic
 broker will only acknowledge the produce request once the data is fully replicated across other brokers. If you set a
 topic replication factor of N, the system can tolerate N-1 broker failures.
 
-Producers always sends to the **leader** partition replica, while consumers can be configured to fetch from in-sync
-**follower** replicas. Up to date replicas are called **in-sync replicas** (ISR). Partitions are the unit of
-parallelism. Multiple consumers with the same `group.id` form a **consumer group** and partitions are distributed among
-them using a pluggable assignor. Within a consumer group, a partition is assigned to exactly one consumer to not break
-ordering, but that consumer can handle multiple partitions. Each consumer periodically or manually commits its position
-for all assigned partitions (the next offset to read) to an internal topic called `__consumer_offsets`.
+Producers always send to the **leader** partition replica, while consumers can be configured to fetch from a
+**follower**. Up to date replicas are called **in-sync replicas** (ISR). Multiple consumers with the same `group.id`
+form a **consumer group** and partitions are distributed among them using a pluggable assignor (partition as unit of
+parallelism). Within a consumer group, a partition is assigned to exactly one consumer to not break ordering, but that
+consumer can handle multiple partitions. Each consumer periodically or manually commits its position (next offsets to
+read) to an internal topic called `__consumer_offsets`.
 
 ### Example: deploy on localhost
 
-We are going to deploy a Kafka cluster on your local machine. This is useful for reproducing issues or experiment with
-tools without having to provision a cluster on OpenShift. We will use the latest upstream release (the downstream
-release is just a rebuild with few additional and optional plugins).
+We are going to deploy a Kafka cluster on your local machine. This is useful for quick tests where a multi node cluster
+is not required. We will use the latest upstream release because the downstream release is just a rebuild with few
+additional and optional plugins.
 
-Download the Kafka distribution and start a single broker cluster with just one command. When it's don, you should have
-a two processes running on your system, one is Kafka and the other is ZooKeeper.
+Download the Kafka distribution and start a single broker cluster all in one command. When it returns, you should have
+two processes running on your system, one is Kafka and the other is ZooKeeper.
 
 ```sh
 $ KAFKA_URL="https://archive.apache.org/dist/kafka/3.2.1/kafka_2.13-3.2.1.tgz" \
@@ -79,9 +79,9 @@ $ jps -v | grep kafka
 450808 QuorumPeerMain -Xmx512M -Xms512M -XX:+UseG1GC -XX:MaxGCPauseMillis=20 -XX:InitiatingHeapOccupancyPercent=35 -XX:+ExplicitGCInvokesConcurrent -XX:MaxInlineLevel=15 -Djava.awt.headless=true -Xlog:gc:file=/tmp/kafka-uIdD8ek/bin/.logs/zookeeper-gc.log:time,tags:filecount=10,filesize=100M -Dcom.sun.management.jmxremote -Dcom.sun.management.jmxremote.authenticate=false -Dcom.sun.management.jmxremote.ssl=false -Dkafka.logs.dir=/tmp/kafka-uIdD8ek/bin/.logs -Dlog4j.configuration=file:/tmp/kafka-uIdD8ek/bin/.config/log4j.properties
 ```
 
-Now we can create a new topic with 3 partitions, produce some messages and consume them. When consuming messages, we
-print additional data such as the partition number. We also set the group id because, if you don't do it, a randomly
-generate one is used at every invocation.
+Create a new topic with 3 partitions, produce and consume some messages. When consuming messages, we print additional
+data such as the partition number. Every consumer with the same `group.id` will be part of the same consumer group. If
+you don't use the `--group` option, a randomly generated `group.id` is used at every invocation.
 
 ```sh
 $ kafka-topics.sh --bootstrap-server :9092 --topic my-topic --create --partitions 3 --replication-factor 1 
@@ -105,7 +105,7 @@ Partition:2	Offset:0	2	world
 ^CProcessed a total of 2 messages
 ```
 
-It works, but where these messages are being stored? The broker property `log.dirs` specifies where our topic partitions
+It works, but where these messages are being stored? The broker property `log.dirs` configure where our topic partitions
 are stored. We have 3 partitions, which corresponds to exactly 3 folders on disk.
 
 ```sh
@@ -118,10 +118,10 @@ drwxr-xr-x. 2 fvaleri fvaleri  140 Sep  8 16:55 my-topic-1
 drwxr-xr-x. 2 fvaleri fvaleri  140 Sep  8 16:55 my-topic-2
 ```
 
-The consumer output shows that messages were sent to partition 0 and 2. Looking inside partition 0, we have the `.log`
-file containing our records (each segment is named after the initial offset), the `.index` which maps the record offset
-to its position in the log, and a `.timeindex` file maps the record timestamp to its position in the log. The other two
-files contain some additional metadata.
+The consumer output shows that messages were sent to partition 0 and 2. Looking inside partition 0, we have a `.log`
+file containing our records (each segment is named after the initial offset), an `.index` file mapping the record offset
+to its position in the log and a `.timeindex` file mapping the record timestamp to its position in the log. The other
+two files contain some additional metadata.
 
 ```sh
 $ ls -lh /tmp/kafka-logs/my-topic-0/
@@ -133,9 +133,8 @@ total 12K
 -rw-r--r--. 1 fvaleri fvaleri  43 Sep  8 16:55 partition.metadata
 ```
 
-The log file is in binary format, but Kafka includes a tool to dump and decode it content. Let's look at one ogf them
-and see if it contains one of our messages. On this partition we have one batch (`baseOffset`), containing only one
-record (`| offset`) with key "1" and value "hello".
+Partition log files are in binary format, but Kafka includes a dump tool for decoding them. On this partition we have
+one batch (`baseOffset`), containing only one record (`| offset`) with key "1" and value "hello".
 
 ```sh
 $ kafka-dump-log.sh --deep-iteration --print-data-log \
@@ -147,9 +146,9 @@ baseOffset: 0 lastOffset: 0 count: 1 baseSequence: 0 lastSequence: 0 producerId:
 ```
 
 Our consumer group should have committed the offsets to the `__consumer_offsets` internal topic. The problem is that
-this topic has 50 partitions by default, so how do I know which partition was used? Kafka applies a simple hashing
-algorithm to map the `group.id` to a specific offset coordinating partition. We can use the same algorithm through a
-bash function (JDK 9+ is required) to reverse engineer that mapping and find our partition number.
+this topic has 50 partitions by default, so how do I know which partition was used? Kafka uses a simple hashing
+algorithm to map a `group.id` to a specific offset coordinating partition. We can use the same algorithm through a
+simple bash function (JDK 9+ is required).
 
 ```sh
 $ find_cp() {
@@ -167,12 +166,12 @@ $ find_cp my-group
 12
 ```
 
-Ok, we know that the consumer group commit record was sent to `__consumer_offsets-12`, so we can dump this partition
-like we did previously. This time the record's value is encoded for performance reasons, so we have to pass
-the `--offsets-decoder` option to enable deserialization. This partition contains other metadata, but we are
-specifically interested in the `offset_commit` key. As you can see, we have a batch from our consumer group, which
-includes 3 records, one for each input topic partition. As expected, the consumer group committed offset1 on partition0
-and partition2, and offset0 on partition1 (we only sent 2 messages).
+We know that the consumer group commit record was sent to `__consumer_offsets-12`, so let's dump this partition too.
+Here values are encoded for performance reasons, so we have to pass the `--offsets-decoder` option.
+
+This partition contains other metadata, but we are specifically interested in the `offset_commit` key. We have a batch
+from our consumer group, which includes 3 records, one for each input topic partition. As expected, the consumer group
+committed offset1 on partition0 and partition2, plus offset0 on partition1 (we sent 2 messages).
 
 ```sh
 $ kafka-dump-log.sh --deep-iteration --print-data-log --offsets-decoder \
@@ -188,8 +187,8 @@ baseOffset: 15 lastOffset: 17 count: 3 baseSequence: 0 lastSequence: 2 producerI
 
 ### Example: deploy on OpenShift
 
-We are going to deploy a 3-nodes cluster on OpenShift, using the built-in OperatorHub (OLM) component, which is the
-preferred mode because you can use a web UI and you get the additional benefit of automatic upgrades.
+We are going to deploy a 3-nodes cluster on OpenShift using the built-in OperatorHub (OLM) component, which is the
+preferred mode because you can use the web console and you get the additional benefit of automatic updates.
 
 Login to your OpenShift cluster as admin user and create a test namespace, setting it as the current context.
 
@@ -208,13 +207,15 @@ $ kubectl config set-context --current --namespace=test
 Context "default/api-cluster-8z6kz-8z6kz-sandbox425-opentlc-com:6443/opentlc-mgr" modified.
 ```
 
-Then, create the OLM subscription, which installs the Streams custom resource definitions (CRDs) and triggers the
-Streams cluster operator (CO) deployment. CRDs extend the built-in OpenShift resources and add new capabilities. The CO
-is installed in the `openshift-operators` namespace and, by default, watches for new `Kafka` resources in all
-namespaces. CRDs are cluster wide resources, you can't deploy multiple operator versions running on the same OpenShift
-cluster, unless their CRDs are fully compatible, which is not guaranteed.
+Create the OLM subscription which installs the Streams custom resource definitions (CRDs) and triggers the cluster
+operator (CO) deployment. CRDs extend the built-in OpenShift resources adding new capabilities. By default, the CO is
+installed in the `openshift-operators` namespace and watches Kafka resources in all namespaces.
 
-```
+Remember that CRDs are cluster wide resources, we can't deploy multiple operator versions running on the same OpenShift
+cluster, unless their CRDs are fully compatible, which is not guaranteed. If you delete the CRDs, every Kafka cluster
+deployed on that OpenShift cluster will be garbage collected.
+
+```sh
 $ kubectl create -f sessions/001/sub.yaml
 operatorgroup.operators.coreos.com/local-operators created
 subscription.operators.coreos.com/my-streams created
@@ -224,14 +225,15 @@ NAME                                                     READY   STATUS    RESTA
 amq-streams-cluster-operator-v2.1.0-8-6dfcc6449d-c2np5   1/1     Running   0          57s
 ```
 
-Now we can create our Kafka cluster and one topic. Look inside the YAML files to see how the desired cluster is
-specified in a declarative way. The CO will then try to reconcile that with the actual state. In addition to ZooKeeper
-and Kafka pods, the entity operator (EO) pod is also deployed, which includes two namespace operators: the topic
-operator (TO), which reconciles `KafkaTopic` resources, and the user operator (UO), which reconciles `KafkaUser`
-resources. If you want to deploy multiple Kafka clusters on the same namespace, make sure to only have only one instance
-of these operators to avoid a race condition on topic and user creations.
+Create a new Kafka cluster and test topic. Look inside the YAML files to see how the cluster state is declared. The CO
+periodically verifies that the desired state corresponds to the actual state and take action if not.
 
-```
+In addition to ZooKeeper and Kafka pods, the entity operator (EO) pod is also deployed, which includes two namespace
+operators: the topic operator (TO), which reconciles topic resources, and the user operator (UO), which reconciles user
+resources. If you want to deploy multiple Kafka clusters on the same namespace, make sure to have only one instance of
+these operators to avoid a race conditions.
+
+```sh
 $ kubectl create -f sessions/001/crs
 kafka.kafka.strimzi.io/my-cluster created
 kafkatopic.kafka.strimzi.io/my-topic created
@@ -256,23 +258,21 @@ pod/my-cluster-zookeeper-1                        1/1     Running   0          5
 pod/my-cluster-zookeeper-2                        1/1     Running   0          5m4s
 ```
 
-When the Kafka cluster is up and running, let's try to produce and consume some messages.
+When the Kafka cluster is ready, let's try to produce and consume some messages.
 
-```
-$ kubectl run client-$(date +%s) -it --rm --restart="Never" \
-  --image="registry.redhat.io/amq7/amq-streams-kafka-31-rhel8:2.1.0" -- \
-    bin/kafka-console-producer.sh --bootstrap-server my-cluster-kafka-bootstrap:9092 \
-      --topic my-topic
+```sh
+$ krun_kafka() { kubectl run krun-$(date +%s) -it --rm --restart="Never" \
+  --image="registry.redhat.io/amq7/amq-streams-kafka-31-rhel8:2.1.0" -- "$@"; }
+
+$ krun_kafka bin/kafka-console-producer.sh --bootstrap-server my-cluster-kafka-bootstrap:9092 --topic my-topic
 If you don't see a command prompt, try pressing enter.
 >hello
 >world
 >^Cpod "my-producer" deleted
 pod test/my-producer terminated (Error)
 
-$ kubectl run client-$(date +%s) -it --rm --restart="Never" \
-  --image="registry.redhat.io/amq7/amq-streams-kafka-31-rhel8:2.1.0" -- \
-    bin/kafka-console-consumer.sh --bootstrap-server my-cluster-kafka-bootstrap:9092 \
-      --topic my-topic --group my-group --from-beginning
+$ krun_kafka bin/kafka-console-consumer.sh --bootstrap-server my-cluster-kafka-bootstrap:9092 \
+  --topic my-topic --group my-group --from-beginning
 If you don't see a command prompt, try pressing enter.
 world
 hello
@@ -281,13 +281,13 @@ pod "my-consumer" deleted
 pod test/my-consumer terminated (Error)
 ```
 
-When debugging issues, we usually need to retrieve various artifacts from these pods and this can be tedious.
+When debugging issues, we usually need to retrieve various artifacts from the environment and this can be tedious.
 Fortunately, Strimzi maintains a backward compatible must-gather script that can be used to download all relevant
-artifacts and logs from a specific Kafka cluster. If needed, add the `--secrets=all` flag to also get secret values.
+artifacts and logs from a specific Kafka cluster. Add `--secrets=all` option to also get secret values.
 
-```
+```sh
 $ pushd /tmp && curl -sLk https://raw.githubusercontent.com/strimzi/strimzi-kafka-operator/main/tools/report.sh \
-    | bash -s -- --namespace=test --cluster=my-cluster && popd
+  | bash -s -- --namespace=test --cluster=my-cluster && popd
 /tmp
 WARNING: This version information is deprecated and will be replaced with the output from kubectl version --short.  Use --output=yaml|json to get the full version.
 deployments
