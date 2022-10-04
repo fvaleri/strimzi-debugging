@@ -44,7 +44,7 @@ spec:
   build:
     output:
       type: docker
-      image: #VALUE0#
+      image: value0
       pushSecret: registry-authn
     plugins:
       - name: debezium-mysql
@@ -56,3 +56,13 @@ spec:
       - name: connectors
         secret:
           secretName: connectors
+---
+apiVersion: v1
+kind: Secret
+metadata:
+  name: connectors
+stringData:
+  config.properties: |-
+    mysql.username=debezium
+    mysql.password=changeit
+---

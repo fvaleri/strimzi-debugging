@@ -2,8 +2,8 @@
 
 We have an unbalanced cluster when there is **uneven distribution of load across brokers**, so that some brokers are
 overloaded, while others are under utilized. This happens as a consequence of some failures, the addition of new
-brokers, or simply because some partitions are used more than others. The `RequestHandlerAvgIdlePercent` metric is a
-good overall load measurement metric for Kafka scaling decisions. Good rule of thumb is when it hits 20% (i.e. the
+brokers, or simply because some partitions are used more than others. The `RequestHandlerAvgIdlePercent` broker metric
+is a good overall load measurement metric for Kafka scaling decisions. Good rule of thumb is when it hits 20% (i.e. the
 request handler threads are busy 80% of the time), then it's time to plan your cluster expansion, at 10% you need to
 scale it now.
 
@@ -131,9 +131,9 @@ topicName: my-topic
 ### Example: Cruise Control in action
 
 [Deploy Streams operator and Kafka cluster](/sessions/001). When the cluster is ready, add the `spec.cruiseControl`
-to Kafka CR and create a rebalance CR with default goals. Al Kafka pods will be rolled in order to add the CC metric
-agents, and a CC instance will be started. A new rebalance proposal ise created every 15 minutes based on the latest
-workload model.
+to Kafka CR and create a rebalance CR with default goals. Al Kafka pods will be rolled in order to add the required
+metric agents, and a CC instance will be started. A new rebalance proposal is created every 15 minutes based on the
+latest workload model.
 
 ```sh
 $ kubectl apply -f sessions/007/crs
@@ -185,7 +185,7 @@ sessionId: c0d1e77e-9b0d-4871-ab30-6443b123307e
 
 Let's check the log end offsets of the test topic partitions. Now we send some messages in order to create some
 imbalance and see if this is reflected in the auto generated reassignment proposal. We don't want to wait the periodic
-proposal, so we use the refresh annotation.
+proposal creation, so we use the refresh annotation.
 
 ```sh
 $ krun_kafka bin/kafka-producer-perf-test.sh --topic my-topic --record-size 100 --num-records 1000000 \

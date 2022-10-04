@@ -1,9 +1,0 @@
-apiVersion: v1
-kind: Secret
-metadata:
-  name: connectors
-type: Opaque
-stringData:
-  config.properties: |-
-    mysql.username=debezium
-    mysql.password=changeit

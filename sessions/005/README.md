@@ -2,15 +2,15 @@
 
 In order to create a disaster recovery plan you would need to decide the **recovery point objective** (RPO), which is
 the maximum amount of data you are willing to risk losing, and the **recovery time objective** (RTO), which is the
-maximum amount of downtime that your system can have. Zero RPO requires a good infrastructure, but there are cheaper
-alternatives if you can relax this objective. The RTO depends on your tooling and failover procedures, since failing
-over applications is not a system responsibility.
+maximum amount of downtime that your system can have. Zero RPO requires a really good infrastructure, but there are
+cheaper alternatives if you can relax this objective. The RTO depends on your tooling and failover procedures, since
+failing over applications is not a system responsibility.
 
 A data corruption due to human error or bug would also be replicated, so having **periodic backups** from which you can
 restore the cluster at a specific point in time is a must in every case. One strategy here is to backup the full cluster
-configuration (including any custom configuration), while also taking disk/volumes snapshots. Unfortunately, we do not
-have an integrated solution for that, so you would need to create some automation scripts. A solid monitoring system
-might help to know what you have restored and what you might be missing.
+configuration, while also taking disk/volume snapshots. Unfortunately, we do not have an integrated solution for that,
+so you would need to create some custom automation scripts. A solid monitoring system might help to know what you have
+restored and what you might be missing.
 
 Assuming the right replication configuration, the only way to have zero RPO is to setup a **stretch Kafka cluster**,
 which is one that evenly spans multiple data centers (i.e. synchronous replication). Usually only DCs that are close to
@@ -24,21 +24,21 @@ longer RTO (this is not recommended).
 The cheaper alternative to the stretch cluster is **Mirror Maker 2** (MM2), where a secondary/backup cluster is
 continuously kept in-sync, including consumer group offsets and topic ACLs. Unfortunately, you can't completely avoid
 duplicates and data loss because replication is asynchronous with no transactions support (see KIP-656). Producers,
-should be able to re-send data missing on the backup cluster, which means storing the latest messages sent somewhere.
-Consumers should be idempotent, in order to tolerate some duplicates. In case of disaster, the amount of data that may
-be lost depends on MM2 connectors latency, so you should carefully monitor these metrics and set alerts. It would also
-be good to have virtual hosts or a cluster proxy, so that you can switch all clients at once from a central place.
+should be able to re-send missing data, which means storing the latest sent messages somewhere. Consumers should be
+idempotent, so that they can tolerate some duplicates. In case of disaster, the amount of data that may be lost depends
+on MM2 connectors latency, so you should carefully monitor these metrics and set alerts. It would also be good to have
+virtual hosts or a cluster proxy, so that you can switch all clients at once from a central place.
 
 ![](images/mm2.png)
 
-### Example: active-passive configuration with MM2
+### Example: active-passive configuration
 
-[Deploy Streams operator and Kafka cluster](/sessions/001). Then, create the target namespace, cluster and MM2 instance.
+[Deploy Streams operator and Kafka cluster](/sessions/001). Then, we create the target namespace for the backup cluster.
 For convenience, we run the two Kafka clusters in different namespaces on the same OpenShift cluster.
 
-We want to connect securely, so we also need to copy the source cluster CA secret to the target namespace, so that it
-can be trusted by MM2. The recommended way of deploying the MM2 cluster is near the target Kafka cluster (same subnet or
-zone), because the overhead on the producer is usually greater than the consumer.
+We want to connect securely, so we need to copy the source cluster CA secret to the target namespace, so that it can be
+trusted by MM2. At this point, we can deploy the target cluster and a MM2 instance. The recommended way of deploying the
+MM2 is near the target Kafka cluster (same subnet or zone), because the producer overhead is greater than consumer.
 
 ```sh
 $ kubectl create ns target
@@ -54,10 +54,10 @@ kafkamirrormaker2.kafka.strimzi.io/my-mm2 created
 configmap/mm2-metrics created
 ```
 
-When the target cluster is up and running, we can start the MM2 pod and check its status. MM2 runs on top of Kafka
-Connect with a set of configurable built-in connectors. The `MirrorSourceConnector` replicates remote topics, ACLs and
-configurations of a single source cluster and emits offset-syncs. The `MirrorCheckpointConnector` emits consumer group
-offsets checkpoints to enable failover points.
+When the target cluster is up and running, we can start MM2 and check its status. MM2 runs on top of Kafka Connect with
+a set of configurable built-in connectors. The `MirrorSourceConnector` replicates remote topics, ACLs and configurations
+of a single source cluster and emits offset syncs. The `MirrorCheckpointConnector` emits consumer group offsets
+checkpoints to enable failover points.
 
 ```sh
 $ kubectl -n target scale kmm2 my-mm2 --replicas 1
@@ -106,7 +106,7 @@ url: http://my-mm2-mirrormaker2-api.target.svc:8083
 
 Finally, we can send 1 mln messages to the test topic in the source Kafka cluster. After some time, the log end offsets
 should match on both clusters. Note that this is a controlled experiment, but the actual offsets tend to naturally
-diverge with time, because each Kafka cluster operates independently. This is why we have offsets mapping metadata.
+diverge with time, because each Kafka cluster operates independently. This is why we have offset mapping metadata.
 
 ```sh
 $ krun_kafka bin/kafka-producer-perf-test.sh --topic my-topic --record-size 100 --num-records 1000000 \
@@ -124,7 +124,7 @@ my-topic:2:287417
 pod "get-leo" deleted
 
 $ krun_kafka bin/kafka-run-class.sh kafka.tools.GetOffsetShell \
-  --broker-list my-cluster-tgt-kafka-bootstrap:9092 --topic my-topic --time -1
+  --broker-list my-cluster-tgt-kafka-bootstrap.target.svc:9092 --topic my-topic --time -1
 If you don't see a command prompt, try pressing enter.
 my-topic:0:353737
 my-topic:1:358846
@@ -138,8 +138,8 @@ can also cause that when having lots of existing data to mirror. In this case MM
 have a fast network, because default producers are not optimized for throughput.
 
 Let's run a load test and see how fast we can replicate data with default settings. By looking
-at `MirrorSourceConnector` task metrics, we see that we are saturating the producer buffer (16384 bytes), which means
-that we have a bottleneck here.
+at `MirrorSourceConnector` task metrics, we see that we are saturating the producer buffer (default: 16384 bytes), which
+means that we have a bottleneck here.
 
 ```sh
 $ kubectl -n target scale kmm2 my-mm2 --replicas 0
@@ -158,9 +158,9 @@ kafkamirrormaker2.kafka.strimzi.io/my-mm2 scaled
 
 $ kubectl -n target exec -it $(kubectl -n target get po | grep my-mm2 | awk '{print $1}') -- \
   bin/kafka-run-class.sh kafka.tools.JmxTool --jmx-url service:jmx:rmi:///jndi/rmi://:9999/jmxrmi \
-  --date-format yyyy-MM-dd_HH:mm:ss --one-time true --wait \
-  --object-name kafka.producer:type=producer-metrics,client-id=\""connector-producer-my-cluster->my-cluster-tgt.MirrorSourceConnector-0\"" \
-  --attributes batch-size-avg,request-latency-avg
+    --date-format yyyy-MM-dd_HH:mm:ss --one-time true --wait \
+    --object-name kafka.producer:type=producer-metrics,client-id=\""connector-producer-my-cluster->my-cluster-tgt.MirrorSourceConnector-0\"" \
+    --attributes batch-size-avg,request-latency-avg
 2022-09-27_16:36:22,16224.29945722409,3.705901141898906
 ```
 
@@ -190,8 +190,8 @@ kafkamirrormaker2.kafka.strimzi.io/my-mm2 scaled
 
 $ kubectl -n target exec -it $(kubectl -n target get po | grep my-mm2 | awk '{print $1}') -- \
   bin/kafka-run-class.sh kafka.tools.JmxTool --jmx-url service:jmx:rmi:///jndi/rmi://:9999/jmxrmi \
-  --date-format yyyy-MM-dd_HH:mm:ss --one-time true --wait \
-  --object-name kafka.producer:type=producer-metrics,client-id=\""connector-producer-my-cluster->my-cluster-tgt.MirrorSourceConnector-0\"" \
-  --attributes batch-size-avg,request-latency-avg
+    --date-format yyyy-MM-dd_HH:mm:ss --one-time true --wait \
+    --object-name kafka.producer:type=producer-metrics,client-id=\""connector-producer-my-cluster->my-cluster-tgt.MirrorSourceConnector-0\"" \
+    --attributes batch-size-avg,request-latency-avg
 2022-09-27_17:13:43,241694.3748256625,21.546531892645522
 ```

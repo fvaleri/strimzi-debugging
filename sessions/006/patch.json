@@ -22,7 +22,7 @@
       {
         "name": "data",
         "persistentVolumeClaim": {
-          "claimName": "#VALUE0#"
+          "claimName": "value0"
         }
       }
     ]

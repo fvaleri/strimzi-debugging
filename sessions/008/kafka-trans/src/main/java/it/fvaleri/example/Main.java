@@ -87,7 +87,7 @@ public class Main {
     }
 
     private static KafkaConsumer<String, String> createKafkaConsumer() {
-        System.out.println("Creating a new transaction-aware consumer");
+        System.out.println("Creating a new transactional consumer");
         Properties props = new Properties();
         props.put(ConsumerConfig.BOOTSTRAP_SERVERS_CONFIG, BOOTSTRAP_SERVERS);
         props.put(ConsumerConfig.KEY_DESERIALIZER_CLASS_CONFIG, StringDeserializer.class.getName());

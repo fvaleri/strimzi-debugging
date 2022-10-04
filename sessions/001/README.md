@@ -1,7 +1,7 @@
 ## Kafka cluster deployments and tools
 
-[Apache Kafka](https://kafka.apache.org) is an Open Source distributed event streaming platform that lets you read,
-write, store, and process events (also called records or messages) across many
+[Apache Kafka](https://kafka.apache.org) is an **Open Source distributed streaming platform** that lets you read, write,
+store, and process messages across many
 machines. [Red Hat AMQ Streams](https://www.redhat.com/en/resources/amq-streams-datasheet) includes Kafka and a set of
 operators from the [CNCF Strimzi](https://strimzi.io) project. The operators are a way of extending the OpenShift or
 Kubernetes platforms by deploying application controllers with domain knowledge.
@@ -44,18 +44,19 @@ guaranteed to be fully replicated up to this offset. Only committed records are 
 
 ![](images/replicas.png)
 
-By default, Kafka relies on the OS page cache for disk writes and there is no fsync call (except for the new KRaft
-internal metadata topic). Durability and high availability can be achieved through **partition replication** and
-appropriate client configuration (topic with `replicas=3` and `min.insync.replicas=2`, producer with `acks=all`). The
-broker will only acknowledge the produce request once the data is fully replicated across other brokers. If you set a
-topic replication factor of N, the system can tolerate N-1 broker failures.
+The **partition replication** protocol is fundamental in Kafka. The system ensures durability and high availability by
+spreading partition replicas across brokers. Kafka is fast because it relies on the OS page cache for disk writes (no
+fsync call except for the new KRaft internal topic), so it's really important that you set the right amount of replicas
+for your use case. One of these replicas will be elected as the **leader** getting all messages from producers, while
+the others will be **followers** and can be read by consumers. If you set a topic replication factor of N, the system
+can tolerate N-1 broker failures.
 
-Producers always send to the **leader** partition replica, while consumers can be configured to fetch from a
-**follower**. Up to date replicas are called **in-sync replicas** (ISR). Multiple consumers with the same `group.id`
-form a **consumer group** and partitions are distributed among them using a pluggable assignor (partition as unit of
-parallelism). Within a consumer group, a partition is assigned to exactly one consumer to not break ordering, but that
-consumer can handle multiple partitions. Each consumer periodically or manually commits its position (next offsets to
-read) to an internal topic called `__consumer_offsets`.
+When sending messages, a producer with `acks=all` (now default) will not get an ack until all `min.insync.replicas`
+(ISR) have replicated the message. At any time, the ISR only includes replicas that are up to date. Multiple consumers
+with the same `group.id` form a consumer group and partitions are distributed among them using a pluggable assignor
+(partition as unit of parallelism). Within a consumer group, a partition is assigned to exactly one consumer to not
+break ordering, but that consumer can handle multiple partitions. Each consumer periodically or manually commits its
+position (next offsets to read) to an internal topic called `__consumer_offsets`.
 
 ### Example: deploy on localhost
 
@@ -99,9 +100,9 @@ $ kafka-console-producer.sh --bootstrap-server :9092 --topic my-topic --property
 >^C
 
 $ kafka-console-consumer.sh --bootstrap-server :9092 --topic my-topic --group my-group --from-beginning \
-  --property print.partition=true --property print.offset=true --property print.key=true
-Partition:0	Offset:0	1	hello
-Partition:2	Offset:0	2	world 
+  --property print.partition=true -property print.key=true
+Partition:0	1	hello
+Partition:2	2	world
 ^CProcessed a total of 2 messages
 ```
 
@@ -258,7 +259,9 @@ pod/my-cluster-zookeeper-1                        1/1     Running   0          5
 pod/my-cluster-zookeeper-2                        1/1     Running   0          5m4s
 ```
 
-When the Kafka cluster is ready, let's try to produce and consume some messages.
+When the Kafka cluster is ready, let's try to produce and consume some messages. Note that we are using a nice function
+to avoid repeating that for every client we need. You can also use the broker pods for that, but it is always risky to
+spin up another JVM inside a pod, especially in production.
 
 ```sh
 $ krun_kafka() { kubectl run krun-$(date +%s) -it --rm --restart="Never" \
@@ -268,8 +271,8 @@ $ krun_kafka bin/kafka-console-producer.sh --bootstrap-server my-cluster-kafka-b
 If you don't see a command prompt, try pressing enter.
 >hello
 >world
->^Cpod "my-producer" deleted
-pod test/my-producer terminated (Error)
+>^Cpod "krun-1664886431" deleted
+pod test/krun-1664886431 terminated (Error
 
 $ krun_kafka bin/kafka-console-consumer.sh --bootstrap-server my-cluster-kafka-bootstrap:9092 \
   --topic my-topic --group my-group --from-beginning
@@ -277,8 +280,8 @@ If you don't see a command prompt, try pressing enter.
 world
 hello
 ^CProcessed a total of 2 messages
-pod "my-consumer" deleted
-pod test/my-consumer terminated (Error)
+pod "krun-1664886505" deleted
+pod test/krun-1664886505 terminated (Error)
 ```
 
 When debugging issues, we usually need to retrieve various artifacts from the environment and this can be tedious.
@@ -286,10 +289,8 @@ Fortunately, Strimzi maintains a backward compatible must-gather script that can
 artifacts and logs from a specific Kafka cluster. Add `--secrets=all` option to also get secret values.
 
 ```sh
-$ pushd /tmp && curl -sLk https://raw.githubusercontent.com/strimzi/strimzi-kafka-operator/main/tools/report.sh \
-  | bash -s -- --namespace=test --cluster=my-cluster && popd
-/tmp
-WARNING: This version information is deprecated and will be replaced with the output from kubectl version --short.  Use --output=yaml|json to get the full version.
+$ curl -sLk https://raw.githubusercontent.com/strimzi/strimzi-kafka-operator/main/tools/report.sh \
+  | bash -s -- --namespace=test --cluster=my-cluster --out-dir=~/Downloads  
 deployments
     deployment.apps/my-cluster-entity-operator
 statefulsets
@@ -312,6 +313,7 @@ secrets
     secret/my-cluster-entity-user-operator-certs
     secret/my-cluster-kafka-brokers
     secret/my-cluster-zookeeper-nodes
+    secret/my-user
 services
     service/my-cluster-kafka-0
     service/my-cluster-kafka-1
@@ -333,7 +335,7 @@ networkpolicies
     networkpolicy.networking.k8s.io/my-cluster-network-policy-kafka
     networkpolicy.networking.k8s.io/my-cluster-network-policy-zookeeper
 pods
-    pod/my-cluster-entity-operator-6b68959588-4klzj
+    pod/my-cluster-entity-operator-6b68959588-6fqcb
     pod/my-cluster-kafka-0
     pod/my-cluster-kafka-1
     pod/my-cluster-kafka-2
@@ -359,7 +361,7 @@ clusterroles
     clusterrole.rbac.authorization.k8s.io/strimzi-kafka-client
 clusterrolebindings
 podlogs
-    my-cluster-entity-operator-6b68959588-4klzj
+    my-cluster-entity-operator-6b68959588-6fqcb
     my-cluster-kafka-0
     my-cluster-kafka-1
     my-cluster-kafka-2
@@ -376,6 +378,8 @@ customresources
         my-topic
         strimzi-store-topic---effb8e3e057afce1ecf67c3f5d8e4e3ff177fc55
         strimzi-topic-operator-kstreams-topic-store-changelog---b75e702040b99be8a9263134de3507fc0cc4017b
+    kafkausers.kafka.strimzi.io
+        my-user
 customresourcedefinitions
     kafkabridges.kafka.strimzi.io
     kafkaconnectors.kafka.strimzi.io
@@ -389,5 +393,4 @@ customresourcedefinitions
     strimzipodsets.core.strimzi.io
 events
 Report file report-08-09-2022_18-49-41.zip created
-~/Documents/streams-debugging
 ```

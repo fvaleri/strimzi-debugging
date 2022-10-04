@@ -7,6 +7,7 @@ spec:
     replicas: 3
     version: 3.1.0
     config:
+      # lowest protocol version (downgrade is not supported)
       inter.broker.protocol.version: "3.1"
       num.partitions: 3
       default.replication.factor: 3
@@ -35,6 +36,10 @@ spec:
       type: inline
       loggers:
         kafka.root.logger.level: "INFO"
+    jvmOptions:
+      gcLoggingEnabled: false
+      "-XX":
+        ExitOnOutOfMemoryError: "true"
     resources:
       limits:
         cpu: 1000m

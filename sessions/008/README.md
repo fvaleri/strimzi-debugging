@@ -1,12 +1,11 @@
 ## Transactions and how to rollback them
 
 Kafka provides at-least-once semantics by default and duplicates can arise due to either producer retries or consumer
-restarts after failure. The **idempotent producer** configuration solves the duplicates problem, but does not guarantee
-the atomicity when you need to write to multiple partitions at the same time. This is what a typical streaming
-application does with its cycles of read-process-write. The **exactly-once semantics** (EOS) helps to achieve all or
-nothing behavior when writing to multiple partitions, much like you need transactions to atomically write to two or more
-tables in a relational database.
-
+restarts after failure. The **idempotent producer** configuration (now default) solves the duplicates problem, but does
+not guarantee the atomicity when you need to write to multiple partitions at the same time. This is what a typical
+streaming application does with its cycles of read-process-write. The **exactly-once semantics** (EOS) helps to achieve
+all or nothing behavior when writing to multiple partitions, much like you need transactions to atomically write to more
+than one table in a relational database.
 
 Algorithm overview:
 
@@ -18,19 +17,19 @@ Algorithm overview:
 ![](images/trans.png)
 
 The producer has to configure a static and unique `transactional.id` (TID), that is mapped to a producer ID (PID) and
-epoch, used for zombie fencing. A producer can have **only one ongoing transaction** (ordering guarantee). Consumers
+epoch used for zombie fencing. A producer can have **only one ongoing transaction** (ordering guarantee). Consumers
 with `isolation.level=read_committed` receive committed messages only, ignoring ongoing and discarding aborted
 transactions (they get few additional metadata to do that). Transactions overhead is minimal and the biggest impact is
-on producers. You can balance overhead with latency by tuning the `commit.interval.ms`. Compared to suing the low level
+on producers. You can balance overhead with latency by tuning the `commit.interval.ms`. Compared to using the low level
 API, enabling transactions is much easier when using the Streams API, as we just need to
 set `processing.guarantee=exactly_once_v2`.
 
-The **transaction state** is stored in a specific `__transaction_state` partition, whose leader is a broker called the
-transaction coordinator. This partition is determined in a similar way as the consumer group coordinating partition.
-Each partition also contains `.snapshot` logs which helps in rebuilding producers state in case of broker crash or
-restart. A single Kafka transaction cannot span different Kafka clusters or external systems. The offset of the first
-still-open transaction is called the **last stable offset** (LSO <= HW). The transaction coordinator automatically
-aborts any ongoing transaction that is not committed or aborted within `transaction.timeout.ms`.
+The transaction state is stored in a specific `__transaction_state` partition, whose leader is a broker called the
+**transaction coordinator**. Each partition also contains `.snapshot` logs that helps in rebuilding producers state in
+case of broker crash or restart. A single Kafka transaction cannot span different Kafka clusters or external systems.
+The offset of the first still-open transaction is called the **last stable offset** (LSO <= HW). The transaction
+coordinator automatically aborts any ongoing transaction that is not committed or aborted
+within `transaction.timeout.ms`.
 
 Before Kafka 2.5.0 the TID had to be a static encoding of the input partition (i.e. `my-app.my-group.my-topic.0`)
 in order to avoid partition ownership transfer during consumer group rebalances, that would invalidate the fencing
@@ -42,7 +41,7 @@ with the offsets to commit.
 
 [Deploy a Kafka cluster on localhost](/sessions/001). This time, we use a local deployment just because it's more
 convenient for inspecting partition content. Let's run the application on a different shell, send one sentence to the
-input topic and check the result on the output topic. [Look at the code](/sessions/008/kafka-trans) to see how the
+input topic and check the result in the output topic. [Look at the code](/sessions/008/kafka-trans) to see how the
 transaction API is used within the read-process-write process.
 
 ```sh
@@ -51,12 +50,9 @@ $ kafka-topics.sh --bootstrap-server :9092 --create --topic wc-input --partition
 Created topic wc-input.
 Created topic wc-output.
 
-$ pushd sessions/008/kafka-trans && mvn clean compile exec:java -q && popd
-~/Documents/streams-debugging/sessions/008/kafka-trans ~/Documents/streams-debugging
+# run thisc commad in a different shell
+$ mvn clean compile exec:java -f sessions/008/kafka-trans/pom.xml -q
 Creating a new transactional producer
-SLF4J: Failed to load class "org.slf4j.impl.StaticLoggerBinder".
-SLF4J: Defaulting to no-operation (NOP) logger implementation
-SLF4J: See http://www.slf4j.org/codes.html#StaticLoggerBinder for further details.
 Creating a new transaction-aware consumer
 READ: Waiting for new user sentence
 
@@ -233,9 +229,9 @@ operation is required if authorization is enabled.
 $ klog snapshot abort-cmd 00000000000933607637.snapshot.dump --pid 173101 --producer-epoch 14
 ```
 
-As additional exercise, try to apply the above procedure to [this raw partition](/sessions/008/raw). We know
-that `__consumer_offsets-27` LSO is 913095344 and some consumer applications are blocked. You should get the following
-result for the first hanging transaction.
+As additional exercise, try to apply the above procedure to [this raw partition](/sessions/008/raw). We know that the
+LSO for that partition is 913095344 and some consumer applications are blocked. You should get the following result for
+the first hanging transaction.
 
 ```sh
 $KAFKA_HOME/bin/kafka-transactions.sh --bootstrap-server $BOOTSTRAP_URL abort --topic $TOPIC_NAME --partition $PART_NUM --producer-id 171100 --producer-epoch 1 --coordinator-epoch 34

@@ -23,8 +23,8 @@ storage_capacity (MB) = retention_sec * topic_write_rate (MB/s) * replication_fa
 storage_capacity (MB) = retention_mb * replication_factor * part_number
 ```
 
-In OpenShift, a persistent volume (PV) live outside any namespace and is claimed by using a persistent volume claim
-(PVC). You can specify the storage class (SC) used fir provisioning directly in the Kafka CR. Only volumes created and
+In OpenShift, a persistent volume (PV) lives outside any namespace and it is claimed by using a persistent volume claim
+(PVC). You can specify the storage class (SC) used for provisioning directly in the Kafka CR. Only volumes created and
 managed by a SC with `allowVolumeExpansion: true` can be increased, but not decreased. When using JBOD, you can also
 remove a volume, but data needs to be migrated to other volumes upfront. Volumes with
 either `persistentVolumeReclaimPolicy: Retain`, or using a storage class with `reclaimPolicy: Retain` are retained when
@@ -109,7 +109,7 @@ kafka.kafka.strimzi.io/my-cluster annotated
 statefulset.apps/my-cluster-kafka scaled
 
 $ kubectl run client-$(date +%s) --image "dummy" --restart "Never" \
-  --overrides "$(sed "s,#VALUE0#,data-my-cluster-kafka-0,g" sessions/006/patch.json)"
+  --overrides "$(sed "s,value0,data-my-cluster-kafka-0,g" sessions/006/patch.json)"
 pod/strimzi-debug created
 
 $ kubectl exec -it strimzi-debug -- bash
@@ -164,7 +164,7 @@ my-cluster-kafka-2                            1/1     Running   0          18m
 
 ### Example: unintentional namespace deletion with retained volumes
 
-[Deploy Streams operator and Kafka cluster](/sessions/001). Once the cluster is ready, we change the reclaim policy at
+[Deploy Streams operator and Kafka cluster](/sessions/001). When the cluster is ready, we change the reclaim policy at
 the persistent volume level. Also note that the volume status is "Bound".
 
 ```sh
@@ -243,7 +243,7 @@ $ for line in $(kubectl get pv | grep "my-cluster" | awk '{print $1 "#" $2 "#" $
   pvc="$(echo $line | awk -F'#' '{print $3}' | sed 's|test\/||g')"
   sc="$(echo $line | awk -F'#' '{print $4}')"
   kubectl patch pv "$pv" --type json -p '[{"op":"remove","path":"/spec/claimRef"}]'
-  sed "s,#VALUE0#,$pvc,g; s,#VALUE1#,$size,g; s,#VALUE2#,$sc,g; s,#VALUE3#,$pv,g" \
+  sed "s,value0,$pvc,g; s,value1,$size,g; s,value2,$sc,g; s,value3,$pv,g" \
     sessions/006/pvc.yaml | kubectl create -f -
 done
 persistentvolume/pvc-32b4c2cf-e4f1-453b-b86d-498324a3a1fa patched

@@ -4,16 +4,16 @@ The TLS protocol provides **communications security over a computer network**. E
 is insecure. Hostname verification through common name (CN) or subject alternative name (SAN) protects against man in
 the middle attacks, so it should never be disabled in production.
 
-A **public key infrastructure** (PKI) is an arrangement that binds public keys with respective identities of entities (
-e.g. organizations, people, applications). The binding is established through a process of registration and issuance of
+A **public key infrastructure** (PKI) is an arrangement that binds public keys with respective identities of entities
+(e.g. organizations, people, applications). The binding is established through a process of registration and issuance of
 certificates by a **certificate authority** (CA). The server name indication (SNI) extension is used when having
 multiple certificates on the same IP address. It is also used by OpenShift to route external TLS connections. Leveraging
 this feature, we can tunnel the Kafka TCP protocol through the OpenShift HTTP reverse proxy.
 
 A TLS certificate contains a public key along with the ownership data and expiration date. Cipher suites contain
 algorithms for key exchange, encryption and authentication. A **self-signed certificate** is secure enough, but only if
-it is trusted upfront by the application. It is also possible to create a **wildcard certificate** (e.g. CN=*
-.example.com), that can be used by all application running in a specific domain (e.g. an OpenShift cluster).
+it is trusted upfront by the application. It is also possible to create a **wildcard certificate**
+(e.g. CN=*.example.com), that can be used by all application running in a specific domain (e.g. an OpenShift cluster).
 
 Within a Kafka cluster, in addition to the **client-server communication**, you also need to protect the **inter-cluster
 communication** and renew certificates when they expire. Most of this work is done by the Streams CO, which is a great
@@ -55,38 +55,26 @@ authentication:
   type: tls
 ```
 
-All external clients need to retrieve the self-signed auto-generated cluster CA certificate and add it to their
-truststore. They also need to add the user certificate to their keystore. The CO was kind enough to generate these
-stores for us and provide them inside a secret. We also need to retrieve the bootstrap URL from the passthrough route.
+Now, external clients need to retrieve the bootstrap URL from the passthrough route, configure their keystore and
+truststore. Then we can try sending some messages in a secure way. Make sure to have
+the [Kafka scripts in your path](/sessions/001).
 
 ```sh
-$ kubectl get secret my-user -o "jsonpath={.data['user\.p12']}" | base64 -d > /tmp/keystore.p12
-$ kubectl get secret my-user -o "jsonpath={.data['user\.password']}" | base64 -d
-zbyegyq9hRJo
-
-$ kubectl get secret my-cluster-cluster-ca-cert -o "jsonpath={.data['ca\.p12']}" | base64 -d > /tmp/truststore.p12
-$ kubectl get secret my-cluster-cluster-ca-cert -o "jsonpath={.data['ca\.password']}" | base64 -d
-iJBQFEsE7G2e
-
-$ echo $(kubectl get routes my-cluster-kafka-bootstrap -o=jsonpath='{.status.ingress[0].host}{"\n"}'):443
-my-cluster-kafka-bootstrap-test.apps.cluster-8z6kz.8z6kz.sandbox425.opentlc.com:443
-```
-
-With all these data, we can now configure the client, connect to the cluster and try sending some messages in a secure
-way. Make sure to have the [Kafka scripts in your path](/sessions/001).
-
-```sh
+$ BOOTSTRAP_URL="$(kubectl get routes my-cluster-kafka-bootstrap -o=jsonpath='{.status.ingress[0].host}{"\n"}'):443" \
+  KEYSTORE_LOCATION="/tmp/keystore.p12" KEYSTORE_PASSWORD="$(kubectl get secret my-user -o "jsonpath={.data['user\.password']}" | base64 -d)" \
+  TRUSTSTORE_LOCATION="/tmp/truststore.p12" TRUSTSTORE_PASSWORD="$(kubectl get secret my-cluster-cluster-ca-cert -o "jsonpath={.data['ca\.password']}" | base64 -d)" \
+  ; kubectl get secret my-user -o "jsonpath={.data['user\.p12']}" | base64 -d > $KEYSTORE_LOCATION \
+    && kubectl get secret my-cluster-cluster-ca-cert -o "jsonpath={.data['ca\.p12']}" | base64 -d > $TRUSTSTORE_LOCATION
+  
 $ cat <<EOF >/tmp/client.properties
 security.protocol = SSL
-ssl.keystore.location = /tmp/keystore.p12
-ssl.keystore.password = zbyegyq9hRJo
-ssl.truststore.location = /tmp/truststore.p12
-ssl.truststore.password = iJBQFEsE7G2e
+ssl.keystore.location = $KEYSTORE_LOCATION
+ssl.keystore.password = $KEYSTORE_PASSWORD
+ssl.truststore.location = $TRUSTSTORE_LOCATION
+ssl.truststore.password = $TRUSTSTORE_PASSWORD
 EOF
 
-$ kafka-console-producer.sh --producer.config /tmp/client.properties \
-  --bootstrap-server my-cluster-kafka-bootstrap-test.apps.cluster-8z6kz.8z6kz.sandbox425.opentlc.com:443 \
-  --topic my-topic
+$ kafka-console-producer.sh --producer.config /tmp/client.properties --bootstrap-server $BOOTSTRAP_URL --topic my-topic
 >hello
 >tls
 >^C 
@@ -129,9 +117,9 @@ Certificate:
         ...
 ```
 
-When the TLS handshake is failing, we can add `-Djavax.net.debug=ssl:handshake` Java option to the client in order to
-get more details. As additional exercise, try to get the clients CA and user certificates to check if the first signs
-the second.
+If this is not enough to spot the issue, we can add the `-Djavax.net.debug=ssl:handshake` Java option to the client in
+order to get more details. As additional exercise, try to get the clients CA and user certificates to check if the first
+signs the second.
 
 ### Example: custom certificates
 
@@ -152,7 +140,7 @@ $ cat /tmp/listener.crt /tmp/intermca.crt /tmp/rootca.crt > /tmp/bundle.crt
 ```
 
 Note that the listener certificate must not be a CA and it must includes a SAN for each broker route, plus one for the
-bootstrap route. Alternatively, you can use a wildcard certificate.
+bootstrap route. This is an example of how it should look like.
 
 ```sh
 $ kubectl get routes
@@ -175,8 +163,8 @@ X509v3 extensions:
     DNS:my-cluster-kafka-bootstrap-test.apps.cluster-8z6kz.8z6kz.sandbox425.opentlc.com, DNS:my-cluster-kafka-0-test.apps.cluster-8z6kz.8z6kz.sandbox425.opentlc.com, DNS:my-cluster-kafka-1-test.apps.cluster-8z6kz.8z6kz.sandbox425.opentlc.com, DNS:my-cluster-kafka-2-test.apps.cluster-8z6kz.8z6kz.sandbox425.opentlc.com
 ```
 
-In order to try this configuration, we are going to generate our certificate bundle with just one self-signed wildcard
-certificate, pretending it was handed over by the security team.
+Just for convenience, we generate our own certificate bundle with only one self-signed certificate, pretending it was
+handed over by the security team. We use a wildcard certificate so that we don't need to specify all broker SANs.
 
 ```sh
 $ CONFIG="
