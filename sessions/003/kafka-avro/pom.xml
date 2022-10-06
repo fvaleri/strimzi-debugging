@@ -13,8 +13,8 @@
         <maven.compiler.target>11</maven.compiler.target>
         <project.build.sourceEncoding>UTF-8</project.build.sourceEncoding>
         <project.reporting.outputEncoding>UTF-8</project.reporting.outputEncoding>
-        <kafka.version>3.1.0.redhat-00007</kafka.version>
-        <apicurio-registry.version>2.0.3.Final-redhat-00002</apicurio-registry.version>
+        <kafka.version>3.2.3.redhat-00003</kafka.version>
+        <apicurio-registry.version>2.3.0.Final-redhat-00004</apicurio-registry.version>
         <jackson-databind.version>2.12.3</jackson-databind.version>
         <slf4j.version>1.7.36</slf4j.version>
         <exec-plugin.version>1.6.0</exec-plugin.version>

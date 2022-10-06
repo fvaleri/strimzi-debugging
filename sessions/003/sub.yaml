@@ -13,7 +13,7 @@ metadata:
   name: my-registry
   namespace: openshift-operators
 spec:
-  channel: 2.0.x
+  channel: 2.3.x
   name: service-registry-operator
   installPlanApproval: Automatic
   source: redhat-operators

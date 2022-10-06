@@ -5,13 +5,14 @@ metadata:
 spec:
   kafka:
     replicas: 3
-    version: 3.1.0
+    version: 3.2.3
     config:
-      inter.broker.protocol.version: "3.1"
+      # lowest protocol version (downgrade is not supported)
+      inter.broker.protocol.version: "3.2"
       num.partitions: 3
       default.replication.factor: 3
-      offsets.topic.replication.factor: 3
       min.insync.replicas: 2
+      offsets.topic.replication.factor: 3
       transaction.state.log.replication.factor: 3
       transaction.state.log.min.isr: 2
     listeners:
@@ -23,17 +24,20 @@ spec:
         port: 9093
         type: internal
         tls: true
+    # enable unprotected JMX on port 9999
     jmxOptions: { }
     logging:
       type: inline
       loggers:
         kafka.root.logger.level: "INFO"
-    resources:
-      limits:
-        cpu: 500m
-        memory: 1Gi
     jvmOptions:
       gcLoggingEnabled: false
+      "-XX":
+        ExitOnOutOfMemoryError: "true"
+    resources:
+      limits:
+        cpu: 1000m
+        memory: 1Gi
     storage:
       size: 10Gi
       type: persistent-claim
@@ -55,8 +59,8 @@ spec:
         zookeeper.root.logger: "INFO"
     resources:
       limits:
-        cpu: 250m
-        memory: 256Mi
+        cpu: 500m
+        memory: 1Gi
     jvmOptions:
       gcLoggingEnabled: false
     storage:
@@ -73,7 +77,10 @@ spec:
     topicOperator:
       resources:
         limits:
-          cpu: 250m
+          cpu: 1000m
+          memory: 512Mi
+        requests:
+          cpu: 500m
           memory: 256Mi
       readinessProbe:
         initialDelaySeconds: 60
@@ -84,7 +91,10 @@ spec:
     userOperator:
       resources:
         limits:
-          cpu: 250m
+          cpu: 1000m
+          memory: 512Mi
+        requests:
+          cpu: 500m
           memory: 256Mi
       readinessProbe:
         initialDelaySeconds: 60

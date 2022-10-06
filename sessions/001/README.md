@@ -38,9 +38,9 @@ include multiple batches, one for each partition).
 Records are stored in a **topic**, which is further divided into one or more **partitions**, distributed evenly across
 the brokers. Each partition is stored on disk as a series of fixed-size commit logs called **segments**. Ordering is
 only guaranteed at the partition level. Each record within a partition has a unique id called the **offset**, which is a
-monotonically increasing number that is never reused. To uniquely identify a record in Kafka you need the topic, the
-partition and the offset. The last committed offset of a partition is called the **high watermark** (HW). Records are
-guaranteed to be fully replicated up to this offset. Only committed records are exposed to consumers.
+monotonically increasing number that is never reused. Message **ordering is only guaranteed at the partition level**. If
+this is a requirement, you should create a single-partition topic or you should use the same key for sending all related
+events, so that they always land on the same partition. Beware that increasing topic partitions may break ordering.
 
 ![](images/replicas.png)
 
@@ -49,9 +49,10 @@ spreading partition replicas across brokers. Kafka is fast because it relies on 
 fsync call except for the new KRaft internal topic), so it's really important that you set the right amount of replicas
 for your use case. One of these replicas will be elected as the **leader** getting all messages from producers, while
 the others will be **followers** and can be read by consumers. If you set a topic replication factor of N, the system
-can tolerate N-1 broker failures.
+can tolerate N-1 broker failures. The last committed offset of a partition is called the **high watermark** (HW).
+Records are guaranteed to be fully replicated up to this offset and only committed records are exposed to consumers.
 
-When sending messages, a producer with `acks=all` (now default) will not get an ack until all `min.insync.replicas`
+When sending messages, a producer with `acks=all` (now default) will not get a send ack until all `min.insync.replicas`
 (ISR) have replicated the message. At any time, the ISR only includes replicas that are up to date. Multiple consumers
 with the same `group.id` form a consumer group and partitions are distributed among them using a pluggable assignor
 (partition as unit of parallelism). Within a consumer group, a partition is assigned to exactly one consumer to not
@@ -68,9 +69,9 @@ Download the Kafka distribution and start a single broker cluster all in one com
 two processes running on your system, one is Kafka and the other is ZooKeeper.
 
 ```sh
-$ KAFKA_URL="https://archive.apache.org/dist/kafka/3.2.1/kafka_2.13-3.2.1.tgz" \
+$ KAFKA_URL="https://archive.apache.org/dist/kafka/3.2.3/kafka_2.13-3.2.3.tgz" \
   && rm -rf /tmp/kafka-logs /tmp/zookeeper \
-  && export KAFKA_HOME=$(mktemp -d -t kafka-XXXXXXX) && export PATH="$KAFKA_HOME/bin:$PATH" \
+  && export KAFKA_HOME=$(mktemp -d -t kafka.XXXXXXX) && export PATH="$KAFKA_HOME/bin:$PATH" \
   && curl -sLk $KAFKA_URL | tar xz -C $KAFKA_HOME --strip-components 1 \
   && zookeeper-server-start.sh -daemon $KAFKA_HOME/config/zookeeper.properties \
   && sleep 5 && kafka-server-start.sh -daemon $KAFKA_HOME/config/server.properties
@@ -265,14 +266,14 @@ spin up another JVM inside a pod, especially in production.
 
 ```sh
 $ krun_kafka() { kubectl run krun-$(date +%s) -it --rm --restart="Never" \
-  --image="registry.redhat.io/amq7/amq-streams-kafka-31-rhel8:2.1.0" -- "$@"; }
+  --image="registry.redhat.io/amq7/amq-streams-kafka-32-rhel8:2.2.0" -- "$@"; }
 
 $ krun_kafka bin/kafka-console-producer.sh --bootstrap-server my-cluster-kafka-bootstrap:9092 --topic my-topic
 If you don't see a command prompt, try pressing enter.
 >hello
 >world
 >^Cpod "krun-1664886431" deleted
-pod test/krun-1664886431 terminated (Error
+pod test/krun-1664886431 terminated (Error)
 
 $ krun_kafka bin/kafka-console-consumer.sh --bootstrap-server my-cluster-kafka-bootstrap:9092 \
   --topic my-topic --group my-group --from-beginning
@@ -289,8 +290,8 @@ Fortunately, Strimzi maintains a backward compatible must-gather script that can
 artifacts and logs from a specific Kafka cluster. Add `--secrets=all` option to also get secret values.
 
 ```sh
-$ curl -sLk https://raw.githubusercontent.com/strimzi/strimzi-kafka-operator/main/tools/report.sh \
-  | bash -s -- --namespace=test --cluster=my-cluster --out-dir=~/Downloads  
+$ curl -sLk https://raw.githubusercontent.com/strimzi/strimzi-kafka-operator/15b2f3b534b74d732c9bf57ede015c9e72941079/tools/report.sh \
+  | bash -s -- --namespace=test --cluster=my-cluster --out-dir=~/Downloads
 deployments
     deployment.apps/my-cluster-entity-operator
 statefulsets

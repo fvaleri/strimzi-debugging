@@ -186,8 +186,8 @@ $ openssl genrsa -out /tmp/listener.key 2048
 $ openssl req -new -x509 -days 3650 -key /tmp/listener.key -out /tmp/bundle.crt -config <(echo "$CONFIG")
 ```
 
-[Deploy Streams operator](/sessions/001). Then, deploy the secret containing the custom certificate and the Kafka
-cluster containing a reference to that secret.
+Building on the previous example, we deploy the secret containing the custom certificate and the Kafka cluster
+containing a reference to that secret.
 
 ```sh
 $ kubectl create secret generic ext-listener-crt \
@@ -208,4 +208,5 @@ pod/my-cluster-zookeeper-1                        1/1     Running   0          5
 pod/my-cluster-zookeeper-2                        1/1     Running   0          5m4s
 ```
 
-When the cluster is ready, clients just need to trust the external CA and they will be able to connect.
+When the cluster is ready, clients just need to trust the external CA and they will be able to connect. In this case, we
+need to trust our self-signed certificate, but I'm leaving this additional exercise to you. 
