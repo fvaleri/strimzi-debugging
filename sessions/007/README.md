@@ -1,11 +1,14 @@
 ## Cruise Control and unbalanced clusters
 
-We have an unbalanced cluster when there is **uneven distribution of load across brokers**, so that some brokers are
-overloaded, while others are under utilized. This happens as a consequence of some failures, the addition of new
-brokers, or simply because some partitions are used more than others. The `RequestHandlerAvgIdlePercent` broker metric
-is a good overall load measurement metric for Kafka scaling decisions. Good rule of thumb is when it hits 20% (i.e. the
-request handler threads are busy 80% of the time), then it's time to plan your cluster expansion, at 10% you need to
-scale it now.
+By default, Kafka try to distribute the load evenly across brokers. This is achieved through the concept of **preferred
+replica**, which is the first replica created for a new topic. This is designated as the leader and assigned to a broker
+in order to balance leader distribution. A background thread moves leader to preferred replica when it's in sync.
+
+Sometimes, this may not be enough and we may end up with **uneven distribution of load across brokers** as a consequence
+of some failures, the addition of new brokers or simply because some partitions are used more than others.
+The `RequestHandlerAvgIdlePercent` broker metric is a good overall load measurement metric for Kafka scaling decisions.
+Good rule of thumb is when it hits 20% (i.e. the request handler threads are busy 80% of the time), then it's time to
+plan your cluster expansion, at 10% you need to scale it now.
 
 Rebalancing means moving partitions between brokers (inter brokers), between disks on the same broker (intra broker), or
 simply change leaders in order to restore the balance. Usually we need some combination of partition movements and
