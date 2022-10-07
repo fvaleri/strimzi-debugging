@@ -290,7 +290,7 @@ Fortunately, Strimzi maintains a backward compatible must-gather script that can
 artifacts and logs from a specific Kafka cluster. Add `--secrets=all` option to also get secret values.
 
 ```sh
-$ curl -sLk https://raw.githubusercontent.com/strimzi/strimzi-kafka-operator/15b2f3b534b74d732c9bf57ede015c9e72941079/tools/report.sh \
+$ curl -sLk https://raw.githubusercontent.com/strimzi/strimzi-kafka-operator/28b70e1041301d0a0ecc0d2555013629f934718c/tools/report.sh \
   | bash -s -- --namespace=test --cluster=my-cluster --out-dir=~/Downloads
 deployments
     deployment.apps/my-cluster-entity-operator
