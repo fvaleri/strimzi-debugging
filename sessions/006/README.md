@@ -243,7 +243,7 @@ $ for line in $(kubectl get pv | grep "my-cluster" | awk '{print $1 "#" $2 "#" $
   pvc="$(echo $line | awk -F'#' '{print $3}' | sed 's|test\/||g')"
   sc="$(echo $line | awk -F'#' '{print $4}')"
   kubectl patch pv "$pv" --type json -p '[{"op":"remove","path":"/spec/claimRef"}]'
-  sed "s,value0,$pvc,g; s,value1,$size,g; s,value2,$sc,g; s,value3,$pv,g" \
+  sed "s#value0#$pvc#g; s#value1#$size#g; s#value2#$sc#g; s#value3#$pv#g" \
     sessions/006/pvc.yaml | kubectl create -f -
 done
 persistentvolume/pvc-32b4c2cf-e4f1-453b-b86d-498324a3a1fa patched

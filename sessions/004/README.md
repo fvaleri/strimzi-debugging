@@ -59,11 +59,11 @@ $ kubectl create secret docker-registry registry-authn \
   --dry-run=client -o yaml | kubectl replace --force -f -
 secret/registry-authn replaced
 
-find sessions/004/crs -name "*.yaml" -exec sed "s,value0,quay.io/fvaleri/my-connect:2.1,g" {} + | kubectl create -f -
+find sessions/004/crs -name "*.yaml" -exec sed "s#value0#quay.io/fvaleri/my-connect:2.1#g" {} + | kubectl create -f -
 
 
 # not working fine
-$ sed "s,value0,quay.io/fvaleri/my-connect:2.1,g" sessions/004/crs/*.yaml | kubectl create -f - \
+$ sed "s#value0#quay.io/fvaleri/my-connect:2.1#g" sessions/004/crs/*.yaml | kubectl create -f - \
   && kubectl wait --for="condition=Ready" pod -l app=mysql --timeout=300s \
   && kubectl exec my-mysql-ss-0 -- bash -c 'mysql -u root < /tmp/sql/initdb.sql'
 configmap/my-mysql-init created
