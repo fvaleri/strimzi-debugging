@@ -6,8 +6,6 @@ data:
   initdb.sql: |
     \connect testdb;
     GRANT ALL PRIVILEGES ON DATABASE testdb to admin;
-    GRANT ALL PRIVILEGES ON ALL TABLES IN SCHEMA cdc TO admin;
-    GRANT ALL PRIVILEGES ON ALL SEQUENCES IN SCHEMA cdc TO admin;
 ---
 apiVersion: v1
 kind: PersistentVolumeClaim
