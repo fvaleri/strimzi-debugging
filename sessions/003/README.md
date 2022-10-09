@@ -5,7 +5,7 @@ need to know the metadata, which fields are available and what are their types. 
 more efficient, because we don't need to send the schema with each message and numbers can be stored in their more
 efficient binary representation.
 
-It is less obvious why we may need a central schema registry. Why would you want to add this complexity to your
+It is less obvious why we may need a **central schema registry**. Why would you want to add this complexity to your
 architecture? Why not simply agree on a message schema, put it in shared library and live with that? Distributing
 schemas is easy when we have few clients that we control, but it becomes challenging when we have lots of clients and
 some of them are by third party. In addition to distribution, we also need to evolve these schema safely in a backwards
@@ -13,13 +13,13 @@ and forwards compatible way, to allow new clients to read old data and old clien
 
 ![](images/serdes.png)
 
-[Red Hat Service Registry](https://www.redhat.com/en/technologies/cloud-computing/openshift/openshift-service-registry)
-is based on [Apicurio Registry](https://www.apicur.io/registry), which is a schema registry for REST APIs (OpenAPI) and
-message schemas (AsyncAPI). It supports pluggable storage (in-memory, Kafka, PostgreSQL), schema versioning, schema
-validation and provides **Java serializers/deserializers** (SerDes) for Avro, Protobuf and JSON Schema. It also provides
-a **Maven plugin** that we can use to register artifacts at build time, a REST API and a web console to do CRUD
-operations on schema artifacts. When migrating from Confluent registry, it is possible to enable the API translation
-layer and use a tool called `exportConfluent` to import existing schemas.
+[Red Hat Service Registry](https://catalog.redhat.com/software/operators/detail/5ef2818e7dc79430ca5f4fd2) is based
+on [Apicurio Registry](https://www.apicur.io/registry), which is a schema registry for REST APIs (OpenAPI) and message
+schemas (AsyncAPI). It supports pluggable storage (in-memory, Kafka, PostgreSQL), schema versioning, schema validation
+and provides **Java serializers/deserializers** (SerDes) for Avro, Protobuf and JSON Schema. It also provides a **Maven
+plugin** that we can use to register schema artifacts at build time, a REST API and a web console to do CRUD operations
+on schema artifacts. When migrating from Confluent registry, it is possible to enable the API translation layer and use
+a tool called `exportConfluent` to import existing schemas.
 
 A registered schema artifact is uniquely identified by the tuple `(groupId, artifactId, version)`. By default,
 the `artifactId` is equal to the topic name plus `-key` or `-value` suffix, depending on whether the serializer was used
@@ -40,8 +40,8 @@ the operators are ready, we can deploy the Service Registry instance with Postgr
 
 ```sh
 $ kubectl create -f sessions/003/sub.yaml
-subscription.operators.coreos.com/my-svcreg created
-Error from server (AlreadyExists): error when creating "sessions/003/sub.yaml": operatorgroups.operators.coreos.com "local-operators" already exists
+operatorgroup.operators.coreos.com/local-operators created
+subscription.operators.coreos.com/my-registry created
 
 $ kubectl get po -n openshift-operators
 NAME                                                     READY   STATUS    RESTARTS   AGE
@@ -75,11 +75,11 @@ the schema registry REST endpoint. We also need to provide the truststore locati
 connecting externally.
 
 ```sh
-$ export BOOTSTRAP_SERVERS=$(kubectl get k my-cluster -o yaml | yq e '.status.listeners[2].bootstrapServers') \
-  && export REGISTRY_URL="http://$(kubectl get apicurioregistries my-registry -o 'jsonpath={.status.info.host}')/apis/registry/v2" \
-  && kubectl get secret my-cluster-cluster-ca-cert -o "jsonpath={.data['ca\.p12']}" | base64 -d > /tmp/truststore.p12 \
+$ export BOOTSTRAP_SERVERS=$(kubectl get routes my-cluster-kafka-bootstrap -o jsonpath="{.status.ingress[0].host}"):443 \
+  && export REGISTRY_URL=http://$(kubectl get apicurioregistries my-registry -o jsonpath="{.status.info.host}")/apis/registry/v2 \
+  && kubectl get secret my-cluster-cluster-ca-cert -o jsonpath="{.data['ca\.p12']}" | base64 -d > /tmp/truststore.p12 \
   && export SSL_TRUSTSTORE_LOCATION="/tmp/truststore.p12" \
-  && export SSL_TRUSTSTORE_PASSWORD=$(kubectl get secret my-cluster-cluster-ca-cert -o "jsonpath={.data['ca\.password']}" | base64 -d)
+  && export SSL_TRUSTSTORE_PASSWORD=$(kubectl get secret my-cluster-cluster-ca-cert -o jsonpath="{.data['ca\.password']}" | base64 -d)
 
 $ mvn clean compile exec:java -f sessions/003/kafka-avro/pom.xml -q
 Producing records

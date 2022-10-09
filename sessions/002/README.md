@@ -33,7 +33,7 @@ authentication and wait for the CO to restart all pods one by one (rolling updat
 correctly, it is possible to update the configuration with zero downtime.
 
 ```sh
-$ kubectl apply -f sessions/002/crs/tls-authn
+$ kubectl apply -f sessions/002/crs/mtls
 kafka.kafka.strimzi.io/my-cluster configured
 kafkauser.kafka.strimzi.io/my-user created
 ```
@@ -60,11 +60,11 @@ truststore. Then we can try sending some messages in a secure way. Make sure to 
 the [Kafka scripts in your path](/sessions/001).
 
 ```sh
-$ BOOTSTRAP_URL="$(kubectl get routes my-cluster-kafka-bootstrap -o=jsonpath='{.status.ingress[0].host}{"\n"}'):443" \
-  KEYSTORE_LOCATION="/tmp/keystore.p12" KEYSTORE_PASSWORD="$(kubectl get secret my-user -o "jsonpath={.data['user\.password']}" | base64 -d)" \
-  TRUSTSTORE_LOCATION="/tmp/truststore.p12" TRUSTSTORE_PASSWORD="$(kubectl get secret my-cluster-cluster-ca-cert -o "jsonpath={.data['ca\.password']}" | base64 -d)" \
-  ; kubectl get secret my-user -o "jsonpath={.data['user\.p12']}" | base64 -d > $KEYSTORE_LOCATION \
-    && kubectl get secret my-cluster-cluster-ca-cert -o "jsonpath={.data['ca\.p12']}" | base64 -d > $TRUSTSTORE_LOCATION
+$ BOOTSTRAP_SERVERS=$(kubectl get routes my-cluster-kafka-bootstrap -o jsonpath="{.status.ingress[0].host}"):443 \
+  KEYSTORE_LOCATION="/tmp/keystore.p12" KEYSTORE_PASSWORD=$(kubectl get secret my-user -o jsonpath="{.data['user\.password']}" | base64 -d) \
+  TRUSTSTORE_LOCATION="/tmp/truststore.p12" TRUSTSTORE_PASSWORD=$(kubectl get secret my-cluster-cluster-ca-cert -o jsonpath="{.data['ca\.password']}" | base64 -d) \
+  ; kubectl get secret my-user -o jsonpath="{.data['user\.p12']}" | base64 -d > $KEYSTORE_LOCATION \
+    && kubectl get secret my-cluster-cluster-ca-cert -o jsonpath="{.data['ca\.p12']}" | base64 -d > $TRUSTSTORE_LOCATION
   
 $ cat <<EOF >/tmp/client.properties
 security.protocol = SSL
@@ -74,7 +74,7 @@ ssl.truststore.location = $TRUSTSTORE_LOCATION
 ssl.truststore.password = $TRUSTSTORE_PASSWORD
 EOF
 
-$ kafka-console-producer.sh --producer.config /tmp/client.properties --bootstrap-server $BOOTSTRAP_URL --topic my-topic
+$ kafka-console-producer.sh --producer.config /tmp/client.properties --bootstrap-server $BOOTSTRAP_SERVERS --topic my-topic
 >hello
 >tls
 >^C 
@@ -118,8 +118,8 @@ Certificate:
 ```
 
 If this is not enough to spot the issue, we can add the `-Djavax.net.debug=ssl:handshake` Java option to the client in
-order to get more details. As additional exercise, try to get the clients CA and user certificates to check if the first
-signs the second.
+order to get more details. As additional exercise, try to get the clients CA and user certificates to verify if the
+first signs the second.
 
 ### Example: custom certificates
 
@@ -129,7 +129,7 @@ certificates functionality can be used to configure a custom certificate signed 
 Custom certificates are not managed by the operator, so you will be in charge of the renewal process, which requires to
 update the listener secret. A rolling update will start automatically in order to make the new certificate available.
 This example only shows TLS encryption, but you can add a custom client certificate for TLS authentication by
-setting `type: tls-external` in the user CR and creating the user secret (subject can only contain `CN=$USER_NAME`).
+setting `type: tls-external` in the user CR and create the user secret (subject can only contain `CN=$USER_NAME`).
 
 Typically, the security team will provide a certificate bundle which includes the whole trust chain (i.e. root CA +
 intermediate CA + listener certificate) and a private key. If that's not the case, you can easily create the bundle from
@@ -139,8 +139,8 @@ individual certificates in PEM format.
 $ cat /tmp/listener.crt /tmp/intermca.crt /tmp/rootca.crt > /tmp/bundle.crt
 ```
 
-Note that the listener certificate must not be a CA and it must includes a SAN for each broker route, plus one for the
-bootstrap route. This is an example of how it should look like.
+The listener certificate must not be a CA and it must includes a SAN for each broker route, plus one for the bootstrap
+route. This is an example of how it should look like.
 
 ```sh
 $ kubectl get routes
@@ -184,29 +184,54 @@ DNS.1=$(kubectl get route my-cluster-kafka-bootstrap -o yaml | yq -e '.status.in
 "
 $ openssl genrsa -out /tmp/listener.key 2048
 $ openssl req -new -x509 -days 3650 -key /tmp/listener.key -out /tmp/bundle.crt -config <(echo "$CONFIG")
+
+$ openssl crl2pkcs7 -nocrl -certfile /tmp/bundle.crt | openssl pkcs7 -print_certs -text -noout | grep DNS
+                DNS:*.apps.cluster-8z6kz.8z6kz.sandbox425.opentlc.com
 ```
 
-Building on the previous example, we deploy the secret containing the custom certificate and the Kafka cluster
-containing a reference to that secret.
+Building on the previous example, we deploy the secret containing the custom certificate and update the Kafka cluster
+configuration by adding a reference to that secret.
 
 ```sh
 $ kubectl create secret generic ext-listener-crt \
   --from-file=/tmp/bundle.crt --from-file=/tmp/listener.key \
   --dry-run=client -o yaml | kubectl replace --force -f -
   
-$ kubectl apply -f sessions/002/crs/custom-crt
+$ kubectl apply -f sessions/002/crs/ccrt
 kafka.kafka.strimzi.io/my-cluster configured
 
-$ kubectl get po
-NAME                                              READY   STATUS    RESTARTS   AGE
-pod/my-cluster-entity-operator-6b68959588-4klzj   3/3     Running   0          2m4s
-pod/my-cluster-kafka-0                            1/1     Running   0          3m34s
-pod/my-cluster-kafka-1                            1/1     Running   0          3m34s
-pod/my-cluster-kafka-2                            1/1     Running   0          3m34s
-pod/my-cluster-zookeeper-0                        1/1     Running   0          5m4s
-pod/my-cluster-zookeeper-1                        1/1     Running   0          5m4s
-pod/my-cluster-zookeeper-2                        1/1     Running   0          5m4s
+$ kubectl get k my-cluster -o yaml | yq e '.spec.kafka.listeners[2]'
+configuration:
+  brokerCertChainAndKey:
+    certificate: bundle.crt
+    key: listener.key
+    secretName: ext-listener-crt
+name: external
+port: 9094
+tls: true
+type: route
 ```
 
-When the cluster is ready, clients just need to trust the external CA and they will be able to connect. In this case, we
-need to trust our self-signed certificate, but I'm leaving this additional exercise to you. 
+When the cluster is ready (rolling update is complete), clients just need to trust the external CA and they will be able
+to connect. In our case, we need to trust the self-signed certificate.
+
+```sh
+$ BOOTSTRAP_SERVERS=$(kubectl get routes my-cluster-kafka-bootstrap -o jsonpath="{.status.ingress[0].host}"):443 \
+  CERT_LOCATION="/tmp/bundle.crt" TRUSTSTORE_LOCATION="/tmp/truststore.p12" TRUSTSTORE_PASSWORD="changeit"
+  
+$ rm -rf $TRUSTSTORE_LOCATION && keytool -keystore $TRUSTSTORE_LOCATION -storetype PKCS12 -alias my-cluster \
+  -storepass $TRUSTSTORE_PASSWORD -keypass $TRUSTSTORE_PASSWORD -import -file $CERT_LOCATION -noprompt
+Certificate was added to keystore
+
+$ cat <<EOF >/tmp/client.properties
+security.protocol = SSL
+ssl.truststore.location = $TRUSTSTORE_LOCATION
+ssl.truststore.password = $TRUSTSTORE_PASSWORD
+EOF
+
+$ kafka-console-producer.sh --producer.config /tmp/client.properties --bootstrap-server $BOOTSTRAP_SERVERS --topic my-topic
+>hello
+>custom
+>tls
+>^C
+```

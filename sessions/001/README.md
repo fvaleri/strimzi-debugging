@@ -2,9 +2,9 @@
 
 [Apache Kafka](https://kafka.apache.org) is an **Open Source distributed streaming platform** that lets you read, write,
 store, and process messages across many
-machines. [Red Hat AMQ Streams](https://www.redhat.com/en/resources/amq-streams-datasheet) includes Kafka and a set of
-operators from the [CNCF Strimzi](https://strimzi.io) project. The operators are a way of extending the OpenShift or
-Kubernetes platforms by deploying application controllers with domain knowledge.
+machines. [Red Hat AMQ Streams](https://catalog.redhat.com/software/operators/detail/5ef20efd46bc301a95a1e9a4) includes
+Kafka and a set of operators from the [CNCF Strimzi](https://strimzi.io) project. The operators are a way of extending
+the OpenShift or Kubernetes platforms by deploying application controllers with domain knowledge.
 
 Let's start by saying that not every use case justifies the additional complexity that Kafka brings to the table. It is
 best suited when you have a high throughput of relatively small messages, that traditional message brokers struggle to

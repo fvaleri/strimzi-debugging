@@ -2,8 +2,8 @@ package it.fvaleri.example;
 
 import io.apicurio.registry.rest.client.RegistryClient;
 import io.apicurio.registry.rest.client.RegistryClientFactory;
+import io.apicurio.registry.rest.client.exception.NotFoundException;
 import io.apicurio.registry.rest.v2.beans.IfExists;
-import io.apicurio.registry.serde.AbstractKafkaSerializer;
 import io.apicurio.registry.serde.SerdeConfig;
 import io.apicurio.registry.serde.avro.AvroKafkaDeserializer;
 import io.apicurio.registry.serde.avro.AvroKafkaSerializer;
@@ -21,7 +21,6 @@ import org.apache.kafka.common.config.SslConfigs;
 import org.apache.kafka.common.serialization.StringDeserializer;
 import org.apache.kafka.common.serialization.StringSerializer;
 
-import javax.ws.rs.WebApplicationException;
 import java.io.ByteArrayOutputStream;
 import java.io.IOException;
 import java.io.InputStream;
@@ -64,11 +63,9 @@ public class Main {
             String schemaData = null;
             try (InputStream latestArtifact = client.getLatestArtifact(ARTIFACT_GROUP, ARTIFACT_ID)) {
                 schemaData = toString(latestArtifact);
-            } catch (WebApplicationException e) {
-                if (e.getResponse().getStatus() == 404) {
-                    System.err.println("Schema not registered in registry");
-                    System.exit(1);
-                }
+            } catch (NotFoundException e) {
+                System.err.println("Schema not registered");
+                System.exit(1);
             }
 
             System.out.println("Producing records");
