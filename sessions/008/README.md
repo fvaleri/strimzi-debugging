@@ -1,24 +1,23 @@
 ## Transactions and how to rollback them
 
 Kafka provides at-least-once semantics by default and duplicates can arise due to either producer retries or consumer
-restarts after failure. The **idempotent producer** configuration (now default) solves the duplicates problem, but does
-not guarantee the atomicity when you need to write to multiple partitions at the same time. This is what a typical
-streaming application does with its cycles of read-process-write. The **exactly-once semantics** (EOS) helps to achieve
-all or nothing behavior when writing to multiple partitions, much like you need transactions to atomically write to more
-than one table in a relational database.
+restarts after failure. The **idempotent producer** configuration (now default) solves the duplicates problem by
+creating a producer session identified by a producer id (PID) and epoch. A sequence number is assigned when the record
+batch is first added to a produce request and is never changed, even if the batch gets resent. That way, the broker
+hosting the partition leader can identify and filter out duplicates.
 
-Algorithm overview:
-
-1. Log the existence of an ongoing transaction to the `__transaction_state` coordinating partition.
-2. Log the intent to commit or abort to the `__transaction_state` coordinating partition.
-3. Log all the end transaction markers to the output and `__consumer_offsets` partitions.
-4. Log the completion of the transaction to the `__transaction_state` coordinating partition.
+Unfortunately, the idempotent producer does not guarantee the atomicity when you need to write to multiple partitions at
+the same time and duplicates can still arise if you have two or more producer instances. For these reasons the
+idempotent producer only works for a single partition. Instead, a typical streaming application have multiple instances
+and runs read-process-write cycles involving multiple topics at the same time. The **exactly-once semantics** (EOS)
+helps to achieve all or nothing behavior when writing to multiple partitions, much like you need transactions to
+atomically write to more than one table in a relational database.
 
 ![](images/trans.png)
 
-The producer has to configure a static and unique `transactional.id` (TID), that is mapped to a producer ID (PID) and
-epoch used for zombie fencing. A producer can have **only one ongoing transaction** (ordering guarantee). Consumers
-with `isolation.level=read_committed` receive committed messages only, ignoring ongoing and discarding aborted
+The transactional producer configure a static and unique `transactional.id` (TID), that is mapped to the PID and epoch.
+This information is used for zombie fencing. A producer can have **only one ongoing transaction** (ordering guarantee).
+Consumers with `isolation.level=read_committed` receive committed messages only, ignoring ongoing and discarding aborted
 transactions (they get few additional metadata to do that). Transactions overhead is minimal and the biggest impact is
 on producers. You can balance overhead with latency by tuning the `commit.interval.ms`. Compared to using the low level
 API, enabling transactions is much easier when using the Streams API, as we just need to

@@ -143,14 +143,6 @@ The listener certificate must not be a CA and it must includes a SAN for each br
 route. This is an example of how it should look like.
 
 ```sh
-$ kubectl get routes
-NAME                         HOST/PORT                                                                         PATH   SERVICES                              PORT   TERMINATION   WILDCARD
-my-cluster-kafka-0           my-cluster-kafka-0-test.apps.cluster-8z6kz.8z6kz.sandbox425.opentlc.com                  my-cluster-kafka-0                    9094   passthrough   None
-my-cluster-kafka-1           my-cluster-kafka-1-test.apps.cluster-8z6kz.8z6kz.sandbox425.opentlc.com                  my-cluster-kafka-1                    9094   passthrough   None
-my-cluster-kafka-2           my-cluster-kafka-2-test.apps.cluster-8z6kz.8z6kz.sandbox425.opentlc.com                  my-cluster-kafka-2                    9094   passthrough   None
-my-cluster-kafka-bootstrap   my-cluster-kafka-bootstrap-test.apps.cluster-8z6kz.8z6kz.sandbox425.opentlc.com          my-cluster-kafka-external-bootstrap   9094   passthrough   None
-
-$ openssl crl2pkcs7 -nocrl -certfile listener.crt | openssl pkcs7 -print_certs -text -noout
 ...
 X509v3 extensions:
   X509v3 Basic Constraints: critical
@@ -160,7 +152,7 @@ X509v3 extensions:
   X509v3 Extended Key Usage:
     TLS Web Server Authentication, TLS Web Client Authentication
   X509v3 Subject Alternative Name:
-    DNS:my-cluster-kafka-bootstrap-test.apps.cluster-8z6kz.8z6kz.sandbox425.opentlc.com, DNS:my-cluster-kafka-0-test.apps.cluster-8z6kz.8z6kz.sandbox425.opentlc.com, DNS:my-cluster-kafka-1-test.apps.cluster-8z6kz.8z6kz.sandbox425.opentlc.com, DNS:my-cluster-kafka-2-test.apps.cluster-8z6kz.8z6kz.sandbox425.opentlc.com
+    DNS:my-cluster-kafka-bootstrap-test.apps.example.com, DNS:my-cluster-kafka-0-test.apps.example.com, DNS:my-cluster-kafka-1-test.apps.example.com, DNS:my-cluster-kafka-2-test.apps.example.com
 ```
 
 Just for convenience, we generate our own certificate bundle with only one self-signed certificate, pretending it was
