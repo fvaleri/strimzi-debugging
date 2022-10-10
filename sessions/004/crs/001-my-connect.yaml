@@ -51,18 +51,3 @@ spec:
         artifacts:
           - type: zip
             url: https://maven.repository.redhat.com/ga/io/debezium/debezium-connector-mysql/1.9.5.Final-redhat-00001/debezium-connector-mysql-1.9.5.Final-redhat-00001-plugin.zip
-  externalConfiguration:
-    volumes:
-      - name: connectors
-        secret:
-          secretName: connectors
----
-apiVersion: v1
-kind: Secret
-metadata:
-  name: connectors
-stringData:
-  config.properties: |-
-    mysql.username=debezium
-    mysql.password=changeit
----

@@ -50,10 +50,9 @@ amq-streams-cluster-operator-v2.1.0-8-6dfcc6449d-c2np5   1/1     Running   3    
 apicurio-registry-operator-fb9ffd5cb-89z89               1/1     Running   0          46s
 
 $ kubectl create -f sessions/003/crs
-configmap/my-pgsql-init created
-persistentvolumeclaim/my-pgsql-pvc created
-configmap/my-pgsql-config created
+persistentvolumeclaim/my-pgsql-data created
 configmap/my-pgsql-env created
+configmap/my-pgsql-init created
 statefulset.apps/my-pgsql-ss created
 service/my-pgsql-svc created
 apicurioregistry.registry.apicur.io/my-registry created

@@ -16,8 +16,8 @@ spec:
     database.dbname: "testdb"
     database.hostname: "my-mysql-svc"
     database.port: 3306
-    database.user: "${file:/opt/kafka/external-configuration/connectors/config.properties:mysql.username}"
-    database.password: "${file:/opt/kafka/external-configuration/connectors/config.properties:mysql.password}"
+    database.user: "debezium"
+    database.password: "changeit"
     database.include.list: "testdb"
     table.include.list: "testdb.customers"
     database.allowPublicKeyRetrieval: true
