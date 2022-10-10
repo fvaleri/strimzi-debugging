@@ -9,4 +9,4 @@ spec:
       dataSource:
         url: "jdbc:postgresql://my-pgsql-svc:5432/testdb"
         userName: "admin"
-        password: "admin"
+        password: "changeit"

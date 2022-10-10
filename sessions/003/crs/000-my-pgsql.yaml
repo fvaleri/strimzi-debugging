@@ -25,7 +25,7 @@ metadata:
 data:
   POSTGRESQL_DATABASE: testdb
   POSTGRESQL_USER: admin
-  POSTGRESQL_PASSWORD: admin
+  POSTGRESQL_PASSWORD: changeit
 ---
 apiVersion: apps/v1
 kind: StatefulSet

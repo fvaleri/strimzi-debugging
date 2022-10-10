@@ -16,17 +16,18 @@ and forwards compatible way, to allow new clients to read old data and old clien
 [Red Hat Service Registry](https://catalog.redhat.com/software/operators/detail/5ef2818e7dc79430ca5f4fd2) is based
 on [Apicurio Registry](https://www.apicur.io/registry), which is a schema registry for REST APIs (OpenAPI) and message
 schemas (AsyncAPI). It supports pluggable storage (in-memory, Kafka, PostgreSQL), schema versioning, schema validation
-and provides **Java serializers/deserializers** (SerDes) for Avro, Protobuf and JSON Schema. It also provides a **Maven
-plugin** that we can use to register schema artifacts at build time, a REST API and a web console to do CRUD operations
-on schema artifacts. When migrating from Confluent registry, it is possible to enable the API translation layer and use
-a tool called `exportConfluent` to import existing schemas.
+and provides **Java serializers/deserializers** (SerDes) for Avro, Protobuf and JSON Schema formats. It also provides
+a **Maven plugin** that we can use to register schema artifacts at build time, a REST API and a web console to do CRUD
+operations on schema artifacts. When migrating from Confluent registry, it is possible to enable the API translation
+layer and use a tool called `exportConfluent` to import existing schemas.
 
 A registered schema artifact is uniquely identified by the tuple `(groupId, artifactId, version)`. By default,
 the `artifactId` is equal to the topic name plus `-key` or `-value` suffix, depending on whether the serializer was used
 for the message key or value (there are other strategies). The `groupId` is just a way to logically group schema
 artifacts. The `globalId` and `contentId` are assigned by the server. The `globalId` is the unique id of an artifact
 version, while the `contentId` is the unique id of the artifact content. Different artifacts containing the same schema
-have the same content id.
+have the same content id. For example, this may happen when having multiple instances of a given application registering
+the same schema concurrently at startup.
 
 The serializer exchanges the `artifactId` for a `globalId`, which is then added as record header or as payload prefix,
 depending on the producer configuration. The deserializer fetches the right schema version using the `globalId`. If
