@@ -4,24 +4,28 @@ The TLS protocol provides **communications security over a computer network**. E
 is insecure. Hostname verification through common name (CN) or subject alternative name (SAN) protects against man in
 the middle attacks, so it should never be disabled in production.
 
-A **public key infrastructure** (PKI) is an arrangement that binds public keys with respective identities of entities
-(e.g. organizations, people, applications). The binding is established through a process of registration and issuance of
-certificates by a **certificate authority** (CA). The server name indication (SNI) extension is used when having
-multiple certificates on the same IP address. It is also used by OpenShift to route external TLS connections. Leveraging
-this feature, we can tunnel the Kafka TCP protocol through the OpenShift HTTP reverse proxy.
+A **certificate** contains the public key along with the ownership data and expiration date. A **self-signed**
+certificate (Issuer == Subject) is secure enough, but only if it is trusted upfront by the application. It is also
+possible to create a **wildcard** certificate (e.g. `commonName=*.example.com`), that can be used by all application
+running in a specific subdomain (e.g. an OpenShift cluster). Cipher suites contain algorithms for key exchange,
+encryption and authentication.
 
-A TLS certificate contains a public key along with the ownership data and expiration date. Cipher suites contain
-algorithms for key exchange, encryption and authentication. A **self-signed certificate** is secure enough, but only if
-it is trusted upfront by the application. It is also possible to create a **wildcard certificate**
-(e.g. CN=*.example.com), that can be used by all application running in a specific domain (e.g. an OpenShift cluster).
+A **public key infrastructure** (PKI) is an arrangement that binds public keys with respective identities (e.g.
+organizations, people, applications). The binding is established through a process of registration and issuance of
+certificates by a **certificate authority** (CA).
 
-Within a Kafka cluster, in addition to the **client-server communication**, you also need to protect the **inter-cluster
-communication** and renew certificates when they expire. Most of this work is done by the Streams CO, which is a great
-example on how the operator simplifies cluster management.
+Within a Kafka cluster, in addition to the **client-server** communication, you also need to protect the
+**inter-cluster** communication and renew certificates when they expire. All of this work is done by the Streams CO,
+which is a great example of how the operator simplifies cluster management. Two self-signed CAs are automatically
+generated and used to sign all cluster (cluster CA) and user (clients CA) certificates.
 
 ![](images/connections.png)
 
-Kafka clients don't need to trust the server certificate when it is signed by a **well-known CA**, because it is already
+The **server name indication** (SNI) extension is used when having multiple certificates on the same IP address. For
+example, it is used by OpenShift to route external TLS connections to the right pod. Leveraging this extension, we can
+tunnel the Kafka TCP protocol through the OpenShift HTTP reverse proxy.
+
+Kafka clients don't need to trust TLS certificates when they are signed by a **well-known CA**, which is already
 included in the system truststore (e.g. `$JAVA_HOME/jre/lib/security/cacerts`). Before the encryption starts, the peers
 agree to the protocol version and cipher suite to be used, exchange certificates and share encryption keys (connection
 overhead). Almost all the problems occur within this initial handshake.
@@ -133,14 +137,14 @@ setting `type: tls-external` in the user CR and create the user secret (subject 
 
 Typically, the security team will provide a certificate bundle which includes the whole trust chain (i.e. root CA +
 intermediate CA + listener certificate) and a private key. If that's not the case, you can easily create the bundle from
-individual certificates in PEM format.
+individual certificates in PEM format, because you need to trust the whole chain, if any.
 
 ```sh
 $ cat /tmp/listener.crt /tmp/intermca.crt /tmp/rootca.crt > /tmp/bundle.crt
 ```
 
-The listener certificate must not be a CA and it must includes a SAN for each broker route, plus one for the bootstrap
-route. This is an example of how it should look like.
+It's important to note that the custom certificate must not be a CA and it must includes a SAN for each broker route,
+plus one for the bootstrap route. This is an example of how it should look like.
 
 ```sh
 ...
@@ -205,7 +209,7 @@ type: route
 ```
 
 When the cluster is ready (rolling update is complete), clients just need to trust the external CA and they will be able
-to connect. In our case, we need to trust the self-signed certificate.
+to connect. In our case, we don't have a CA, so we just need to trust the self-signed certificate.
 
 ```sh
 $ BOOTSTRAP_SERVERS=$(kubectl get routes my-cluster-kafka-bootstrap -o jsonpath="{.status.ingress[0].host}"):443 \
