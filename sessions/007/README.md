@@ -2,53 +2,43 @@
 
 By default, Kafka try to distribute the load evenly across brokers. This is achieved through the concept of **preferred
 replica**, which is the first replica created for a new topic. This is designated as the leader and assigned to a broker
-in order to balance leader distribution. A background thread moves leader to preferred replica when it's in sync.
+in order to balance leader distribution. A background thread moves leader to preferred replica when it is in sync.
 
 Sometimes, this may not be enough and we may end up with **uneven distribution of load across brokers** as a consequence
-of some failures, the addition of new brokers or simply because some partitions are used more than others.
+of some broker failures, the addition of new brokers or simply because some partitions are used more than others.
 The `RequestHandlerAvgIdlePercent` broker metric is a good overall load measurement metric for Kafka scaling decisions.
 Good rule of thumb is when it hits 20% (i.e. the request handler threads are busy 80% of the time), then it's time to
 plan your cluster expansion, at 10% you need to scale it now.
 
-Rebalancing means moving partitions between brokers (inter brokers), between disks on the same broker (intra broker), or
-simply change leaders in order to restore the balance. Usually we need some combination of partition movements and
-leadership changes. When using `kafka-reassign-partitions.sh` for rebalancing, the task of figuring out which changes
-are required and possible is left to the user. This requires some calculations that may be hard and time consuming,
-especially on big clusters with lots of data. Automating this complex task is the reason
+**Rebalancing** means moving partitions between brokers (inter brokers), between disks on the same broker
+(intra broker), or simply change leaders in order to restore the balance. Usually we need some combination of partition
+movements and leadership changes. When using `kafka-reassign-partitions.sh` for rebalancing, the task of figuring out
+which changes are required and possible is left to the user. This requires some calculations that may be hard and time
+consuming, especially on big clusters with lots of partitions. Automating this complex task is the reason
 why [Cruise Control](https://github.com/linkedin/cruise-control) (CC) was created.
 
 ![](images/cc.png)
 
 A replica level **workload model** is periodically updated from the resource utilization metrics (CPU, disk, bytes-in,
 bytes-out). The analyzer component uses this model to create a valid **rebalance proposal** when possible (one that must
-satisfy configured hard goals, and possibly soft goals too). The executor ensures that there is only one active
-execution at a time, and enables graceful cancellation applying changes in batches. If two equivalent changes are
+satisfy all configured hard goals, and possibly soft goals too). The executor ensures that there is only one active
+execution at a time and enables graceful cancellation applying changes in batches. If two equivalent changes are
 possible, the one with the lower cost is selected (leadership change > replica move > replica swap).
 
 As of today, Streams still requires the manual approval of the auto-generated rebalance proposal, but we are working to
-enable full automation. In order to have accurate rebalance proposal when using CPU goals, we can set CPU requests equal
-to CPU limits in `spec.kafka.resources`. That way, all CPU resources are reserved upfront and are always available. This
-allows CC to properly evaluate the CPU utilization when preparing the rebalance proposals.
+enable full automation. In order to have accurate rebalance proposals when using CPU goals, we can set CPU requests
+equal to CPU limits in `spec.kafka.resources`. That way, all CPU resources are reserved upfront and are always
+available. This allows CC to properly evaluate the CPU utilization when preparing the rebalance proposals.
 
-### Example: increase the topic replication factor
+### Example: reduce the topic replication factor
 
-[Deploy Streams operator and Kafka cluster](/sessions/001). When the cluster is ready, let's try to change the topic
+[Deploy Streams operator and Kafka cluster](/sessions/001). When the cluster is ready, let's try to reduce the topic
 replication factor by editing its specification. As you can see, the TO does not allow this change.
 
 ```sh
-$ kubectl get kt my-topic -o yaml | yq e '.spec'
-config:
-  min.insync.replicas: 2
-  retention.bytes: 1073741824
-partitions: 3
-replicas: 3
-
-$ kubectl patch kt my-topic --type json -p '
-  [{
-    "op": "replace",
-    "path": "/spec/replicas",
-    "value": 2
-  }]'
+$ kubectl patch kt my-topic --type merge -p '
+    spec:
+      replicas: 2'
 kafkatopic.kafka.strimzi.io/my-topic patched
 
 $ kubectl get kt my-topic -o yaml | yq e '.status'
@@ -62,21 +52,20 @@ observedGeneration: 5
 topicName: my-topic
 ```
 
-As a workaround, we can use the reassign tool to apply the above change at Kafka level. The first replica you see for
-each partition in `reassign.json` is called preferred replicas and the cluster will try to elect this one as the leader.
-This is why we distribute them evenly among available brokers. Note that we are also throttling the movement of
-partitions to 5 MB/s to avoid disrupting other clients. If the partition movement is too slow, you can resubmit the
-execute command with the `--additional` option and a new throttle value.
+As a workaround, we can use the reassign tool to apply the above change at Kafka level. The preferred replica is the
+first one that appears in the replicas list. In `reassign.json` we distribute them evenly among available brokers. Note
+that we are also throttling the movement of partitions to 5 MB/s to avoid disrupting other clients. If the partition
+movement is too slow, you can resubmit the execute command with the `--additional` option and a new throttle value.
 
 ```sh
 $ krun_kafka
-[strimzi@client-1664115586 kafka]$ bin/kafka-topics.sh --bootstrap-server my-cluster-kafka-bootstrap:9092 --topic my-topic --describe
+[strimzi@krun-1664115586 kafka]$ bin/kafka-topics.sh --bootstrap-server my-cluster-kafka-bootstrap:9092 --topic my-topic --describe
 Topic: my-topic	TopicId: 3n2nu6v9SS23xALR8yHADA	PartitionCount: 3	ReplicationFactor: 3	Configs: min.insync.replicas=2,message.format.version=3.0-IV1,retention.bytes=1073741824
 	Topic: my-topic	Partition: 0	Leader: 1	Replicas: 1,0,2	Isr: 1,0,2
 	Topic: my-topic	Partition: 1	Leader: 0	Replicas: 0,2,1	Isr: 0,2,1
 	Topic: my-topic	Partition: 2	Leader: 2	Replicas: 2,1,0	Isr: 2,1,0
 
-[strimzi@client-1664115586 kafka]$ cat <<EOF >/tmp/reassign.json
+[strimzi@krun-1664115586 kafka]$ cat <<EOF >/tmp/reassign.json
 {
   "version": 1,
   "partitions": [
@@ -87,7 +76,7 @@ Topic: my-topic	TopicId: 3n2nu6v9SS23xALR8yHADA	PartitionCount: 3	ReplicationFac
 }
 EOF
 
-[strimzi@client-1664115586 kafka]$ bin/kafka-reassign-partitions.sh --bootstrap-server my-cluster-kafka-bootstrap:9092 \
+[strimzi@krun-1664115586 kafka]$ bin/kafka-reassign-partitions.sh --bootstrap-server my-cluster-kafka-bootstrap:9092 \
   --reassignment-json-file /tmp/reassign.json --throttle 5000000 --execute
 Current partition replica assignment
 
@@ -104,7 +93,7 @@ disk space to accommodate for this extra storage requirement. If the process com
 topic configuration again.
 
 ```sh
-[strimzi@client-1664115586 kafka]$ bin/kafka-reassign-partitions.sh --bootstrap-server my-cluster-kafka-bootstrap:9092 \
+[strimzi@krun-1664115586 kafka]$ bin/kafka-reassign-partitions.sh --bootstrap-server my-cluster-kafka-bootstrap:9092 \
   --reassignment-json-file /tmp/reassign.json --verify
 Status of partition reassignment:
 Reassignment of partition my-topic-0 is complete.
@@ -114,13 +103,13 @@ Reassignment of partition my-topic-2 is complete.
 Clearing broker-level throttles on brokers 0,1,2
 Clearing topic-level throttles on topic my-topic
 
-[strimzi@client-1664115586 kafka]$ bin/kafka-topics.sh --bootstrap-server my-cluster-kafka-bootstrap:9092 --topic my-topic --describe
+[strimzi@krun-1664115586 kafka]$ bin/kafka-topics.sh --bootstrap-server my-cluster-kafka-bootstrap:9092 --topic my-topic --describe
 Topic: my-topic	TopicId: 3n2nu6v9SS23xALR8yHADA	PartitionCount: 3	ReplicationFactor: 2	Configs: min.insync.replicas=2,message.format.version=3.0-IV1,retention.bytes=1073741824
 	Topic: my-topic	Partition: 0	Leader: 1	Replicas: 0,1	Isr: 1,0
 	Topic: my-topic	Partition: 1	Leader: 1	Replicas: 1,2	Isr: 2,1
 	Topic: my-topic	Partition: 2	Leader: 2	Replicas: 2,0	Isr: 2,0
 
-[strimzi@client-1664115586 kafka]$ exit
+[strimzi@krun-1664115586 kafka]$ exit
 
 $ kubectl get kt my-topic -o yaml | yq e '.status'
 conditions:
@@ -193,7 +182,6 @@ proposal creation, so we use the refresh annotation.
 ```sh
 $ krun_kafka bin/kafka-producer-perf-test.sh --topic my-topic --record-size 100 --num-records 1000000 \
   --throughput -1 --producer-props acks=1 bootstrap.servers=my-cluster-kafka-bootstrap:9092
-If you don't see a command prompt, try pressing enter.
 1000000 records sent, 201126.307321 records/sec (19.18 MB/sec), 67.85 ms avg latency, 347.00 ms max latency, 44 ms 50th, 248 ms 95th, 302 ms 99th, 338 ms 99.9th.
 pod "client-1664122756" deleted
 

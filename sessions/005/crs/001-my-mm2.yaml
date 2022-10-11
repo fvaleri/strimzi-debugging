@@ -35,20 +35,18 @@ spec:
       sourceConnector:
         tasksMax: 2
         config:
-          replication.factor: 3
-          offset-syncs.topic.replication.factor: 3
+          replication.factor: -1
+          offset-syncs.topic.replication.factor: -1
           refresh.topics.interval.seconds: 30
           # disable replication of ACL rules
           sync.topic.acls.enabled: false
           # disable source cluster name prefix on target topic
           replication.policy.separator: ""
           replication.policy.class: "org.apache.kafka.connect.mirror.IdentityReplicationPolicy"
-          # high volumes: tune the producer for throughput (default x20)
-          #producer.override.batch.size: 327680
       checkpointConnector:
         tasksMax: 2
         config:
-          checkpoints.topic.replication.factor: 3
+          checkpoints.topic.replication.factor: -1
           # enable consumer offsets sync
           sync.group.offsets.enabled: true
           sync.group.offsets.interval.seconds: 30

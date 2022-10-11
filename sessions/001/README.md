@@ -269,20 +269,16 @@ $ krun_kafka() { kubectl run krun-$(date +%s) -it --rm --restart="Never" \
   --image="registry.redhat.io/amq7/amq-streams-kafka-32-rhel8:2.2.0" -- "$@"; }
 
 $ krun_kafka bin/kafka-console-producer.sh --bootstrap-server my-cluster-kafka-bootstrap:9092 --topic my-topic
-If you don't see a command prompt, try pressing enter.
 >hello
 >world
 >^Cpod "krun-1664886431" deleted
-pod test/krun-1664886431 terminated (Error)
 
 $ krun_kafka bin/kafka-console-consumer.sh --bootstrap-server my-cluster-kafka-bootstrap:9092 \
   --topic my-topic --group my-group --from-beginning
-If you don't see a command prompt, try pressing enter.
 world
 hello
 ^CProcessed a total of 2 messages
 pod "krun-1664886505" deleted
-pod test/krun-1664886505 terminated (Error)
 ```
 
 When debugging issues, we usually need to retrieve various artifacts from the environment and this can be tedious.

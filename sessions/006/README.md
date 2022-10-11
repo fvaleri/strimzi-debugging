@@ -12,7 +12,7 @@ and the expected volume of messages (GB/s). A non active segment can be deleted 
 `segment.bytes`. Even if one record is not yet eligible for deletion based on `retention.ms` or `retention.bytes`, the
 broker will keep the entire segment file. Deletion timing also depends on the cluster load and how
 many `background.threads` are available for normal topics, and `log.cleaner.threads` for compacted topics. The required
-storage capacity can be calculated based on the message retention. When the topic combines both the time and size based
+storage capacity can be calculated based on the message retention. When the topic combines both time and size based
 retention policies, the size based policy defines the upper cap.
 
 ```sh
@@ -23,17 +23,17 @@ storage_capacity (MB) = retention_sec * topic_write_rate (MB/s) * replication_fa
 storage_capacity (MB) = retention_mb * replication_factor * part_number
 ```
 
-In OpenShift, a persistent volume (PV) lives outside any namespace and it is claimed by using a persistent volume claim
-(PVC). You can specify the storage class (SC) used for provisioning directly in the Kafka CR. Only volumes created and
-managed by a SC with `allowVolumeExpansion: true` can be increased, but not decreased. When using JBOD, you can also
-remove a volume, but data needs to be migrated to other volumes upfront. Volumes with
+In OpenShift, a **persistent volume** (PV) lives outside any namespace and it is claimed by using a **persistent volume
+claim** (PVC). You can specify the **storage class** (SC) used for provisioning directly in the Kafka CR. Only volumes
+created and managed by a SC with `allowVolumeExpansion: true` can be increased, but not decreased. When using JBOD, you
+can also remove a volume, but data needs to be migrated to other volumes upfront. Volumes with
 either `persistentVolumeReclaimPolicy: Retain`, or using a storage class with `reclaimPolicy: Retain` are retained when
 the Kafka cluster is deleted.
 
 ### Example: no space left on device
 
-[Deploy Streams operator and Kafka cluster](/sessions/001). When the cluster is ready, we break it by sending 14 GiB of
-data to a topic with RF=3, which exceeds the combined cluster disk capacity of 30 GiB.
+[Deploy Streams operator and Kafka cluster](/sessions/001). When the cluster is ready, we purposely break it by sending
+14 GiB of data to a topic with RF=3 (42 GiB in total), which exceeds the combined cluster disk capacity of 30 GiB.
 
 ```sh
 $ kubectl get pvc | grep kafka
@@ -43,7 +43,6 @@ data-my-cluster-kafka-2       Bound    pvc-65550116-3ae6-4f4f-9be9-a098cdc49002 
 
 $ krun_kafka bin/kafka-producer-perf-test.sh --topic my-topic --record-size 100 --num-records 150000000 \
   --throughput -1 --producer-props acks=1 bootstrap.servers=my-cluster-kafka-bootstrap:9092
-If you don't see a command prompt, try pressing enter.
 977529 records sent, 195505.8 records/sec (18.64 MB/sec), 156.6 ms avg latency, 486.0 ms max latency.
 847415 records sent, 169483.0 records/sec (16.16 MB/sec), 28.1 ms avg latency, 98.0 ms max latency.
 827921 records sent, 165584.2 records/sec (15.79 MB/sec), 27.4 ms avg latency, 101.0 ms max latency.
@@ -52,14 +51,13 @@ If you don't see a command prompt, try pressing enter.
 [2022-09-21 16:08:25,583] WARN [Producer clientId=perf-producer-client] Connection to node 2 (my-cluster-kafka-2.my-cluster-kafka-brokers.test.svc/10.128.2.49:9092) could not be established. Broker may not be available. (org.apache.kafka.clients.NetworkClient)
 [2022-09-21 16:08:25,805] WARN [Producer clientId=perf-producer-client] Connection to node 1 (my-cluster-kafka-1.my-cluster-kafka-brokers.test.svc/10.129.2.61:9092) could not be established. Broker may not be available. (org.apache.kafka.clients.NetworkClient)
 ^Cpod "producer-perf" deleted
-pod test/producer-perf terminated (Error)
 
 $ kubectl get po | grep kafka
 my-cluster-kafka-0                            0/1     CrashLoopBackOff   3 (26s ago)   15m
 my-cluster-kafka-1                            0/1     CrashLoopBackOff   3 (26s ago)   15m
 my-cluster-kafka-2                            0/1     CrashLoopBackOff   3 (20s ago)   15m
 
-$  kubectl logs my-cluster-kafka-0 | grep "No space left on device" | tail -n1
+$ kubectl logs my-cluster-kafka-0 | grep "No space left on device" | tail -n1
 java.io.IOException: No space left on device
 ```
 
@@ -67,18 +65,14 @@ If volume expansion is supported, you can simply edit the Kafka CR increasing th
 rest (this may take some time). We didn't specify any storage class, so we have been assigned the default one.
 
 ```sh
-$ kubectl get pv pvc-100f7351-9d2c-4048-b3a4-e04685a3cd3d -o yaml | yq e '.spec.storageClassName'
-gp2
-
-$ kubectl get sc gp2 -o yaml | yq e '.allowVolumeExpansion'
+$ kubectl get sc $(kubectl get pv | grep data-my-cluster-kafka-0 | awk '{print $7}') -o yaml | yq e '.allowVolumeExpansion'
 true
 
-$ kubectl patch k my-cluster --type json -p '
-  [{
-    "op": "replace",
-    "path": "/spec/kafka/storage/size",
-    "value": "20Gi"
-  }]'
+$ kubectl patch k my-cluster --type merge -p '
+  spec:
+    kafka:
+      storage:
+        size: 20Gi'
 kafka.kafka.strimzi.io/my-cluster patched
 
 $ kubectl -n openshift-operators logs $(kubectl -n openshift-operators get po | grep cluster-operator | cut -d" " -f1) | grep "Resizing"
@@ -108,9 +102,9 @@ $ kubectl annotate k my-cluster strimzi.io/pause-reconciliation="true" \
 kafka.kafka.strimzi.io/my-cluster annotated
 statefulset.apps/my-cluster-kafka scaled
 
-$ kubectl run client-$(date +%s) --image "dummy" --restart "Never" \
+$ kubectl run recovery --image "dummy" --restart "Never" \
   --overrides "$(sed "s,value0,data-my-cluster-kafka-0,g" sessions/006/patch.json)"
-pod/strimzi-debug created
+pod/recovery created
 
 $ kubectl exec -it strimzi-debug -- bash
 [root@strimzi-debug /]# cd /data/kafka-log0/my-topic-0
@@ -146,8 +140,8 @@ total 297M
 # ...
 
 [root@strimzi-debug my-topic-0]# exit
-$ kubectl delete pod strimzi-debug
-pod "strimzi-debug" deleted
+$ kubectl delete pod recovery
+pod "recovery" deleted
 
 # ...
 
@@ -165,7 +159,7 @@ my-cluster-kafka-2                            1/1     Running   0          18m
 ### Example: unintentional namespace deletion with retained volumes
 
 [Deploy Streams operator and Kafka cluster](/sessions/001). When the cluster is ready, we change the reclaim policy at
-the persistent volume level. Also note that the volume status is "Bound".
+the persistent volume level. Also note that the status is "Bound".
 
 ```sh
 $ kubectl get pv
@@ -178,12 +172,9 @@ pvc-d64b4012-e8ea-4c5d-b2b0-90730740896f   10Gi       RWO            Delete     
 pvc-e05bb77e-9bc6-431c-9d59-bf2f5d664d95   10Gi       RWO            Delete           Bound    test/data-my-cluster-kafka-2       gp2                     8m43s
 
 $ for pv in $(kubectl get pv | grep "my-cluster" | awk '{print $1}'); do
-  kubectl patch pv $pv --type json -p '
-    [{
-      "op": "replace",
-      "path": "/spec/persistentVolumeReclaimPolicy",
-      "value": "Retain"
-    }]'
+  kubectl patch pv $pv --type merge -p '
+    spec:
+      persistentVolumeReclaimPolicy: Retain'
 done
 persistentvolume/pvc-32b4c2cf-e4f1-453b-b86d-498324a3a1fa patched
 persistentvolume/pvc-3f8fbc95-0cbe-4e08-88b1-3ed6f339749f patched
@@ -203,22 +194,17 @@ pvc-e05bb77e-9bc6-431c-9d59-bf2f5d664d95   10Gi       RWO            Retain     
 ```
 
 Now we send some data and then delete the namespace. As expected, persistent volumes are still there and their status
-changed from "Bound" to "Released". Note that we also retain some useful information that is needed when reattaching
-them (capacity, claim, storage class).
+changed to "Released". Note that OpenShift also retains some useful information that is needed when reattaching them
+(capacity, claim, storage class).
 
 ```sh
-$ krun_kafka bin/kafka-console-producer.sh --bootstrap-server my-cluster-kafka-bootstrap:9092 --topic my-topic
-If you don't see a command prompt, try pressing enter.
+$ krun_kafka bin/kafka-console-producer.sh --bootstrap-server my-cluster-kafka-bootstrap:9092 --topic my-topic.
 >hello
 >world
 >^Cpod "my-producer" deleted
-pod test/my-producer terminated (Error)
 
 $ kubectl delete ns test
 namespace "test" deleted
-
-$ kubectl get ns test
-Error from server (NotFound): namespaces "test" not found
 
 $ kubectl get pv
 NAME                                       CAPACITY   ACCESS MODES   RECLAIM POLICY   STATUS     CLAIM                              STORAGECLASS   REASON   AGE
@@ -238,10 +224,10 @@ $ kubectl create ns test
 namespace/test created
 
 $ for line in $(kubectl get pv | grep "my-cluster" | awk '{print $1 "#" $2 "#" $6 "#" $7}'); do
-  pv="$(echo $line | awk -F'#' '{print $1}')"
-  size="$(echo $line | awk -F'#' '{print $2}')"
   pvc="$(echo $line | awk -F'#' '{print $3}' | sed 's|test\/||g')"
+  size="$(echo $line | awk -F'#' '{print $2}')"
   sc="$(echo $line | awk -F'#' '{print $4}')"
+  pv="$(echo $line | awk -F'#' '{print $1}')"
   kubectl patch pv "$pv" --type json -p '[{"op":"remove","path":"/spec/claimRef"}]'
   sed "s#value0#$pvc#g; s#value1#$size#g; s#value2#$sc#g; s#value3#$pv#g" \
     sessions/006/pvc.yaml | kubectl create -f -
@@ -258,7 +244,11 @@ persistentvolume/pvc-d64b4012-e8ea-4c5d-b2b0-90730740896f patched
 persistentvolumeclaim/data-my-cluster-kafka-0 created
 persistentvolume/pvc-e05bb77e-9bc6-431c-9d59-bf2f5d664d95 patched
 persistentvolumeclaim/data-my-cluster-kafka-2 created
+```
 
+Volumes are "Bound" again and deploying a new Kafka cluster with the same spec we should be able to consume messages.
+
+```sh
 $ kubectl get pv
 NAME                                       CAPACITY   ACCESS MODES   RECLAIM POLICY   STATUS   CLAIM                              STORAGECLASS   REASON   AGE
 pvc-32b4c2cf-e4f1-453b-b86d-498324a3a1fa   5Gi        RWO            Retain           Bound    test/data-my-cluster-zookeeper-1   gp2                     19m
@@ -267,21 +257,15 @@ pvc-8b3e6629-8466-4c83-a47a-c6f12d2d0f4c   5Gi        RWO            Retain     
 pvc-99e25916-b37d-4c72-aeaf-5aadcea6347a   5Gi        RWO            Retain           Bound    test/data-my-cluster-zookeeper-2   gp2                     19m
 pvc-d64b4012-e8ea-4c5d-b2b0-90730740896f   10Gi       RWO            Retain           Bound    test/data-my-cluster-kafka-0       gp2                     18m
 pvc-e05bb77e-9bc6-431c-9d59-bf2f5d664d95   10Gi       RWO            Retain           Bound    test/data-my-cluster-kafka-2       gp2                     18m
-```
 
-Volumes are "Bound" again and deploying a new Kafka cluster with the same spec we should be able to consume messages.
-
-```sh
-$ kubectl create -f sessions/001/cluster
+$ kubectl create -f sessions/001/crs
 kafka.kafka.strimzi.io/my-cluster created
 kafkatopic.kafka.strimzi.io/my-topic created
 
 $ krun_kafka bin/kafka-console-consumer.sh --bootstrap-server my-cluster-kafka-bootstrap:9092 \
   --topic my-topic --from-beginning
-If you don't see a command prompt, try pressing enter.
 hello
 world
 ^CProcessed a total of 3 messages
 pod "my-consumer" deleted
-pod test/my-consumer terminated (Error)
 ```

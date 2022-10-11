@@ -111,13 +111,11 @@ diverge with time, because each Kafka cluster operates independently. This is wh
 ```sh
 $ krun_kafka bin/kafka-producer-perf-test.sh --topic my-topic --record-size 100 --num-records 1000000 \
   --throughput -1 --producer-props acks=1 bootstrap.servers=my-cluster-kafka-bootstrap:9092
-If you don't see a command prompt, try pressing enter.
 1000000 records sent, 201531.640468 records/sec (19.22 MB/sec), 255.97 ms avg latency, 715.00 ms max latency, 185 ms 50th, 627 ms 95th, 687 ms 99th, 704 ms 99.9th.
 pod "producer-perf" deleted
 
 $ krun_kafka bin/kafka-run-class.sh kafka.tools.GetOffsetShell \
   --broker-list my-cluster-kafka-bootstrap:9092 --topic my-topic --time -1
-If you don't see a command prompt, try pressing enter.
 my-topic:0:353737
 my-topic:1:358846
 my-topic:2:287417
@@ -125,7 +123,6 @@ pod "get-leo" deleted
 
 $ krun_kafka bin/kafka-run-class.sh kafka.tools.GetOffsetShell \
   --broker-list my-cluster-tgt-kafka-bootstrap.target.svc:9092 --topic my-topic --time -1
-If you don't see a command prompt, try pressing enter.
 my-topic:0:353737
 my-topic:1:358846
 my-topic:2:287417
@@ -147,7 +144,6 @@ kafkamirrormaker2.kafka.strimzi.io/my-mm2 scaled
 
 $ krun_kafka bin/kafka-producer-perf-test.sh --topic my-topic --record-size 100 --num-records 30000000 \
   --throughput -1 --producer-props acks=1 bootstrap.servers=my-cluster-kafka-bootstrap:9092
-If you don't see a command prompt, try pressing enter.
 1047156 records sent, 209389.3 records/sec (19.97 MB/sec), 102.5 ms avg latency, 496.0 ms max latency.
 ...
 30000000 records sent, 239285.970664 records/sec (22.82 MB/sec), 15.98 ms avg latency, 496.00 ms max latency, 3 ms 50th, 60 ms 95th, 115 ms 99th, 428 ms 99.9th.
@@ -164,19 +160,30 @@ $ kubectl -n target exec -it $(kubectl -n target get po | grep my-mm2 | awk '{pr
 2022-09-27_16:36:22,16224.29945722409,3.705901141898906
 ```
 
-When the replication is done (NaN metrics), we increase the producer buffer by uncommenting the producer
-override [in source connector config](/sessions/005/crs/001-my-mm2.yaml) and apply this change. Now every batch will
-include more data and repeating the same test, we see a significant improvement in replication speed. Note that he
-request latency is increased too, but it is still good. There is no free lunch, it's always a matter of finding the
-right balance between throughput and latency.
+When the replication is done (NaN metrics), we increase the producer buffer by overriding its configuration. Now every
+batch will include more data and repeating the same test, we see a significant improvement in replication speed. Note
+that he request latency is increased too, but it is still good. There is no free lunch, it's always a tradeoff between
+throughput and latency.
 
 ```sh
-$ kubectl -n target scale kmm2 my-mm2 --replicas 0
-kafkamirrormaker2.kafka.strimzi.io/my-mm2 scaled
+$ kubectl -n target patch kmm2 my-mm2 --type merge -p '
+  spec:
+    mirrors:
+      - sourceCluster: my-cluster
+        targetCluster: my-cluster-tgt
+        sourceConnector:
+          config:
+            replication.factor: -1
+            offset-syncs.topic.replication.factor: -1
+            refresh.topics.interval.seconds: 30
+            sync.topic.acls.enabled: false
+            replication.policy.separator: ""
+            replication.policy.class: "org.apache.kafka.connect.mirror.IdentityReplicationPolicy"
+            # high volumes: tune the producer for throughput (default x20)
+            producer.override.batch.size: 327680'
+kafkamirrormaker2.kafka.strimzi.io/my-mm2 patched
 
-$ kubectl -n target apply -f sessions/005/crs/001-my-mm2.yaml \
-  && kubectl -n target scale kmm2 my-mm2 --replicas 1
-kafkamirrormaker2.kafka.strimzi.io/my-mm2 configured
+$ kubectl -n target scale kmm2 my-mm2 --replicas 0
 kafkamirrormaker2.kafka.strimzi.io/my-mm2 scaled
 
 $ krun_kafka bin/kafka-producer-perf-test.sh --topic my-topic --record-size 100 --num-records 30000000 \

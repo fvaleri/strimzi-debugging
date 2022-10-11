@@ -60,8 +60,7 @@ authentication:
 ```
 
 Now, external clients need to retrieve the bootstrap URL from the passthrough route, configure their keystore and
-truststore. Then we can try sending some messages in a secure way. Make sure to have
-the [Kafka scripts in your path](/sessions/001).
+truststore. Then we can try sending some messages in a secure way. Make sure to have Kafka scripts in your `$PATH`.
 
 ```sh
 $ BOOTSTRAP_SERVERS=$(kubectl get routes my-cluster-kafka-bootstrap -o jsonpath="{.status.ingress[0].host}"):443 \

@@ -19,9 +19,8 @@ The transactional producer configure a static and unique `transactional.id` (TID
 This information is used for zombie fencing. A producer can have **only one ongoing transaction** (ordering guarantee).
 Consumers with `isolation.level=read_committed` receive committed messages only, ignoring ongoing and discarding aborted
 transactions (they get few additional metadata to do that). Transactions overhead is minimal and the biggest impact is
-on producers. You can balance overhead with latency by tuning the `commit.interval.ms`. Compared to using the low level
-API, enabling transactions is much easier when using the Streams API, as we just need to
-set `processing.guarantee=exactly_once_v2`.
+on producers. You can balance overhead with latency by tuning the `commit.interval.ms`. Enabling EOS with the Streams
+API is much easier than using the transaction API, as we just need to set `processing.guarantee=exactly_once_v2`.
 
 The transaction state is stored in a specific `__transaction_state` partition, whose leader is a broker called the
 **transaction coordinator**. Each partition also contains `.snapshot` logs that helps in rebuilding producers state in
@@ -36,7 +35,7 @@ logic. This was ugely inefficient, because you couldn't reuse a single thread-sa
 create one for each input partition. This was fixed by forcing the producer to send the consumer group metadata along
 with the offsets to commit.
 
-### Example: word count with low level transaction API
+### Example: word count with the transaction API
 
 [Deploy a Kafka cluster on localhost](/sessions/001). This time, we use a local deployment just because it's more
 convenient for inspecting partition content. Let's run the application on a different shell, send one sentence to the
@@ -49,35 +48,27 @@ $ kafka-topics.sh --bootstrap-server :9092 --create --topic wc-input --partition
 Created topic wc-input.
 Created topic wc-output.
 
-# run thisc commad in a different shell
+# run in a different shell
 $ mvn clean compile exec:java -f sessions/008/kafka-trans/pom.xml -q
 Creating a new transactional producer
 Creating a new transaction-aware consumer
 READ: Waiting for new user sentence
 
 $ kafka-console-producer.sh --bootstrap-server :9092 --topic wc-input
->All transactions should be rounded down if you ask me, but that's just my 0 cents.
+>a long time ago in a galaxy far far away
 >^C
 
 $ kafka-console-consumer.sh --bootstrap-server :9092 --topic wc-output \
   --from-beginning --property print.key=true --property print.value=true
-but	1
-All	1
-be	1
-that's	1
-my	1
-transactions	1
-down	1
-0	1
-cents.	1
-me,	1
-ask	1
-should	1
-rounded	1
-just	1
-if	1
-you	1
-^CProcessed a total of 16 messages
+a	2
+away	1
+in	1
+far	2
+ago	1
+time	1
+galaxy	1
+long	1
+^CProcessed a total of 8 messages
 ```
 
 Now we can stop the application (Ctrl+C) and take a look at partitions content. Our topics have both one partition, so
@@ -101,41 +92,34 @@ partition offset commit (`payload: offset=1`) record is also marked as transacti
 transaction marker.
 
 ```sh
-$ kafka-dump-log.sh --deep-iteration --print-data-log \
-  --files /tmp/kafka-logs/wc-output-0/00000000000000000000.log
+$ kafka-dump-log.sh --deep-iteration --print-data-log --files /tmp/kafka-logs/wc-output-0/00000000000000000000.log
 Dumping /tmp/kafka-logs/wc-output-0/00000000000000000000.log
 Starting offset: 0
-baseOffset: 0 lastOffset: 15 count: 16 baseSequence: 0 lastSequence: 15 producerId: 0 producerEpoch: 0 partitionLeaderEpoch: 0 isTransactional: true isControl: false deleteHorizonMs: OptionalLong.empty position: 0 CreateTime: 1664531387239 size: 256 magic: 2 compresscodec: none crc: 2340232627 isvalid: true
-| offset: 0 CreateTime: 1664531387234 keySize: 3 valueSize: 1 sequence: 0 headerKeys: [] key: but payload: 1
-| offset: 1 CreateTime: 1664531387238 keySize: 3 valueSize: 1 sequence: 1 headerKeys: [] key: All payload: 1
-| offset: 2 CreateTime: 1664531387239 keySize: 2 valueSize: 1 sequence: 2 headerKeys: [] key: be payload: 1
-| offset: 3 CreateTime: 1664531387239 keySize: 6 valueSize: 1 sequence: 3 headerKeys: [] key: that's payload: 1
-| offset: 4 CreateTime: 1664531387239 keySize: 2 valueSize: 1 sequence: 4 headerKeys: [] key: my payload: 1
-| offset: 5 CreateTime: 1664531387239 keySize: 12 valueSize: 1 sequence: 5 headerKeys: [] key: transactions payload: 1
-| offset: 6 CreateTime: 1664531387239 keySize: 4 valueSize: 1 sequence: 6 headerKeys: [] key: down payload: 1
-| offset: 7 CreateTime: 1664531387239 keySize: 1 valueSize: 1 sequence: 7 headerKeys: [] key: 0 payload: 1
-| offset: 8 CreateTime: 1664531387239 keySize: 6 valueSize: 1 sequence: 8 headerKeys: [] key: cents. payload: 1
-| offset: 9 CreateTime: 1664531387239 keySize: 3 valueSize: 1 sequence: 9 headerKeys: [] key: me, payload: 1
-| offset: 10 CreateTime: 1664531387239 keySize: 3 valueSize: 1 sequence: 10 headerKeys: [] key: ask payload: 1
-| offset: 11 CreateTime: 1664531387239 keySize: 6 valueSize: 1 sequence: 11 headerKeys: [] key: should payload: 1
-| offset: 12 CreateTime: 1664531387239 keySize: 7 valueSize: 1 sequence: 12 headerKeys: [] key: rounded payload: 1
-| offset: 13 CreateTime: 1664531387239 keySize: 4 valueSize: 1 sequence: 13 headerKeys: [] key: just payload: 1
-| offset: 14 CreateTime: 1664531387239 keySize: 2 valueSize: 1 sequence: 14 headerKeys: [] key: if payload: 1
-| offset: 15 CreateTime: 1664531387239 keySize: 3 valueSize: 1 sequence: 15 headerKeys: [] key: you payload: 1
-baseOffset: 16 lastOffset: 16 count: 1 baseSequence: -1 lastSequence: -1 producerId: 0 producerEpoch: 0 partitionLeaderEpoch: 0 isTransactional: true isControl: true deleteHorizonMs: OptionalLong.empty position: 256 CreateTime: 1664531387382 size: 78 magic: 2 compresscodec: none crc: 3122996963 isvalid: true
-| offset: 16 CreateTime: 1664531387382 keySize: 4 valueSize: 6 sequence: -1 headerKeys: [] endTxnMarker: COMMIT coordinatorEpoch: 0
+baseOffset: 0 lastOffset: 7 count: 8 baseSequence: 0 lastSequence: 7 producerId: 0 producerEpoch: 0 partitionLeaderEpoch: 0 isTransactional: true isControl: false deleteHorizonMs: OptionalLong.empty position: 0 CreateTime: 1665506597828 size: 152 magic: 2 compresscodec: none crc: 3801140420 isvalid: true
+| offset: 0 CreateTime: 1665506597822 keySize: 1 valueSize: 1 sequence: 0 headerKeys: [] key: a payload: 2
+| offset: 1 CreateTime: 1665506597827 keySize: 4 valueSize: 1 sequence: 1 headerKeys: [] key: away payload: 1
+| offset: 2 CreateTime: 1665506597828 keySize: 2 valueSize: 1 sequence: 2 headerKeys: [] key: in payload: 1
+| offset: 3 CreateTime: 1665506597828 keySize: 3 valueSize: 1 sequence: 3 headerKeys: [] key: far payload: 2
+| offset: 4 CreateTime: 1665506597828 keySize: 3 valueSize: 1 sequence: 4 headerKeys: [] key: ago payload: 1
+| offset: 5 CreateTime: 1665506597828 keySize: 4 valueSize: 1 sequence: 5 headerKeys: [] key: time payload: 1
+| offset: 6 CreateTime: 1665506597828 keySize: 6 valueSize: 1 sequence: 6 headerKeys: [] key: galaxy payload: 1
+| offset: 7 CreateTime: 1665506597828 keySize: 4 valueSize: 1 sequence: 7 headerKeys: [] key: long payload: 1
+baseOffset: 8 lastOffset: 8 count: 1 baseSequence: -1 lastSequence: -1 producerId: 0 producerEpoch: 0 partitionLeaderEpoch: 0 isTransactional: true isControl: true deleteHorizonMs: OptionalLong.empty position: 152 CreateTime: 1665506597998 size: 78 magic: 2 compresscodec: none crc: 3355926470 isvalid: true
+| offset: 8 CreateTime: 1665506597998 keySize: 4 valueSize: 6 sequence: -1 headerKeys: [] endTxnMarker: COMMIT coordinatorEpoch: 0
 
-$ kafka-dump-log.sh --deep-iteration --print-data-log --offsets-decoder \
-  --files /tmp/kafka-logs/__consumer_offsets-12/00000000000000000000.log
+$ kafka-dump-log.sh --deep-iteration --print-data-log --offsets-decoder --files /tmp/kafka-logs/__consumer_offsets-12/00000000000000000000.log
+Dumping /tmp/kafka-logs/__consumer_offsets-12/00000000000000000000.log
 Starting offset: 0
-baseOffset: 0 lastOffset: 0 count: 1 baseSequence: -1 lastSequence: -1 producerId: -1 producerEpoch: -1 partitionLeaderEpoch: 0 isTransactional: false isControl: false deleteHorizonMs: OptionalLong.empty position: 0 CreateTime: 1664531116553 size: 339 magic: 2 compresscodec: none crc: 810578779 isvalid: true
-| offset: 0 CreateTime: 1664531116553 keySize: 12 valueSize: 257 sequence: -1 headerKeys: [] key: group_metadata::group=my-group payload: {"protocolType":"consumer","protocol":"range","generationId":1,"assignment":"{consumer-my-group-1-75802c25-7e83-44cb-8249-a7d2e3197e32=[wc-input-0]}"}
-baseOffset: 1 lastOffset: 1 count: 1 baseSequence: 0 lastSequence: 0 producerId: 0 producerEpoch: 0 partitionLeaderEpoch: 0 isTransactional: true isControl: false deleteHorizonMs: OptionalLong.empty position: 339 CreateTime: 1664531387354 size: 118 magic: 2 compresscodec: none crc: 2105801863 isvalid: true
-| offset: 1 CreateTime: 1664531387354 keySize: 26 valueSize: 24 sequence: 0 headerKeys: [] key: offset_commit::group=my-group,partition=wc-input-0 payload: offset=1
-baseOffset: 2 lastOffset: 2 count: 1 baseSequence: -1 lastSequence: -1 producerId: 0 producerEpoch: 0 partitionLeaderEpoch: 0 isTransactional: true isControl: true deleteHorizonMs: OptionalLong.empty position: 457 CreateTime: 1664531387381 size: 78 magic: 2 compresscodec: none crc: 1317242470 isvalid: true
-| offset: 2 CreateTime: 1664531387381 keySize: 4 valueSize: 6 sequence: -1 headerKeys: [] endTxnMarker: COMMIT coordinatorEpoch: 0
-baseOffset: 3 lastOffset: 3 count: 1 baseSequence: -1 lastSequence: -1 producerId: -1 producerEpoch: -1 partitionLeaderEpoch: 0 isTransactional: false isControl: false deleteHorizonMs: OptionalLong.empty position: 535 CreateTime: 1664531557631 size: 112 magic: 2 compresscodec: none crc: 3099282109 isvalid: true
-| offset: 3 CreateTime: 1664531557631 keySize: 12 valueSize: 32 sequence: -1 headerKeys: [] key: group_metadata::group=my-group payload: {"protocolType":"consumer","protocol":null,"generationId":2,"assignment":"{}"}
+baseOffset: 0 lastOffset: 0 count: 1 baseSequence: -1 lastSequence: -1 producerId: -1 producerEpoch: -1 partitionLeaderEpoch: 0 isTransactional: false isControl: false deleteHorizonMs: OptionalLong.empty position: 0 CreateTime: 1665506545837 size: 339 magic: 2 compresscodec: none crc: 2084712706 isvalid: true
+| offset: 0 CreateTime: 1665506545837 keySize: 12 valueSize: 257 sequence: -1 headerKeys: [] key: group_metadata::group=my-group payload: {"protocolType":"consumer","protocol":"range","generationId":1,"assignment":"{consumer-my-group-1-600d5429-c4cb-4a6e-a6a6-0c7025fd7299=[wc-input-0]}"}
+baseOffset: 1 lastOffset: 1 count: 1 baseSequence: 0 lastSequence: 0 producerId: 0 producerEpoch: 0 partitionLeaderEpoch: 0 isTransactional: true isControl: false deleteHorizonMs: OptionalLong.empty position: 339 CreateTime: 1665506597950 size: 118 magic: 2 compresscodec: none crc: 4199759988 isvalid: true
+| offset: 1 CreateTime: 1665506597950 keySize: 26 valueSize: 24 sequence: 0 headerKeys: [] key: offset_commit::group=my-group,partition=wc-input-0 payload: offset=1
+baseOffset: 2 lastOffset: 2 count: 1 baseSequence: -1 lastSequence: -1 producerId: 0 producerEpoch: 0 partitionLeaderEpoch: 0 isTransactional: true isControl: true deleteHorizonMs: OptionalLong.empty position: 457 CreateTime: 1665506597998 size: 78 magic: 2 compresscodec: none crc: 3355926470 isvalid: true
+| offset: 2 CreateTime: 1665506597998 keySize: 4 valueSize: 6 sequence: -1 headerKeys: [] endTxnMarker: COMMIT coordinatorEpoch: 0
+baseOffset: 3 lastOffset: 3 count: 1 baseSequence: -1 lastSequence: -1 producerId: -1 producerEpoch: -1 partitionLeaderEpoch: 0 isTransactional: false isControl: false deleteHorizonMs: OptionalLong.empty position: 535 CreateTime: 1665506608228 size: 346 magic: 2 compresscodec: none crc: 2609927459 isvalid: true
+| offset: 3 CreateTime: 1665506608228 keySize: 26 valueSize: 250 sequence: -1 headerKeys: [] key: group_metadata::group=console-consumer-37281 payload: {"protocolType":"consumer","protocol":"range","generationId":1,"assignment":"{console-consumer-a2304e37-6b7e-427e-91db-3dba13f4e8ae=[wc-output-0]}"}
+baseOffset: 4 lastOffset: 4 count: 1 baseSequence: -1 lastSequence: -1 producerId: -1 producerEpoch: -1 partitionLeaderEpoch: 0 isTransactional: false isControl: false deleteHorizonMs: OptionalLong.empty position: 881 CreateTime: 1665506614331 size: 127 magic: 2 compresscodec: none crc: 4000856233 isvalid: true
+| offset: 4 CreateTime: 1665506614331 keySize: 26 valueSize: 32 sequence: -1 headerKeys: [] key: group_metadata::group=console-consumer-37281 payload: {"protocolType":"consumer","protocol":null,"generationId":2,"assignment":"{}"}
 ```
 
 That was straightforward, but how the transaction state is managed by the coordinator? In `__transaction_state-33` dump
@@ -145,23 +129,22 @@ application calls commit, a `state=PrepareCommit` record is added and the broker
 happens with the `state=CompleteCommit` record that closes the transaction.
 
 ```sh
-$ kafka-dump-log.sh --deep-iteration --print-data-log --transaction-log-decoder \
-  --files /tmp/kafka-logs/__transaction_state-33/00000000000000000000.log
+$ kafka-dump-log.sh --deep-iteration --print-data-log --transaction-log-decoder --files /tmp/kafka-logs/__transaction_state-33/00000000000000000000.log
 Dumping /tmp/kafka-logs/__transaction_state-33/00000000000000000000.log
 Starting offset: 0
-baseOffset: 0 lastOffset: 0 count: 1 baseSequence: -1 lastSequence: -1 producerId: -1 producerEpoch: -1 partitionLeaderEpoch: 0 isTransactional: false isControl: false deleteHorizonMs: OptionalLong.empty position: 0 CreateTime: 1664531116250 size: 130 magic: 2 compresscodec: none crc: 1190815950 isvalid: true
-| offset: 0 CreateTime: 1664531116250 keySize: 24 valueSize: 37 sequence: -1 headerKeys: [] key: transaction_metadata::transactionalId=my-unique-static-tid payload: producerId:0,producerEpoch:0,state=Empty,partitions=[],txnLastUpdateTimestamp=1664531116242,txnTimeoutMs=60000
-baseOffset: 1 lastOffset: 1 count: 1 baseSequence: -1 lastSequence: -1 producerId: -1 producerEpoch: -1 partitionLeaderEpoch: 0 isTransactional: false isControl: false deleteHorizonMs: OptionalLong.empty position: 130 CreateTime: 1664531387243 size: 149 magic: 2 compresscodec: none crc: 3789373876 isvalid: true
-| offset: 1 CreateTime: 1664531387243 keySize: 24 valueSize: 56 sequence: -1 headerKeys: [] key: transaction_metadata::transactionalId=my-unique-static-tid payload: producerId:0,producerEpoch:0,state=Ongoing,partitions=[wc-output-0],txnLastUpdateTimestamp=1664531387242,txnTimeoutMs=60000
-baseOffset: 2 lastOffset: 2 count: 1 baseSequence: -1 lastSequence: -1 producerId: -1 producerEpoch: -1 partitionLeaderEpoch: 0 isTransactional: false isControl: false deleteHorizonMs: OptionalLong.empty position: 279 CreateTime: 1664531387247 size: 178 magic: 2 compresscodec: none crc: 1696269573 isvalid: true
-| offset: 2 CreateTime: 1664531387247 keySize: 24 valueSize: 84 sequence: -1 headerKeys: [] key: transaction_metadata::transactionalId=my-unique-static-tid payload: producerId:0,producerEpoch:0,state=Ongoing,partitions=[__consumer_offsets-12,wc-output-0],txnLastUpdateTimestamp=1664531387246,txnTimeoutMs=60000
-baseOffset: 3 lastOffset: 3 count: 1 baseSequence: -1 lastSequence: -1 producerId: -1 producerEpoch: -1 partitionLeaderEpoch: 0 isTransactional: false isControl: false deleteHorizonMs: OptionalLong.empty position: 457 CreateTime: 1664531387371 size: 178 magic: 2 compresscodec: none crc: 574508280 isvalid: true
-| offset: 3 CreateTime: 1664531387371 keySize: 24 valueSize: 84 sequence: -1 headerKeys: [] key: transaction_metadata::transactionalId=my-unique-static-tid payload: producerId:0,producerEpoch:0,state=PrepareCommit,partitions=[__consumer_offsets-12,wc-output-0],txnLastUpdateTimestamp=1664531387371,txnTimeoutMs=60000
-baseOffset: 4 lastOffset: 4 count: 1 baseSequence: -1 lastSequence: -1 producerId: -1 producerEpoch: -1 partitionLeaderEpoch: 0 isTransactional: false isControl: false deleteHorizonMs: OptionalLong.empty position: 635 CreateTime: 1664531387388 size: 130 magic: 2 compresscodec: none crc: 3610071080 isvalid: true
-| offset: 4 CreateTime: 1664531387388 keySize: 24 valueSize: 37 sequence: -1 headerKeys: [] key: transaction_metadata::transactionalId=my-unique-static-tid payload: producerId:0,producerEpoch:0,state=CompleteCommit,partitions=[],txnLastUpdateTimestamp=1664531387373,txnTimeoutMs=60000
+baseOffset: 0 lastOffset: 0 count: 1 baseSequence: -1 lastSequence: -1 producerId: -1 producerEpoch: -1 partitionLeaderEpoch: 0 isTransactional: false isControl: false deleteHorizonMs: OptionalLong.empty position: 0 CreateTime: 1665506545539 size: 130 magic: 2 compresscodec: none crc: 682337358 isvalid: true
+| offset: 0 CreateTime: 1665506545539 keySize: 24 valueSize: 37 sequence: -1 headerKeys: [] key: transaction_metadata::transactionalId=my-unique-static-tid payload: producerId:0,producerEpoch:0,state=Empty,partitions=[],txnLastUpdateTimestamp=1665506545533,txnTimeoutMs=60000
+baseOffset: 1 lastOffset: 1 count: 1 baseSequence: -1 lastSequence: -1 producerId: -1 producerEpoch: -1 partitionLeaderEpoch: 0 isTransactional: false isControl: false deleteHorizonMs: OptionalLong.empty position: 130 CreateTime: 1665506597832 size: 149 magic: 2 compresscodec: none crc: 3989189852 isvalid: true
+| offset: 1 CreateTime: 1665506597832 keySize: 24 valueSize: 56 sequence: -1 headerKeys: [] key: transaction_metadata::transactionalId=my-unique-static-tid payload: producerId:0,producerEpoch:0,state=Ongoing,partitions=[wc-output-0],txnLastUpdateTimestamp=1665506597831,txnTimeoutMs=60000
+baseOffset: 2 lastOffset: 2 count: 1 baseSequence: -1 lastSequence: -1 producerId: -1 producerEpoch: -1 partitionLeaderEpoch: 0 isTransactional: false isControl: false deleteHorizonMs: OptionalLong.empty position: 279 CreateTime: 1665506597836 size: 178 magic: 2 compresscodec: none crc: 4121781109 isvalid: true
+| offset: 2 CreateTime: 1665506597836 keySize: 24 valueSize: 84 sequence: -1 headerKeys: [] key: transaction_metadata::transactionalId=my-unique-static-tid payload: producerId:0,producerEpoch:0,state=Ongoing,partitions=[__consumer_offsets-12,wc-output-0],txnLastUpdateTimestamp=1665506597836,txnTimeoutMs=60000
+baseOffset: 3 lastOffset: 3 count: 1 baseSequence: -1 lastSequence: -1 producerId: -1 producerEpoch: -1 partitionLeaderEpoch: 0 isTransactional: false isControl: false deleteHorizonMs: OptionalLong.empty position: 457 CreateTime: 1665506597988 size: 178 magic: 2 compresscodec: none crc: 1820961623 isvalid: true
+| offset: 3 CreateTime: 1665506597988 keySize: 24 valueSize: 84 sequence: -1 headerKeys: [] key: transaction_metadata::transactionalId=my-unique-static-tid payload: producerId:0,producerEpoch:0,state=PrepareCommit,partitions=[__consumer_offsets-12,wc-output-0],txnLastUpdateTimestamp=1665506597987,txnTimeoutMs=60000
+baseOffset: 4 lastOffset: 4 count: 1 baseSequence: -1 lastSequence: -1 producerId: -1 producerEpoch: -1 partitionLeaderEpoch: 0 isTransactional: false isControl: false deleteHorizonMs: OptionalLong.empty position: 635 CreateTime: 1665506598005 size: 130 magic: 2 compresscodec: none crc: 4065405397 isvalid: true
+| offset: 4 CreateTime: 1665506598005 keySize: 24 valueSize: 37 sequence: -1 headerKeys: [] key: transaction_metadata::transactionalId=my-unique-static-tid payload: producerId:0,producerEpoch:0,state=CompleteCommit,partitions=[],txnLastUpdateTimestamp=1665506597989,txnTimeoutMs=60000
 ```
 
-### Example: rollback hanging transactions
+### Example: how to rollback hanging transactions
 
 A hanging transaction is one which has a missing or an out of order control record due to a bug in the transaction
 handling. If a transaction is being left in an open state, then the LSO is stuck, which means any `read_committed`
