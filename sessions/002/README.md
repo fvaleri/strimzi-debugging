@@ -21,9 +21,10 @@ generated and used to sign all cluster (cluster CA) and user (clients CA) certif
 
 ![](images/connections.png)
 
-The **server name indication** (SNI) extension is used when having multiple certificates on the same IP address. For
-example, it is used by OpenShift to route external TLS connections to the right pod. Leveraging this extension, we can
-tunnel the Kafka TCP protocol through the OpenShift HTTP reverse proxy.
+The **server name indication** (SNI) extension allows a client to indicate which hostname it is trying to connect to at
+the start of the TLS handshake. The server can present multiple certificates on the same IP address and port number. For
+example, it is used by OpenShift to route external connections to the right pod when having passthrough routes, which
+also allows to tunnel the Kafka TCP protocol through the HTTP reverse proxy.
 
 Kafka clients don't need to trust TLS certificates when they are signed by a **well-known CA**, which is already
 included in the system truststore (e.g. `$JAVA_HOME/jre/lib/security/cacerts`). Before the encryption starts, the peers
@@ -42,8 +43,8 @@ kafka.kafka.strimzi.io/my-cluster configured
 kafkauser.kafka.strimzi.io/my-user created
 ```
 
-Previous command adds a new authentication element to the external listener, which is the endpoint used by clients
-connecting from outside OpenShift. It also creates a `KafkaUser` resource with a matching configuration.
+The previous command adds a new authentication element to the external listener, which is the endpoint used by clients
+connecting from outside OpenShift using TLS. It also creates a Kafka user resource with a matching configuration.
 
 ```sh
 $ kubectl get k my-cluster -o yaml | yq e '.spec.kafka.listeners[2]'
@@ -59,8 +60,8 @@ authentication:
   type: tls
 ```
 
-Now, external clients need to retrieve the bootstrap URL from the passthrough route, configure their keystore and
-truststore. Then we can try sending some messages in a secure way. Make sure to have Kafka scripts in your `$PATH`.
+The external clients have to retrieve the bootstrap URL from the passthrough route, configure their keystore and
+truststore. Then, we can try to send some messages in a secure way. Make sure to have Kafka scripts in your `$PATH`.
 
 ```sh
 $ BOOTSTRAP_SERVERS=$(kubectl get routes my-cluster-kafka-bootstrap -o jsonpath="{.status.ingress[0].host}"):443 \
