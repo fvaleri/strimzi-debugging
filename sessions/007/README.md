@@ -6,15 +6,15 @@ in order to balance leader distribution. A background thread moves leader to pre
 
 Sometimes, this may not be enough and we may end up with **uneven distribution of load across brokers** as a consequence
 of some broker failures, the addition of new brokers or simply because some partitions are used more than others.
-The `RequestHandlerAvgIdlePercent` broker metric is a good overall load measurement metric for Kafka scaling decisions.
-Good rule of thumb is when it hits 20% (i.e. the request handler threads are busy 80% of the time), then it's time to
-plan your cluster expansion, at 10% you need to scale it now.
+The `kafka.server:type=KafkaRequestHandlerPool,name=RequestHandlerAvgIdlePercent` broker metric is a good overall load
+metric for Kafka scaling and rebalance decisions. Good rule of thumb is when it hits 20% (i.e. the request handler
+threads are busy 80% of the time), then it's time to plan your cluster expansion, at 10% you need to scale it now.
 
 **Rebalancing** means moving partitions between brokers (inter brokers), between disks on the same broker
 (intra broker), or simply change leaders in order to restore the balance. Usually we need some combination of partition
 movements and leadership changes. When using `kafka-reassign-partitions.sh` for rebalancing, the task of figuring out
-which changes are required and possible is left to the user. This requires some calculations that may be hard and time
-consuming, especially on big clusters with lots of partitions. Automating this complex task is the reason
+which replica changes are needed and possible is left to the user. This requires some calculations that may be hard and
+time consuming, especially on big clusters with lots of partitions. Automating this complex task is the reason
 why [Cruise Control](https://github.com/linkedin/cruise-control) (CC) was created.
 
 ![](images/cc.png)
@@ -30,15 +30,23 @@ enable full automation. In order to have accurate rebalance proposals when using
 equal to CPU limits in `spec.kafka.resources`. That way, all CPU resources are reserved upfront and are always
 available. This allows CC to properly evaluate the CPU utilization when preparing the rebalance proposals.
 
-### Example: reduce the topic replication factor
+### Example: scaling up the cluster
 
-[Deploy Streams operator and Kafka cluster](/sessions/001). When the cluster is ready, let's try to reduce the topic
-replication factor by editing its specification. As you can see, the TO does not allow this change.
+[Deploy Streams operator and Kafka cluster](/sessions/001). When the cluster is ready, we want to scale it up by one
+broker and also increase our test topic RF by one. We also want to put some load on the new broker by assigning one of
+the preferred replicas to it. The natural place to change the topic replication factor would be the topic CR but,
+unfortunately, this is not supported by the TO.
 
 ```sh
+$ kubectl patch k my-cluster --type merge -p '
+    spec:
+      kafka:
+        replicas: 4'
+kafka.kafka.strimzi.io/my-cluster patched
+
 $ kubectl patch kt my-topic --type merge -p '
     spec:
-      replicas: 2'
+      replicas: 4'
 kafkatopic.kafka.strimzi.io/my-topic patched
 
 $ kubectl get kt my-topic -o yaml | yq e '.status'
@@ -52,26 +60,35 @@ observedGeneration: 5
 topicName: my-topic
 ```
 
-As a workaround, we can use the reassign tool to apply the above change at Kafka level. The preferred replica is the
-first one that appears in the replicas list. In `reassign.json` we distribute them evenly among available brokers. Note
-that we are also throttling the movement of partitions to 5 MB/s to avoid disrupting other clients. If the partition
-movement is too slow, you can resubmit the execute command with the `--additional` option and a new throttle value.
+As a workaround, we can use the `kafka-reassign-partitions.sh` to do the topic RF change and assign one of the preferred
+replicas to the new broker. The preferred replica is the first one that appears in the replicas list. We use
+the `reassign.json` file to describe the desired topic state. We use the `--throttle` option to limit the inter-broker
+traffic to 5 MB/s, in order to avoid any impact on the cluster while moving partitions between brokers. This is not
+needed when reducing the RF because there is no data movement.
+
+The problem with throttling is that it also applies to the normal partition replication traffic between brokers, so we
+need to find the right balance which allows to move data in a reasonable amount of time, but without slowing down the
+replication too much. We can start from the above safe throttle value and then
+use `kafka.server:type=FetcherLagMetrics,name=ConsumerLag,clientId=([-.\w]+),topic=([-.\w]+),partition=([0-9]+)`
+metric to observe how far the followers are lagging behind the leader for a given partition. If this lag is growing or
+the reassignment is taking too much time, we can re-execute the command with the `--additional` option and an increased
+throttle value.
 
 ```sh
 $ krun_kafka
 [strimzi@krun-1664115586 kafka]$ bin/kafka-topics.sh --bootstrap-server my-cluster-kafka-bootstrap:9092 --topic my-topic --describe
-Topic: my-topic	TopicId: 3n2nu6v9SS23xALR8yHADA	PartitionCount: 3	ReplicationFactor: 3	Configs: min.insync.replicas=2,message.format.version=3.0-IV1,retention.bytes=1073741824
-	Topic: my-topic	Partition: 0	Leader: 1	Replicas: 1,0,2	Isr: 1,0,2
-	Topic: my-topic	Partition: 1	Leader: 0	Replicas: 0,2,1	Isr: 0,2,1
-	Topic: my-topic	Partition: 2	Leader: 2	Replicas: 2,1,0	Isr: 2,1,0
+Topic: my-topic	TopicId: vdrVulssQhmlW-pQndhXEg	PartitionCount: 3	ReplicationFactor: 3	Configs: min.insync.replicas=2,message.format.version=3.0-IV1,retention.bytes=1073741824
+	Topic: my-topic	Partition: 0	Leader: 0	Replicas: 0,2,1	Isr: 0,1,2
+	Topic: my-topic	Partition: 1	Leader: 1	Replicas: 2,1,0	Isr: 0,1,2
+	Topic: my-topic	Partition: 2	Leader: 1	Replicas: 1,0,2	Isr: 0,1,2
 
 [strimzi@krun-1664115586 kafka]$ cat <<EOF >/tmp/reassign.json
 {
   "version": 1,
   "partitions": [
-    {"topic": "my-topic", "partition": 0, "replicas": [0, 1]},
-    {"topic": "my-topic", "partition": 1, "replicas": [1, 2]},
-    {"topic": "my-topic", "partition": 2, "replicas": [2, 0]}
+    {"topic": "my-topic", "partition": 0, "replicas": [0, 1, 2, 3]},
+    {"topic": "my-topic", "partition": 1, "replicas": [3, 2, 0, 1]},
+    {"topic": "my-topic", "partition": 2, "replicas": [2, 0, 1, 3]}
   ]
 }
 EOF
@@ -80,7 +97,7 @@ EOF
   --reassignment-json-file /tmp/reassign.json --throttle 5000000 --execute
 Current partition replica assignment
 
-{"version":1,"partitions":[{"topic":"my-topic","partition":0,"replicas":[1,0,2],"log_dirs":["any","any","any"]},{"topic":"my-topic","partition":1,"replicas":[0,2,1],"log_dirs":["any","any","any"]},{"topic":"my-topic","partition":2,"replicas":[2,1,0],"log_dirs":["any","any","any"]}]}
+{"version":1,"partitions":[{"topic":"my-topic","partition":0,"replicas":[0,2,1],"log_dirs":["any","any","any"]},{"topic":"my-topic","partition":1,"replicas":[2,1,0],"log_dirs":["any","any","any"]},{"topic":"my-topic","partition":2,"replicas":[1,0,2],"log_dirs":["any","any","any"]}]}
 
 Save this to use as the --reassignment-json-file option during rollback
 Warning: You must run --verify periodically, until the reassignment completes, to ensure the throttle is removed.
@@ -89,8 +106,9 @@ Successfully started partition reassignments for my-topic-0,my-topic-1,my-topic-
 ```
 
 The old partitions will be only removed once the reassignment process is complete, so make sure that there is enough
-disk space to accommodate for this extra storage requirement. If the process completed successfully, we can check the
-topic configuration again.
+disk space to accommodate for this extra storage requirement. We must use the `--verify` option to check the status of
+the reassignment process and disable the replication throttling, which otherwise will continue to affect the cluster.
+When the process is done, we can check if the topic configuration changes have been applied.
 
 ```sh
 [strimzi@krun-1664115586 kafka]$ bin/kafka-reassign-partitions.sh --bootstrap-server my-cluster-kafka-bootstrap:9092 \
@@ -100,14 +118,14 @@ Reassignment of partition my-topic-0 is complete.
 Reassignment of partition my-topic-1 is complete.
 Reassignment of partition my-topic-2 is complete.
 
-Clearing broker-level throttles on brokers 0,1,2
+Clearing broker-level throttles on brokers 0,1,2,3
 Clearing topic-level throttles on topic my-topic
 
 [strimzi@krun-1664115586 kafka]$ bin/kafka-topics.sh --bootstrap-server my-cluster-kafka-bootstrap:9092 --topic my-topic --describe
-Topic: my-topic	TopicId: 3n2nu6v9SS23xALR8yHADA	PartitionCount: 3	ReplicationFactor: 2	Configs: min.insync.replicas=2,message.format.version=3.0-IV1,retention.bytes=1073741824
-	Topic: my-topic	Partition: 0	Leader: 1	Replicas: 0,1	Isr: 1,0
-	Topic: my-topic	Partition: 1	Leader: 1	Replicas: 1,2	Isr: 2,1
-	Topic: my-topic	Partition: 2	Leader: 2	Replicas: 2,0	Isr: 2,0
+Topic: my-topic	TopicId: vdrVulssQhmlW-pQndhXEg	PartitionCount: 3	ReplicationFactor: 4	Configs: min.insync.replicas=2,message.format.version=3.0-IV1,retention.bytes=1073741824
+	Topic: my-topic	Partition: 0	Leader: 0	Replicas: 0,1,2,3	Isr: 0,1,2,3
+	Topic: my-topic	Partition: 1	Leader: 3	Replicas: 3,2,0,1	Isr: 0,1,2,3
+	Topic: my-topic	Partition: 2	Leader: 2	Replicas: 2,0,1,3	Isr: 0,1,2,3
 
 [strimzi@krun-1664115586 kafka]$ exit
 
