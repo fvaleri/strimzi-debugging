@@ -37,7 +37,7 @@ determines the time after which a cached artifact is auto evicted and needs to b
 ### Example: schema registry in action
 
 [Deploy Streams operator and Kafka cluster](/sessions/001). Then, we need to deploy the Service Registry operator. When
-the operators are ready, we can deploy the Service Registry instance with PostgreSQL as storage system.
+the operator is ready, we can deploy the Service Registry instance with PostgreSQL as storage system.
 
 ```sh
 $ kubectl create -f sessions/003/sub.yaml
@@ -99,7 +99,7 @@ using the "default" group id, but you can specify a custom name.
 ```sh
 $ curl -s -X POST -H "Content-Type: application/json" \
   -H "X-Registry-ArtifactId: my-topic-value" -H "X-Registry-ArtifactType: AVRO" \
-    -d @src/main/resources/greeting.avsc $REGISTRY_URL/groups/default/artifacts?ifExists=RETURN_OR_UPDATE
+    -d @src/main/resources/greeting.avsc $REGISTRY_URL/groups/default/artifacts?ifExists=RETURN_OR_UPDATE | jq
 {
   "name": "Greeting",
   "createdBy": "",
