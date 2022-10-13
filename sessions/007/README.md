@@ -32,10 +32,9 @@ available. This allows CC to properly evaluate the CPU utilization when preparin
 
 ### Example: scaling up the cluster
 
-[Deploy Streams operator and Kafka cluster](/sessions/001). When the cluster is ready, we want to scale it up by one
-broker and also increase our test topic RF by one. We also want to put some load on the new broker by assigning one of
-the preferred replicas to it. The natural place to change the topic replication factor would be the topic CR but,
-unfortunately, this is not supported by the TO.
+[Deploy Streams operator and Kafka cluster](/sessions/001). When the cluster is ready, we want to scale it up and move
+some replicas to the new broker in order to reduce the load on the other brokers. Thanks to the CO, we can scale the
+cluster up by simply raising the number of broker replicas in the Kafka CR.
 
 ```sh
 $ kubectl patch k my-cluster --type merge -p '
@@ -44,51 +43,36 @@ $ kubectl patch k my-cluster --type merge -p '
         replicas: 4'
 kafka.kafka.strimzi.io/my-cluster patched
 
-$ kubectl patch kt my-topic --type merge -p '
-    spec:
-      replicas: 4'
-kafkatopic.kafka.strimzi.io/my-topic patched
-
-$ kubectl get kt my-topic -o yaml | yq e '.status'
-conditions:
-  - lastTransitionTime: "2022-09-25T14:21:59.887479Z"
-    message: Changing 'spec.replicas' is not supported. This KafkaTopic's 'spec.replicas' should be reverted to 3 and then the replication should be changed directly in Kafka.
-    reason: ReplicationFactorChangeException
-    status: "True"
-    type: NotReady
-observedGeneration: 5
-topicName: my-topic
+$ kubectl get po -l app.kubernetes.io/name=kafka
+NAME                 READY   STATUS    RESTARTS   AGE
+my-cluster-kafka-0   1/1     Running   0          3m41s
+my-cluster-kafka-1   1/1     Running   0          6m17s
+my-cluster-kafka-2   1/1     Running   0          5m4s
+my-cluster-kafka-3   1/1     Running   0          2m30s
 ```
 
-As a workaround, we can use the `kafka-reassign-partitions.sh` to do the topic RF change and assign one of the preferred
-replicas to the new broker. The preferred replica is the first one that appears in the replicas list. We use
-the `reassign.json` file to describe the desired topic state. We use the `--throttle` option to limit the inter-broker
-traffic to 5 MB/s, in order to avoid any impact on the cluster while moving partitions between brokers. This is not
-needed when reducing the RF because there is no data movement.
-
-The problem with throttling is that it also applies to the normal partition replication traffic between brokers, so we
-need to find the right balance which allows to move data in a reasonable amount of time, but without slowing down the
-replication too much. We can start from the above safe throttle value and then
-use `kafka.server:type=FetcherLagMetrics,name=ConsumerLag,clientId=([-.\w]+),topic=([-.\w]+),partition=([0-9]+)`
-metric to observe how far the followers are lagging behind the leader for a given partition. If this lag is growing or
-the reassignment is taking too much time, we can re-execute the command with the `--additional` option and an increased
-throttle value.
+By default, the new broker will sit there idle, until new partitions are crated and assigned to it. One option to avoid
+that is to use the `kafka-reassign-partitions.sh` tool to move existing data when the new broker is ready. We only have
+one topic here, but you may have hundreds of them. In that case, you would need a custom procedure to figure out which
+replica changes can be done in order to redistribute the load evenly, also considering available disk space and
+preferred replicas. The result of this procedure would be a `reassign.json` file describing the desired partition state
+for each topic, that we pass to the tool.
 
 ```sh
 $ krun_kafka
 [strimzi@krun-1664115586 kafka]$ bin/kafka-topics.sh --bootstrap-server my-cluster-kafka-bootstrap:9092 --topic my-topic --describe
-Topic: my-topic	TopicId: vdrVulssQhmlW-pQndhXEg	PartitionCount: 3	ReplicationFactor: 3	Configs: min.insync.replicas=2,message.format.version=3.0-IV1,retention.bytes=1073741824
-	Topic: my-topic	Partition: 0	Leader: 0	Replicas: 0,2,1	Isr: 0,1,2
-	Topic: my-topic	Partition: 1	Leader: 1	Replicas: 2,1,0	Isr: 0,1,2
-	Topic: my-topic	Partition: 2	Leader: 1	Replicas: 1,0,2	Isr: 0,1,2
+Topic: my-topic	TopicId: ODAdezsITgmRMcFihU9Neg	PartitionCount: 3	ReplicationFactor: 3	Configs: min.insync.replicas=2,message.format.version=3.0-IV1,retention.bytes=1073741824
+	Topic: my-topic	Partition: 0	Leader: 1	Replicas: 1,0,2	Isr: 1,2,0
+	Topic: my-topic	Partition: 1	Leader: 0	Replicas: 0,2,1	Isr: 1,2,0
+	Topic: my-topic	Partition: 2	Leader: 2	Replicas: 2,1,0	Isr: 1,2,0
 
 [strimzi@krun-1664115586 kafka]$ cat <<EOF >/tmp/reassign.json
 {
   "version": 1,
   "partitions": [
-    {"topic": "my-topic", "partition": 0, "replicas": [0, 1, 2, 3]},
-    {"topic": "my-topic", "partition": 1, "replicas": [3, 2, 0, 1]},
-    {"topic": "my-topic", "partition": 2, "replicas": [2, 0, 1, 3]}
+    {"topic": "my-topic", "partition": 0, "replicas": [3, 2, 1]},
+    {"topic": "my-topic", "partition": 1, "replicas": [2, 1, 3]},
+    {"topic": "my-topic", "partition": 2, "replicas": [1, 3, 2]}
   ]
 }
 EOF
@@ -97,7 +81,7 @@ EOF
   --reassignment-json-file /tmp/reassign.json --throttle 5000000 --execute
 Current partition replica assignment
 
-{"version":1,"partitions":[{"topic":"my-topic","partition":0,"replicas":[0,2,1],"log_dirs":["any","any","any"]},{"topic":"my-topic","partition":1,"replicas":[2,1,0],"log_dirs":["any","any","any"]},{"topic":"my-topic","partition":2,"replicas":[1,0,2],"log_dirs":["any","any","any"]}]}
+{"version":1,"partitions":[{"topic":"my-topic","partition":0,"replicas":[1,0,2],"log_dirs":["any","any","any"]},{"topic":"my-topic","partition":1,"replicas":[0,2,1],"log_dirs":["any","any","any"]},{"topic":"my-topic","partition":2,"replicas":[2,1,0],"log_dirs":["any","any","any"]}]}
 
 Save this to use as the --reassignment-json-file option during rollback
 Warning: You must run --verify periodically, until the reassignment completes, to ensure the throttle is removed.
@@ -105,10 +89,20 @@ The inter-broker throttle limit was set to 5000000 B/s
 Successfully started partition reassignments for my-topic-0,my-topic-1,my-topic-2
 ```
 
-The old partitions will be only removed once the reassignment process is complete, so make sure that there is enough
-disk space to accommodate for this extra storage requirement. We must use the `--verify` option to check the status of
-the reassignment process and disable the replication throttling, which otherwise will continue to affect the cluster.
-When the process is done, we can check if the topic configuration changes have been applied.
+When moving data between brokers, we use the `--throttle` option to limit the inter-broker traffic to 5 MB/s, in order
+to avoid any impact on the cluster while moving partitions between brokers. The problem is that it also applies to the
+normal partition replication traffic between brokers, so we need to find the right balance which allows to move data in
+a reasonable amount of time, but without slowing down the replication too much.
+
+We can start from a safe throttle value and then
+use `kafka.server:type=FetcherLagMetrics,name=ConsumerLag,clientId=([-.\w]+),topic=([-.\w]+),partition=([0-9]+)`
+metric to observe how far the followers are lagging behind the leader for a given partition. If this lag is growing or
+the reassignment is taking too much time, we can re-execute the command with the `--additional` option and an increased
+throttle value.
+
+After the reassignment is started, we use the `--verify` option to check the status of the reassignment process and
+disable the replication throttling, which otherwise will continue to affect the cluster. When the process is done, we
+can check if the topic configuration changes have been applied.
 
 ```sh
 [strimzi@krun-1664115586 kafka]$ bin/kafka-reassign-partitions.sh --bootstrap-server my-cluster-kafka-bootstrap:9092 \
@@ -122,141 +116,79 @@ Clearing broker-level throttles on brokers 0,1,2,3
 Clearing topic-level throttles on topic my-topic
 
 [strimzi@krun-1664115586 kafka]$ bin/kafka-topics.sh --bootstrap-server my-cluster-kafka-bootstrap:9092 --topic my-topic --describe
-Topic: my-topic	TopicId: vdrVulssQhmlW-pQndhXEg	PartitionCount: 3	ReplicationFactor: 4	Configs: min.insync.replicas=2,message.format.version=3.0-IV1,retention.bytes=1073741824
-	Topic: my-topic	Partition: 0	Leader: 0	Replicas: 0,1,2,3	Isr: 0,1,2,3
-	Topic: my-topic	Partition: 1	Leader: 3	Replicas: 3,2,0,1	Isr: 0,1,2,3
-	Topic: my-topic	Partition: 2	Leader: 2	Replicas: 2,0,1,3	Isr: 0,1,2,3
+Topic: my-topic	TopicId: ODAdezsITgmRMcFihU9Neg	PartitionCount: 3	ReplicationFactor: 3	Configs: min.insync.replicas=2,message.format.version=3.0-IV1,retention.bytes=1073741824
+	Topic: my-topic	Partition: 0	Leader: 1	Replicas: 3,2,1	Isr: 1,2,3
+	Topic: my-topic	Partition: 1	Leader: 2	Replicas: 2,1,3	Isr: 1,2,3
+	Topic: my-topic	Partition: 2	Leader: 2	Replicas: 1,3,2	Isr: 1,2,3
 
 [strimzi@krun-1664115586 kafka]$ exit
-
-$ kubectl get kt my-topic -o yaml | yq e '.status'
-conditions:
-  - lastTransitionTime: "2022-09-25T14:38:59.844320Z"
-    status: "True"
-    type: Ready
-observedGeneration: 6
-topicName: my-topic
 ```
 
-### Example: Cruise Control in action
+### Example: scaling up the cluster with CC
 
-[Deploy Streams operator and Kafka cluster](/sessions/001). When the cluster is ready, add the `spec.cruiseControl`
-to Kafka CR and create a rebalance CR with default goals. Al Kafka pods will be rolled in order to add the required
-metric agents, and a CC instance will be started. A new rebalance proposal is created every 15 minutes based on the
-latest workload model.
+Let's repeat the cluster scale up example, but this time using Cruise Control, which is supposed to make rebalancing
+easier, as it can figure out by itself the required changes, given a set of high level goals (sensible default are
+provided).
+
+[Deploy Streams operator and Kafka cluster](/sessions/001). When the cluster is ready, we verify how the topic
+partitions are distributed among the available brokers.
+
+```sh
+$ kubectl get po -l app.kubernetes.io/name=kafka
+NAME                 READY   STATUS    RESTARTS   AGE
+my-cluster-kafka-0   1/1     Running   0          9m10s
+my-cluster-kafka-1   1/1     Running   0          7m47s
+my-cluster-kafka-2   1/1     Running   0          6m24s
+
+$ krun_kafka bin/kafka-topics.sh --bootstrap-server my-cluster-kafka-bootstrap:9092 --topic my-topic --describe
+Topic: my-topic	TopicId: fVMGczk2RWGPZ3HF0grObg	PartitionCount: 3	ReplicationFactor: 3	Configs: min.insync.replicas=2,message.format.version=3.0-IV1,retention.bytes=1073741824
+	Topic: my-topic	Partition: 0	Leader: 1	Replicas: 2,1,0	Isr: 0,1,2
+	Topic: my-topic	Partition: 1	Leader: 1	Replicas: 1,0,2	Isr: 0,1,2
+	Topic: my-topic	Partition: 2	Leader: 0	Replicas: 0,2,1	Isr: 0,1,2
+```
+
+Now we add one broker, deploy CC by adding the `spec.cruiseControl` section to the Kafka CR and create a rebalance CR
+with `mode: add-brokers`. The first rebalance proposal takes some time because the workload model needs to be created
+from scratch, then a new one will generated every 15 minutes. When the new broker is ready, we can force the proposal
+refresh by using an annotation. Then, we wait for the rebalance to become ready.
 
 ```sh
 $ kubectl apply -f sessions/007/crs
 kafka.kafka.strimzi.io/my-cluster configured
 kafkarebalance.kafka.strimzi.io/my-rebalance created
 
-$ kubectl get po
-NAME                                          READY   STATUS    RESTARTS   AGE
-my-cluster-cruise-control-6f9d8dfc4f-xzhbg    2/2     Running   0          97s
-my-cluster-entity-operator-6b68959588-62cvr   3/3     Running   0          6m58s
-my-cluster-kafka-0                            1/1     Running   0          2m59s
-my-cluster-kafka-1                            1/1     Running   0          5m40s
-my-cluster-kafka-2                            1/1     Running   0          4m25s
-my-cluster-zookeeper-0                        1/1     Running   0          10m
-my-cluster-zookeeper-1                        1/1     Running   0          10m
-my-cluster-zookeeper-2                        1/1     Running   0          10m
+$ kubectl get po -l app.kubernetes.io/name=kafka
+NAME                 READY   STATUS    RESTARTS   AGE
+my-cluster-kafka-0   1/1     Running   0          4m10s
+my-cluster-kafka-1   1/1     Running   0          6m40s
+my-cluster-kafka-2   1/1     Running   0          5m28s
+my-cluster-kafka-3   1/1     Running   0          2m59s
 
-$ kubectl get kr my-rebalance -o yaml | yq e '.status'
-conditions:
-  - lastTransitionTime: "2022-09-25T15:58:41.530923Z"
-    status: "True"
-    type: PendingProposal
-observedGeneration: 1
+$ kubectl annotate kr add-brokers strimzi.io/rebalance=refresh
+kafkarebalance.kafka.strimzi.io/add-brokers annotated
 
-$ kubectl get kr my-rebalance -o yaml | yq e '.status'
-conditions:
-  - lastTransitionTime: "2022-09-25T16:00:29.244565Z"
-    status: "True"
-    type: ProposalReady
-observedGeneration: 1
-optimizationResult:
-  afterBeforeLoadConfigMap: my-rebalance
-  dataToMoveMB: 0
-  excludedBrokersForLeadership: []
-  excludedBrokersForReplicaMove: []
-  excludedTopics: []
-  intraBrokerDataToMoveMB: 0
-  monitoredPartitionsPercentage: 100
-  numIntraBrokerReplicaMovements: 0
-  numLeaderMovements: 37
-  numReplicaMovements: 0
-  onDemandBalancednessScoreAfter: 94.94004939398923
-  onDemandBalancednessScoreBefore: 90.0004242279531
-  provisionRecommendation: ""
-  provisionStatus: RIGHT_SIZED
-  recentWindows: 1
-sessionId: c0d1e77e-9b0d-4871-ab30-6443b123307e
+$ kubectl get kr add-brokers -o wide -w
+NAME          CLUSTER      PENDINGPROPOSAL   PROPOSALREADY   REBALANCING   READY   NOTREADY
+add-brokers   my-cluster   True
+add-brokers   my-cluster                     True
 ```
 
-Let's check the log end offsets of the test topic partitions. Now we send some messages in order to create some
-imbalance and see if this is reflected in the auto generated reassignment proposal. We don't want to wait the periodic
-proposal creation, so we use the refresh annotation.
+When the proposal is ready, we can approve it by using another annotation and wait for CC to move partitions ande
+replica roles around. When the rebalance is ready, we see that we obtained the same result as the previous example,
+without the need to do any complex planning activity.
 
 ```sh
-$ krun_kafka bin/kafka-producer-perf-test.sh --topic my-topic --record-size 100 --num-records 1000000 \
-  --throughput -1 --producer-props acks=1 bootstrap.servers=my-cluster-kafka-bootstrap:9092
-1000000 records sent, 201126.307321 records/sec (19.18 MB/sec), 67.85 ms avg latency, 347.00 ms max latency, 44 ms 50th, 248 ms 95th, 302 ms 99th, 338 ms 99.9th.
-pod "client-1664122756" deleted
+$ kubectl annotate kr add-brokers strimzi.io/rebalance=approve
+kafkarebalance.kafka.strimzi.io/add-brokers annotated
 
-$ kubectl annotate kr my-rebalance strimzi.io/rebalance=refresh
-kafkarebalance.kafka.strimzi.io/my-rebalance annotated
+$ kubectl get kr add-brokers -o wide -w
+NAME          CLUSTER      PENDINGPROPOSAL   PROPOSALREADY   REBALANCING   READY   NOTREADY
+add-brokers   my-cluster                                     True
+add-brokers   my-cluster                                                   True
 
-$ kubectl get kr my-rebalance -o yaml | yq e '.status'
-conditions:
-  - lastTransitionTime: "2022-09-25T16:22:06.342700Z"
-    status: "True"
-    type: ProposalReady
-observedGeneration: 1
-optimizationResult:
-  afterBeforeLoadConfigMap: my-rebalance
-  dataToMoveMB: 0
-  excludedBrokersForLeadership: []
-  excludedBrokersForReplicaMove: []
-  excludedTopics: []
-  intraBrokerDataToMoveMB: 0
-  monitoredPartitionsPercentage: 100
-  numIntraBrokerReplicaMovements: 0
-  numLeaderMovements: 21
-  numReplicaMovements: 18
-  onDemandBalancednessScoreAfter: 90.68937677858641
-  onDemandBalancednessScoreBefore: 87.91899658253526
-  provisionRecommendation: ""
-  provisionStatus: RIGHT_SIZED
-  recentWindows: 1
-sessionId: dd6247d4-ccff-4f90-9581-65bf032df115
-```
-
-All good, so let's finally approve the auto generated rebalance proposal so that it can be executed.
-
-```sh
-$ kubectl annotate kr my-rebalance strimzi.io/rebalance=approve
-kafkarebalance.kafka.strimzi.io/my-rebalance annotated
-
-$ kubectl get kr my-rebalance -o yaml | yq e '.status'
-conditions:
-  - lastTransitionTime: "2022-09-25T16:24:30.796009Z"
-    status: "True"
-    type: Ready
-observedGeneration: 1
-optimizationResult:
-  afterBeforeLoadConfigMap: my-rebalance
-  dataToMoveMB: 0
-  excludedBrokersForLeadership: []
-  excludedBrokersForReplicaMove: []
-  excludedTopics: []
-  intraBrokerDataToMoveMB: 0
-  monitoredPartitionsPercentage: 100
-  numIntraBrokerReplicaMovements: 0
-  numLeaderMovements: 21
-  numReplicaMovements: 18
-  onDemandBalancednessScoreAfter: 90.68937677858641
-  onDemandBalancednessScoreBefore: 87.91899658253526
-  provisionRecommendation: ""
-  provisionStatus: RIGHT_SIZED
-  recentWindows: 1
+$ krun_kafka bin/kafka-topics.sh --bootstrap-server my-cluster-kafka-bootstrap:9092 --topic my-topic --describe
+Topic: my-topic	TopicId: fVMGczk2RWGPZ3HF0grObg	PartitionCount: 3	ReplicationFactor: 3	Configs: min.insync.replicas=2,message.format.version=3.0-IV1,retention.bytes=1073741824
+	Topic: my-topic	Partition: 0	Leader: 2	Replicas: 2,1,3	Isr: 1,2,3
+	Topic: my-topic	Partition: 1	Leader: 1	Replicas: 1,3,2	Isr: 1,2,3
+	Topic: my-topic	Partition: 2	Leader: 3	Replicas: 3,2,1	Isr: 1,2,3
 ```

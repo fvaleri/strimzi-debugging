@@ -4,7 +4,7 @@ metadata:
   name: my-cluster
 spec:
   kafka:
-    replicas: 3
+    replicas: 4
     version: 3.2.3
     config:
       # lowest protocol version (downgrade is not supported)
