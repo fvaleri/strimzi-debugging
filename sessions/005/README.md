@@ -115,13 +115,14 @@ $ krun_kafka bin/kafka-run-class.sh kafka.tools.GetOffsetShell \
 my-topic:0:353737
 my-topic:1:358846
 my-topic:2:287417
-pod "get-leo" deleted
+pod "krun-1665758761" deleted
 
 $ krun_kafka bin/kafka-run-class.sh kafka.tools.GetOffsetShell \
   --broker-list my-cluster-tgt-kafka-bootstrap.target.svc:9092 --topic my-topic --time -1
 my-topic:0:353737
 my-topic:1:358846
 my-topic:2:287417
+pod "krun-1665758761" deleted
 ```
 
 ### Example: tuning for throughput
@@ -148,7 +149,7 @@ $ kubectl -n target scale kmm2 my-mm2 --replicas 1
 kafkamirrormaker2.kafka.strimzi.io/my-mm2 scaled
 
 $ kubectl -n target exec -it $(kubectl -n target get po | grep my-mm2 | awk '{print $1}') -- \
-  bin/kafka-run-class.sh `kafka.tools.JmxTool` --jmx-url service:jmx:rmi:///jndi/rmi://:9999/jmxrmi \
+  bin/kafka-run-class.sh kafka.tools.JmxTool --jmx-url service:jmx:rmi:///jndi/rmi://:9999/jmxrmi \
     --date-format yyyy-MM-dd_HH:mm:ss --one-time true --wait \
     --object-name kafka.producer:type=producer-metrics,client-id=\""connector-producer-my-cluster->my-cluster-tgt.MirrorSourceConnector-0\"" \
     --attributes batch-size-avg,request-latency-avg
@@ -156,8 +157,8 @@ $ kubectl -n target exec -it $(kubectl -n target get po | grep my-mm2 | awk '{pr
 ```
 
 When the replication is done (NaN metrics), we increase the producer buffer by overriding its configuration.
-Now every batch will include more data and repeating the same test, we see a significant improvement in replication speed.
-Note that he request latency is increased too, but it is still good.
+Now every batch will include more data and the same test should complete the replications in about half of the time or even less.
+Note how the request latency increases too, but still good.
 There is no free lunch, it's always a tradeoff between throughput and latency.
 
 ```sh

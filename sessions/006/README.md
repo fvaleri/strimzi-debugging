@@ -32,7 +32,7 @@ Volumes with either `persistentVolumeReclaimPolicy: Retain`, or using a storage 
 ### Example: no space left on device
 
 [Deploy Streams operator and Kafka cluster](/sessions/001). 
-When the cluster is ready, we purposely break it by sending 14 GiB of data to a topic with RF=3 (42 GiB in total), which exceeds the combined cluster disk capacity of 30 GiB.
+When the cluster is ready, we purposely break it by sending 11 GiB of data to a topic with RF=3 (33 GiB in total), which exceeds the combined cluster disk capacity of 30 GiB.
 
 ```sh
 $ kubectl get pvc | grep kafka
@@ -40,16 +40,17 @@ data-my-cluster-kafka-0       Bound    pvc-8c21101b-a7d0-4b57-922b-d79f0207ffdc 
 data-my-cluster-kafka-1       Bound    pvc-100f7351-9d2c-4048-b3a4-e04685a3cd3d   10Gi       RWO            gp2            28m
 data-my-cluster-kafka-2       Bound    pvc-65550116-3ae6-4f4f-9be9-a098cdc49002   10Gi       RWO            gp2            28m
 
-$ krun_kafka bin/kafka-producer-perf-test.sh --topic my-topic --record-size 100 --num-records 150000000 \
+$ krun_kafka bin/kafka-producer-perf-test.sh --topic my-topic --record-size 1000 --num-records 12000000 \
   --throughput -1 --producer-props acks=1 bootstrap.servers=my-cluster-kafka-bootstrap:9092
-977529 records sent, 195505.8 records/sec (18.64 MB/sec), 156.6 ms avg latency, 486.0 ms max latency.
-847415 records sent, 169483.0 records/sec (16.16 MB/sec), 28.1 ms avg latency, 98.0 ms max latency.
-827921 records sent, 165584.2 records/sec (15.79 MB/sec), 27.4 ms avg latency, 101.0 ms max latency.
+287699 records sent, 57528.3 records/sec (54.86 MB/sec), 144.6 ms avg latency, 455.0 ms max latency.
+309618 records sent, 61923.6 records/sec (59.05 MB/sec), 29.1 ms avg latency, 132.0 ms max latency.
+301344 records sent, 60268.8 records/sec (57.48 MB/sec), 53.2 ms avg latency, 361.0 ms max latency.
 ...
-[2022-09-21 16:08:25,134] WARN [Producer clientId=perf-producer-client] Connection to node 0 (my-cluster-kafka-0.my-cluster-kafka-brokers.test.svc/10.131.0.28:9092) could not be established. Broker may not be available. (org.apache.kafka.clients.NetworkClient)
-[2022-09-21 16:08:25,583] WARN [Producer clientId=perf-producer-client] Connection to node 2 (my-cluster-kafka-2.my-cluster-kafka-brokers.test.svc/10.128.2.49:9092) could not be established. Broker may not be available. (org.apache.kafka.clients.NetworkClient)
-[2022-09-21 16:08:25,805] WARN [Producer clientId=perf-producer-client] Connection to node 1 (my-cluster-kafka-1.my-cluster-kafka-brokers.test.svc/10.129.2.61:9092) could not be established. Broker may not be available. (org.apache.kafka.clients.NetworkClient)
-^Cpod "producer-perf" deleted
+[2022-10-14 15:14:26,695] WARN [Producer clientId=perf-producer-client] Connection to node 2 (my-cluster-kafka-2.my-cluster-kafka-brokers.test.svc/10.128.2.32:9092) could not be established. Broker may not be available. (org.apache.kafka.clients.NetworkClient)
+[2022-10-14 15:14:26,885] WARN [Producer clientId=perf-producer-client] Connection to node 0 (my-cluster-kafka-0.my-cluster-kafka-brokers.test.svc/10.129.2.59:9092) could not be established. Broker may not be available. (org.apache.kafka.clients.NetworkClient)
+[2022-10-14 15:14:27,036] WARN [Producer clientId=perf-producer-client] Connection to node 1 (my-cluster-kafka-1.my-cluster-kafka-brokers.test.svc/10.131.0.37:9092) could not be established. Broker may not be available. (org.apache.kafka.clients.NetworkClient)
+^Cpod "krun-1665760296" deleted
+pod test/krun-1665760296 terminated (Error)
 
 $ kubectl get po | grep kafka
 my-cluster-kafka-0                            0/1     CrashLoopBackOff   3 (26s ago)   15m
