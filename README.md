@@ -1,8 +1,10 @@
 # Streams debugging
 
-This project contains a series of debugging sessions for Red Hat AMQ Streams. They assume user level knowledge about Red
-Hat OpenShift and Apache Kafka. An OpenShift cluster with admin permissions is required. The examples are not meant to
-be exhaustive, but just a way to introduce common configurations and tools. Contributions are welcomed.
+This project contains a series of debugging sessions for Red Hat AMQ Streams.
+They assume user level knowledge about Red Hat OpenShift and Apache Kafka.
+An OpenShift cluster with admin permissions is required.
+The examples are not meant to be exhaustive, but just a way to introduce common configurations and tools.
+Contributions are welcomed.
 
 ## Outline
 

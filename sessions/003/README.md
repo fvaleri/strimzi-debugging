@@ -1,43 +1,40 @@
 ## Schema registry and why it is useful
 
-It is pretty obvious why schemas are useful when multiple **clients need to collaborate on the same data**. They all
-need to know the metadata, which fields are available and what are their types. Moreover, data storage and processing is
-more efficient, because we don't need to send the schema with each message and numbers can be stored in their more
-efficient binary representation.
+It is pretty obvious why schemas are useful when multiple **clients need to collaborate on the same data**.
+They all need to know the metadata, which fields are available and what are their types.
+Moreover, data storage and processing is more efficient, because we don't need to send the schema with each message and numbers can be stored in their binary representation.
 
-It is less obvious why we may need a **central schema registry**. Why would you want to add this complexity to your
-architecture? Why not simply agree on a message schema, put it in shared library and live with that? Distributing
-schemas is easy when we have few clients that we control, but it becomes challenging when we have lots of clients and
-some of them are by third party. In addition to distribution, we also need to evolve these schema safely in a backwards
-and forwards compatible way, to allow new clients to read old data and old clients to read new data.
+It is less obvious why we may need a **central schema registry**.
+Why would you want to add this complexity to your architecture?
+Why not simply agree on a message schema, put it in shared library and live with that?
+Distributing schemas is easy when we have few clients that we control, but it becomes challenging when we have lots of clients and some of them are by third party.
+In addition to distribution, we also need to evolve these schema safely in a backwards and forwards compatible way, to allow new clients to read old data and old clients to read new data.
 
 ![](images/serdes.png)
 
-[Red Hat Service Registry](https://catalog.redhat.com/software/operators/detail/5ef2818e7dc79430ca5f4fd2) is based
-on [Apicurio Registry](https://www.apicur.io/registry), which is a schema registry for REST APIs (OpenAPI) and message
-schemas (AsyncAPI). It supports pluggable storage (in-memory, Kafka, PostgreSQL), schema versioning, schema validation
-and provides **Java serializers/deserializers** (SerDes) for Avro, Protobuf and JSON Schema formats. It also provides
-a **Maven plugin** that we can use to register schema artifacts at build time, a REST API and a web console to do CRUD
-operations on schema artifacts. When migrating from Confluent registry, it is possible to enable the API translation
-layer and use a tool called `exportConfluent` to import existing schemas.
+[Red Hat Service Registry](https://catalog.redhat.com/software/operators/detail/5ef2818e7dc79430ca5f4fd2) is based on [Apicurio Registry](https://www.apicur.io/registry), which is a schema registry for REST APIs (OpenAPI) and message schemas (AsyncAPI).
+It supports pluggable storage (in-memory, Kafka, PostgreSQL), schema versioning, schema validation and provides **Java serializers/deserializers** (SerDes) for Avro, Protobuf and JSON Schema formats.
+It also provides a **Maven plugin** that we can use to register schema artifacts at build time, a REST API and a web console to do CRUD operations on schema artifacts.
+When migrating from Confluent registry, it is possible to enable the API translation layer and use a tool called `exportConfluent` to import existing schemas.
 
-A registered schema artifact is uniquely identified by the tuple `(groupId, artifactId, version)`. By default,
-the `artifactId` is equal to the topic name plus `-key` or `-value` suffix, depending on whether the serializer was used
-for the message key or value (there are other strategies). The `groupId` is just a way to logically group schema
-artifacts. The `globalId` and `contentId` are assigned by the server. The `globalId` is the unique id of an artifact
-version, while the `contentId` is the unique id of the artifact content. Different artifacts containing the same schema
-have the same content id. For example, this may happen when having multiple instances of a given application registering
-the same schema concurrently at startup.
+A registered schema artifact is uniquely identified by the tuple `(groupId, artifactId, version)`.
+By default, the `artifactId` is equal to the topic name plus `-key` or `-value` suffix, depending on whether the serializer was used for the message key or value (there are other strategies).
+The `groupId` is just a way to logically group schema artifacts.
+The `globalId` and `contentId` are assigned by the server.
+The `globalId` is the unique id of an artifact version, while the `contentId` is the unique id of the artifact content.
+Different artifacts containing the same schema have the same content id.
+For example, this may happen when having multiple instances of a given application registering the same schema concurrently at startup.
 
-The serializer exchanges the `artifactId` for a `globalId`, which is then added as record header or as payload prefix,
-depending on the producer configuration. The deserializer fetches the right schema version using the `globalId`. If
-required, you can configure to fetch by `contentId` (Confluent default). The `CHECK_PERIOD_MS` environment variable
-determines the time after which a cached artifact is auto evicted and needs to be fetched again on the next record.
+The serializer exchanges the `artifactId` for a `globalId`, which is then added as record header or as payload prefix, depending on the producer configuration.
+The deserializer fetches the right schema version using the `globalId`.
+If required, you can configure to fetch by `contentId` (Confluent default).
+The `CHECK_PERIOD_MS` environment variable determines the time after which a cached artifact is auto evicted and needs to be fetched again on the next record.
 
 ### Example: schema registry in action
 
-[Deploy Streams operator and Kafka cluster](/sessions/001). Then, we need to deploy the Service Registry operator. When
-the operator is ready, we can deploy the Service Registry instance with PostgreSQL as storage system.
+[Deploy Streams operator and Kafka cluster](/sessions/001). 
+Then, we need to deploy the Service Registry operator.
+When the operator is ready, we can deploy the Service Registry instance with PostgreSQL as storage system.
 
 ```sh
 $ kubectl create -f sessions/003/sub.yaml
@@ -70,9 +67,8 @@ pod/my-pgsql-ss-0                                 1/1     Running   0          8
 pod/my-registry-deployment-5f5fb7c786-7tj75       1/1     Running   0          53s
 ```
 
-Now, we just need to tell our client application where it can find the Kafka cluster by setting the bootstrap URL and
-the schema registry REST endpoint. We also need to provide the truststore location and password because we are
-connecting externally.
+Now, we just need to tell our client application where it can find the Kafka cluster by setting the bootstrap URL and the schema registry REST endpoint.
+We also need to provide the truststore location and password because we are connecting externally.
 
 ```sh
 $ export BOOTSTRAP_SERVERS=$(kubectl get routes my-cluster-kafka-bootstrap -o jsonpath="{.status.ingress[0].host}"):443 \
@@ -92,9 +88,9 @@ Record: Hello-1663594982041
 Record: Hello-1663594982042
 ```
 
-[Look at the code](/sessions/003/kafka-avro) to see how the schema is registered and used. The registration happens at
-build time and the Maven plugin execute the following API request for every configured schema artifact. Note that we are
-using the "default" group id, but you can specify a custom name.
+[Look at the code](/sessions/003/kafka-avro) to see how the schema is registered and used.
+The registration happens at build time and the Maven plugin execute the following API request for every configured schema artifact.
+Note that we are using the "default" group id, but you can specify a custom name.
 
 ```sh
 $ curl -s -X POST -H "Content-Type: application/json" \
@@ -115,8 +111,8 @@ $ curl -s -X POST -H "Content-Type: application/json" \
 }
 ```
 
-Finally, let's use the REST API to confirm that our schema was registered correctly. We can also look at the schema
-content and metadata, which may be useful for debugging.
+Finally, let's use the REST API to confirm that our schema was registered correctly.
+We can also look at the schema content and metadata, which may be useful for debugging.
 
 ```sh
 $ curl -s $REGISTRY_URL/search/artifacts | jq
