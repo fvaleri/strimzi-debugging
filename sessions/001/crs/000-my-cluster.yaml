@@ -28,8 +28,6 @@ spec:
         port: 9094
         type: route
         tls: true
-    # enable unprotected JMX on port 9999
-    jmxOptions: { }
     logging:
       type: inline
       loggers:

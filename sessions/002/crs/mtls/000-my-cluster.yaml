@@ -30,8 +30,6 @@ spec:
         tls: true
         authentication:
           type: tls
-    # enable unprotected JMX on port 9999
-    jmxOptions: { }
     logging:
       type: inline
       loggers:

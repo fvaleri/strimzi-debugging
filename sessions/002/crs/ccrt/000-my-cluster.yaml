@@ -33,8 +33,6 @@ spec:
             secretName: ext-listener-crt
             certificate: bundle.crt
             key: listener.key
-    # enable unprotected JMX on port 9999
-    jmxOptions: { }
     logging:
       type: inline
       loggers:

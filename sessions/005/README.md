@@ -153,7 +153,7 @@ $ kubectl -n target scale kmm2 my-mm2 --replicas 1
 kafkamirrormaker2.kafka.strimzi.io/my-mm2 scaled
 
 $ kubectl -n target exec -it $(kubectl -n target get po | grep my-mm2 | awk '{print $1}') -- \
-  bin/kafka-run-class.sh kafka.tools.JmxTool --jmx-url service:jmx:rmi:///jndi/rmi://:9999/jmxrmi \
+  bin/kafka-run-class.sh `kafka.tools.JmxTool` --jmx-url service:jmx:rmi:///jndi/rmi://:9999/jmxrmi \
     --date-format yyyy-MM-dd_HH:mm:ss --one-time true --wait \
     --object-name kafka.producer:type=producer-metrics,client-id=\""connector-producer-my-cluster->my-cluster-tgt.MirrorSourceConnector-0\"" \
     --attributes batch-size-avg,request-latency-avg
