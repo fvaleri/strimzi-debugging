@@ -56,7 +56,7 @@ spec:
           replication.policy.separator: ""
           replication.policy.class: "org.apache.kafka.connect.mirror.IdentityReplicationPolicy"
   # enable unprotected JMX on port 9999
-  jmxOptions: { }
+  jmxOptions: {}
   logging:
     type: inline
     loggers:

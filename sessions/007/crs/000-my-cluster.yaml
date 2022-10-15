@@ -28,8 +28,6 @@ spec:
         port: 9094
         type: route
         tls: true
-    # enable unprotected JMX on port 9999
-    jmxOptions: { }
     logging:
       type: inline
       loggers:
@@ -41,7 +39,7 @@ spec:
     resources:
       limits:
         cpu: 1000m
-        memory: 1Gi
+        memory: 2Gi
     storage:
       size: 10Gi
       type: persistent-claim
@@ -67,6 +65,8 @@ spec:
         memory: 1Gi
     jvmOptions:
       gcLoggingEnabled: false
+      "-XX":
+        ExitOnOutOfMemoryError: "true"
     storage:
       size: 5Gi
       type: persistent-claim
@@ -79,6 +79,10 @@ spec:
       timeoutSeconds: 10
   entityOperator:
     topicOperator:
+      logging:
+        type: inline
+        loggers:
+          rootLogger.level: "INFO"
       resources:
         limits:
           cpu: 1000m
@@ -92,20 +96,24 @@ spec:
       livenessProbe:
         initialDelaySeconds: 60
         timeoutSeconds: 10
-    userOperator:
-      resources:
-        limits:
-          cpu: 1000m
-          memory: 512Mi
-        requests:
-          cpu: 500m
-          memory: 256Mi
-      readinessProbe:
-        initialDelaySeconds: 60
-        timeoutSeconds: 10
-      livenessProbe:
-        initialDelaySeconds: 60
-        timeoutSeconds: 10
+  userOperator:
+    logging:
+      type: inline
+      loggers:
+        rootLogger.level: "INFO"
+    resources:
+      limits:
+        cpu: 1000m
+        memory: 512Mi
+      requests:
+        cpu: 500m
+        memory: 256Mi
+    readinessProbe:
+      initialDelaySeconds: 60
+      timeoutSeconds: 10
+    livenessProbe:
+      initialDelaySeconds: 60
+      timeoutSeconds: 10
   cruiseControl:
     logging:
       type: inline
@@ -117,7 +125,7 @@ spec:
         memory: 2Gi
       requests:
         cpu: 500m
-        memory: 256Mi
+        memory: 512Mi
     readinessProbe:
       initialDelaySeconds: 60
       timeoutSeconds: 10

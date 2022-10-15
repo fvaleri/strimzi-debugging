@@ -41,7 +41,7 @@ spec:
     resources:
       limits:
         cpu: 1000m
-        memory: 1Gi
+        memory: 2Gi
     storage:
       size: 10Gi
       type: persistent-claim
@@ -67,6 +67,8 @@ spec:
         memory: 1Gi
     jvmOptions:
       gcLoggingEnabled: false
+      "-XX":
+        ExitOnOutOfMemoryError: "true"
     storage:
       size: 5Gi
       type: persistent-claim
@@ -79,6 +81,10 @@ spec:
       timeoutSeconds: 10
   entityOperator:
     topicOperator:
+      logging:
+        type: inline
+        loggers:
+          rootLogger.level: "INFO"
       resources:
         limits:
           cpu: 1000m
@@ -93,6 +99,10 @@ spec:
         initialDelaySeconds: 60
         timeoutSeconds: 10
     userOperator:
+      logging:
+        type: inline
+        loggers:
+          rootLogger.level: "INFO"
       resources:
         limits:
           cpu: 1000m
