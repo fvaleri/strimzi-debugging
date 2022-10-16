@@ -37,10 +37,6 @@ spec:
       type: inline
       loggers:
         kafka.root.logger.level: "INFO"
-    jvmOptions:
-      gcLoggingEnabled: false
-      "-XX":
-        ExitOnOutOfMemoryError: "true"
     resources:
       limits:
         cpu: 1000m
@@ -68,10 +64,6 @@ spec:
       limits:
         cpu: 500m
         memory: 1Gi
-    jvmOptions:
-      gcLoggingEnabled: false
-      "-XX":
-        ExitOnOutOfMemoryError: "true"
     storage:
       size: 5Gi
       type: persistent-claim
