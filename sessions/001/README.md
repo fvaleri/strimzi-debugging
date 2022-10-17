@@ -57,15 +57,24 @@ Each consumer periodically or manually commits its position (next offsets to rea
 We are going to deploy a Kafka cluster on your local machine.This is useful for quick tests where a multi node cluster is not required.
 We will use the latest upstream release because the downstream release is just a rebuild with few additional and optional plugins.
 
-Download the Kafka distribution and start a single broker cluster all in one command.
+Use the `init.sh` script to initialize your environment passing your OpenShift parameters.
 When it returns, you should have two processes running on your system, one is Kafka and the other is ZooKeeper.
 
 ```sh
-$ KAFKA_URL="https://archive.apache.org/dist/kafka/3.2.3/kafka_2.13-3.2.3.tgz" \
-  && rm -rf /tmp/kafka-logs /tmp/zookeeper \
-  && export KAFKA_HOME=$(mktemp -d -t kafka.XXXXXXX) && export PATH="$KAFKA_HOME/bin:$PATH" \
-  && curl -sLk $KAFKA_URL | tar xz -C $KAFKA_HOME --strip-components 1 \
-  && zookeeper-server-start.sh -daemon $KAFKA_HOME/config/zookeeper.properties \
+$ OCP_API_URL="https://api.cluster-openshift.example.com:6443" \
+  OCP_ADMIN_USR="my-user" OCP_ADMIN_PWD="my-password"; source init.sh
+Checking prerequisites
+Getting Kafka from https://archive.apache.org/dist/kafka/3.2.3/kafka_2.13-3.2.3.tgz
+Authenticating to https://api.cluster-openshift.example.com:6443
+Deploying cluster-wide operators
+namespace/test created
+subscription.operators.coreos.com/my-streams created
+subscription.operators.coreos.com/my-registry created
+Environment READY!
+  |__Kafka home: /tmp/kafka.Dt7Q7VV
+  |__Current namespace: test
+
+$ zookeeper-server-start.sh -daemon $KAFKA_HOME/config/zookeeper.properties \
   && sleep 5 && kafka-server-start.sh -daemon $KAFKA_HOME/config/server.properties
 
 $ jps -v | grep kafka
@@ -140,20 +149,10 @@ baseOffset: 0 lastOffset: 0 count: 1 baseSequence: 0 lastSequence: 0 producerId:
 
 Our consumer group should have committed the offsets to the `__consumer_offsets` internal topic.
 The problem is that this topic has 50 partitions by default, so how do I know which partition was used? 
-Kafka uses a hashing algorithm to map a `group.id` to a specific offset coordinating partition.We can use the same algorithm through a simple bash function (JDK 9+ is required).
+We can use the same algorithm that Kafka uses to map a `group.id` to a specific offset coordinating partition.
+The `find_cp` function is defined inside the `init.sh` script.
 
 ```sh
-$ find_cp() {
-  local id="$1"
-  local part="${2-50}"
-  if [[ -n $id && -n $part ]]; then
-    echo 'public void run(String id, int part) { System.out.println(abs(id.hashCode()) % part); }    
-      private int abs(int n) { return (n == Integer.MIN_VALUE) ? 0 : Math.abs(n); } 
-      run("'$id'", '$part');' \
-      | jshell -
-  fi
-}
-
 $ find_cp my-group
 12
 ```
@@ -181,41 +180,35 @@ baseOffset: 15 lastOffset: 17 count: 3 baseSequence: 0 lastSequence: 2 producerI
 
 We are going to deploy a 3-nodes cluster on OpenShift using the built-in OperatorHub (OLM) component, which is the preferred mode because you can use the web console and you get the additional benefit of automatic updates.
 
-Login to your OpenShift cluster as admin user and create a test namespace, setting it as the current context.
+Use the `init.sh` script to initialize your environment passing your OpenShift parameters.
+You can reuse it whenever you want to reinitialize your environment.
 
-```sh
-$ oc login -u opentlc-mgr -p changeit https://api.cluster-8z6kz.8z6kz.example.com:6443 --insecure-skip-tls-verify=true
-Login successful.
-
-You have access to 65 projects, the list has been suppressed.You can list all projects with 'oc projects'
-
-Using project "default".
-
-$ kubectl create ns test
-namespace/test created
-
-$ kubectl config set-context --current --namespace=test
-Context "default/api-cluster-8z6kz-8z6kz-sandbox425-opentlc-com:6443/opentlc-mgr" modified.
-```
-
-Create the OLM subscription which installs the Streams custom resource definitions (CRDs) and triggers the cluster operator (CO) deployment.
-CRDs extend the built-in OpenShift resources adding new capabilities.
-By default, the CO is installed in the `openshift-operators` namespace and watches Kafka resources in all namespaces.
-
+When it returns, two cluster-wide operators will start in the `openshift-operators` namespace.
 Remember that CRDs are cluster wide resources, we can't deploy multiple operator versions running on the same OpenShift cluster, unless their CRDs are fully compatible, which is not guaranteed.
 If you delete the CRDs, every Kafka cluster deployed on that OpenShift cluster will be garbage collected.
 
 ```sh
-$ kubectl create -f sessions/001/sub.yaml
-operatorgroup.operators.coreos.com/local-operators created
+$ OCP_API_URL="https://api.cluster-openshift.example.com:6443" \
+  OCP_ADMIN_USR="my-user" OCP_ADMIN_PWD="my-password"; source init.sh
+Checking prerequisites
+Getting Kafka from https://archive.apache.org/dist/kafka/3.2.3/kafka_2.13-3.2.3.tgz
+Authenticating to https://api.cluster-openshift.example.com:6443
+Deploying cluster-wide operators
+namespace/test created
 subscription.operators.coreos.com/my-streams created
+subscription.operators.coreos.com/my-registry created
+Environment READY!
+  |__Kafka home: /tmp/kafka.Dt7Q7VV
+  |__Current namespace: test
 
 $ kubectl -n openshift-operators get po
-NAME                                                     READY   STATUS    RESTARTS   AGE
-amq-streams-cluster-operator-v2.1.0-8-6dfcc6449d-c2np5   1/1     Running   0          57s
+NAME                                                         READY   STATUS    RESTARTS   AGE
+amq-streams-cluster-operator-v2.2.0-1-58bb4cf646-gbh55       1/1     Running   0          12m
+apicurio-registry-operator-v1.1.0-redhat.1-f5f95b4fd-7l9fq   1/1     Running   0          12m
 ```
 
-Create a new Kafka cluster and test topic.Look inside the YAML files to see how the cluster state is declared.
+Create a new Kafka cluster and test topic.
+Look inside the YAML files to see how the cluster state is declared.
 The CO periodically verifies that the desired state corresponds to the actual state and take action if not.
 
 In addition to ZooKeeper and Kafka pods, the entity operator (EO) pod is also deployed, which includes two namespace operators: the topic operator (TO), which reconciles topic resources, and the user operator (UO), which reconciles user resources.
@@ -251,9 +244,6 @@ Note that we are using a nice function to avoid repeating that for every client 
 You can also use the broker pods for that, but it is always risky to spin up another JVM inside a pod, especially in production.
 
 ```sh
-$ krun_kafka() { kubectl run krun-$(date +%s) -it --rm --restart="Never" \
-  --image="registry.redhat.io/amq7/amq-streams-kafka-32-rhel8:2.2.0" -- "$@"; }
-
 $ krun_kafka bin/kafka-console-producer.sh --bootstrap-server my-cluster-kafka-bootstrap:9092 --topic my-topic
 >hello
 >world

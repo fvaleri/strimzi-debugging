@@ -32,20 +32,10 @@ The `CHECK_PERIOD_MS` environment variable determines the time after which a cac
 
 ### Example: schema registry in action
 
-[Deploy Streams operator and Kafka cluster](/sessions/001). 
-Then, we need to deploy the Service Registry operator.
-When the operator is ready, we can deploy the Service Registry instance with PostgreSQL as storage system.
+[Deploy Streams operator and Kafka cluster](/sessions/001).
+Then, we can deploy the Service Registry instance with PostgreSQL as storage system.
 
 ```sh
-$ kubectl create -f sessions/003/sub.yaml
-operatorgroup.operators.coreos.com/local-operators created
-subscription.operators.coreos.com/my-registry created
-
-$ kubectl get po -n openshift-operators
-NAME                                                     READY   STATUS    RESTARTS   AGE
-amq-streams-cluster-operator-v2.1.0-8-6dfcc6449d-c2np5   1/1     Running   3          2d20h
-apicurio-registry-operator-fb9ffd5cb-89z89               1/1     Running   0          46s
-
 $ kubectl create -f sessions/003/crs
 persistentvolumeclaim/my-pgsql-data created
 configmap/my-pgsql-env created
@@ -95,7 +85,8 @@ Note that we are using the "default" group id, but you can specify a custom name
 ```sh
 $ curl -s -X POST -H "Content-Type: application/json" \
   -H "X-Registry-ArtifactId: my-topic-value" -H "X-Registry-ArtifactType: AVRO" \
-    -d @src/main/resources/greeting.avsc $REGISTRY_URL/groups/default/artifacts?ifExists=RETURN_OR_UPDATE | jq
+  -d @sessions/003/kafka-avro/src/main/resources/greeting.avsc \
+  $REGISTRY_URL/groups/default/artifacts?ifExists=RETURN_OR_UPDATE | jq
 {
   "name": "Greeting",
   "createdBy": "",

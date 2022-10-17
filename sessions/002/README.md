@@ -57,7 +57,6 @@ authentication:
 
 The external clients have to retrieve the bootstrap URL from the passthrough route, configure their keystore and truststore.
 Then, we can try to send some messages in a secure way.
-Make sure to have Kafka scripts in your `$PATH`.
 
 ```sh
 $ BOOTSTRAP_SERVERS=$(kubectl get routes my-cluster-kafka-bootstrap -o jsonpath="{.status.ingress[0].host}"):443 \
@@ -178,7 +177,8 @@ $ openssl crl2pkcs7 -nocrl -certfile /tmp/bundle.crt | openssl pkcs7 -print_cert
                 DNS:*.apps.cluster-8z6kz.8z6kz.sandbox425.opentlc.com
 ```
 
-Building on the previous example, we deploy the secret containing the custom certificate and update the Kafka cluster configuration by adding a reference to that secret.
+[Deploy Streams operator and Kafka cluster](/sessions/001).
+Then, we deploy the secret containing the custom certificate and update the Kafka cluster configuration by adding a reference to that secret.
 
 ```sh
 $ kubectl create secret generic ext-listener-crt \

@@ -35,6 +35,13 @@ Volumes with either `persistentVolumeReclaimPolicy: Retain`, or using a storage 
 When the cluster is ready, we purposely break it by sending 11 GiB of data to a topic with RF=3 (33 GiB in total), which exceeds the combined cluster disk capacity of 30 GiB.
 
 ```sh
+$ source init.sh
+Getting Kafka from https://archive.apache.org/dist/kafka/3.2.3/kafka_2.13-3.2.3.tgz
+Authenticating to https://api.cluster-pdbcm.pdbcm.sandbox1150.opentlc.com:6443
+Environment READY!
+  |__Kafka home: /tmp/kafka.rUbW288
+  |__Current namespace: test
+
 $ kubectl get pvc | grep kafka
 data-my-cluster-kafka-0       Bound    pvc-8c21101b-a7d0-4b57-922b-d79f0207ffdc   10Gi       RWO            gp2            28m
 data-my-cluster-kafka-1       Bound    pvc-100f7351-9d2c-4048-b3a4-e04685a3cd3d   10Gi       RWO            gp2            28m
