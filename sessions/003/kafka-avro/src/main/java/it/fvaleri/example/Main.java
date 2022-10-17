@@ -3,7 +3,6 @@ package it.fvaleri.example;
 import io.apicurio.registry.rest.client.RegistryClient;
 import io.apicurio.registry.rest.client.RegistryClientFactory;
 import io.apicurio.registry.rest.client.exception.NotFoundException;
-import io.apicurio.registry.rest.v2.beans.IfExists;
 import io.apicurio.registry.serde.SerdeConfig;
 import io.apicurio.registry.serde.avro.AvroKafkaDeserializer;
 import io.apicurio.registry.serde.avro.AvroKafkaSerializer;
@@ -110,9 +109,8 @@ public class Main {
         // use Avro Serializer
         props.put(ProducerConfig.VALUE_SERIALIZER_CLASS_CONFIG, AvroKafkaSerializer.class.getName());
 
-        // set Service Registry URL
+        // set registry URL
         props.put(SerdeConfig.REGISTRY_URL, registryUrl);
-
         // set cache eviction period
         props.putIfAbsent(SerdeConfig.CHECK_PERIOD_MS, 30_000);
         // set the artifactId lookup strategy (map the topic name to the artifactId in the registry)
@@ -134,11 +132,12 @@ public class Main {
         // use Avro Deserializer
         props.put(ConsumerConfig.VALUE_DESERIALIZER_CLASS_CONFIG, AvroKafkaDeserializer.class.getName());
 
-        // set Service Registry URL
+        // set registry URL
         props.put(SerdeConfig.REGISTRY_URL, registryUrl);
-
         // set cache eviction period
         props.putIfAbsent(SerdeConfig.CHECK_PERIOD_MS, 30_000);
+        // set the artifactId lookup strategy (map the topic name to the artifactId in the registry)
+        props.putIfAbsent(SerdeConfig.ARTIFACT_RESOLVER_STRATEGY, TopicIdStrategy.class.getName());
 
         addSharedConfig(props);
         return props;
