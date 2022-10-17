@@ -12,11 +12,11 @@ Cipher suites contain algorithms for key exchange, encryption and authentication
 A **public key infrastructure** (PKI) is an arrangement that binds public keys with respective identities (e.g. organizations, people, applications).
 The binding is established through a process of registration and issuance of certificates by a **certificate authority** (CA).
 
+![](images/connections.png)
+
 Within a Kafka cluster, in addition to the **client-server** communication, you also need to protect the **inter-cluster** communication and renew certificates when they expire.
 All of this work is done by the Streams CO, which is a great example of how the operator simplifies cluster management.
 Two self-signed CAs are automatically generated and used to sign all cluster (cluster CA) and user (clients CA) certificates.
-
-![](images/connections.png)
 
 The **server name indication** (SNI) extension allows a client to indicate which hostname it is trying to connect to at the start of the TLS handshake.
 The server can present multiple certificates on the same IP address and port number.

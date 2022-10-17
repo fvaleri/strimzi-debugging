@@ -3,18 +3,16 @@
 [Apache Kafka](https://kafka.apache.org) is an **Open Source distributed streaming platform** that lets you read, write, store, and process messages across many machines.
 [Red Hat AMQ Streams](https://catalog.redhat.com/software/operators/detail/5ef20efd46bc301a95a1e9a4) includes Kafka and a set of operators from the [CNCF Strimzi](https://strimzi.io) project.
 The operators are a way of extending the OpenShift or Kubernetes platforms by deploying application controllers with domain knowledge.
-
-Let's start by saying that not every use case justifies the additional complexity that Kafka brings to the table.
+Not every use case justifies the additional complexity that Kafka brings to the table.
 It is best suited when you have a high throughput of relatively small messages, that traditional message brokers struggle to manage, or you have near realtime stream processing requirements.
+
+![](images/cluster.png)
 
 Kafka provides two main layers that can scale independently: the **storage layer**, which stores messages efficiently in a cluster of brokers, and the **compute layer** which is built on top of the producer and consumer APIs.
 There are also two higher level APIs: the connect API for external systems integration and the streams API for stream processing.
-
 Within a cluster, we have the **control plane**, which handles cluster metadata and the **data plane**, which handles user data.
 One of the brokers is elected as controller, which has the additional responsibility of managing the states of partitions and replicas and for performing administrative tasks like reassigning partitions.
 In ZooKeeper mode there is only one elected controller, while in the new KRaft mode we have a quorum of controllers, where only one is active at any time, while the others are ready to take over in case of failure.
-
-![](images/cluster.png)
 
 Kafka uses a **binary protocol over TCP** (KRPC).
 The protocol defines APIs as request/response message pairs and includes both the message format and error codes.
@@ -29,14 +27,14 @@ Key and value are just byte arrays and this gives people the flexibility to enco
 The timestamp is always present, but it can be set by the application when it sends (default), or by the Kafka runtime when it receives.
 Whenever possible, records are buffered and sent in **batches** (a single request can include multiple batches, one for each partition).
 
+![](images/replicas.png)
+
 Records are stored in a **topic**, which is further divided into one or more **partitions**, distributed evenly across the brokers.
 Each partition is stored on disk as a series of fixed-size commit logs called **segments**.
 Ordering is only guaranteed at the partition level.Each record within a partition has a unique id called the **offset**, which is a monotonically increasing number that is never reused.
 Message **ordering is only guaranteed at the partition level**.
 If this is a requirement, you should create a single-partition topic or you should use the same key for sending all related events, so that they always land on the same partition.
 Beware that increasing topic partitions may break ordering.
-
-![](images/replicas.png)
 
 The **partition replication** protocol is fundamental in Kafka.
 The system ensures durability and high availability by spreading partition replicas across brokers.

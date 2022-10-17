@@ -15,11 +15,11 @@ Tasks rebalancing reuses the CG protocol and happens when a worker fails, a new 
 The **converters** are used by connectors to serialize and deserialize data when talking to the Kafka cluster, while **transformations**, also called single message transformations (SMTs), can be optionally used to apply lightweight changes at the record level (filters, mappings, replacements).
 When you need to do heavy transformations (e.g. aggregations, joins, call external services), you should use a stream processing library like Kafka Streams.
 
+![](images/debezium.png)
+
 The **change data capture** (CDC) pattern describes a system that captures and emit data changes, so that other applications can respond to those events.
 [Debezium](https://debezium.io) is a CDC engine that works best when deployed on top of Kafka Connect.
 It is actually a collection of source connectors, that can be used to create data pipelines to bridge traditional data stores with Kafka.
-
-![](images/debezium.png)
 
 The connector produces **change events** by performing an initial snapshot and then reads the internal transaction log from the point at which the snapshot was made.
 There is also the possibility to configure incremental snapshots.
