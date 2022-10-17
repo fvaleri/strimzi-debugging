@@ -70,11 +70,11 @@
                             <goal>register</goal>
                         </goals>
                         <configuration>
-                            <!-- the artifact is auto-registered at build time -->
                             <registryUrl>${env.REGISTRY_URL}</registryUrl>
                             <artifacts>
                                 <artifact>
                                     <groupId>default</groupId>
+                                    <!-- using an artifactId that matches with the default artifact resolver strategy -->
                                     <artifactId>my-topic-value</artifactId>
                                     <file>${project.basedir}/src/main/resources/greeting.avsc</file>
                                     <type>AVRO</type>

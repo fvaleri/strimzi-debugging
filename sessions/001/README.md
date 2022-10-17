@@ -57,7 +57,7 @@ Each consumer periodically or manually commits its position (next offsets to rea
 We are going to deploy a Kafka cluster on your local machine.This is useful for quick tests where a multi node cluster is not required.
 We will use the latest upstream release because the downstream release is just a rebuild with few additional and optional plugins.
 
-Use the `init.sh` script to initialize your environment passing your OpenShift parameters.
+Use the `init.sh` script to initialize the environment passing your OpenShift parameters.
 When it returns, you should have two processes running on your system, one is Kafka and the other is ZooKeeper.
 
 ```sh
@@ -180,7 +180,7 @@ baseOffset: 15 lastOffset: 17 count: 3 baseSequence: 0 lastSequence: 2 producerI
 
 We are going to deploy a 3-nodes cluster on OpenShift using the built-in OperatorHub (OLM) component, which is the preferred mode because you can use the web console and you get the additional benefit of automatic updates.
 
-Use the `init.sh` script to initialize your environment passing your OpenShift parameters.
+Use the `init.sh` script to initialize the environment passing your OpenShift parameters.
 You can reuse it whenever you want to reinitialize your environment.
 
 When it returns, two cluster-wide operators will start in the `openshift-operators` namespace.

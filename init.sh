@@ -45,7 +45,7 @@ kubectl delete ns $NAMESPACE &>/dev/null ||true
 kubectl -n openshift-operators delete csv --all &>/dev/null ||true
 kubectl -n openshift-operators delete sub --all &>/dev/null ||true
 kubectl create ns $NAMESPACE
-sed "s#value0#$NAMESPACE#g" sub.yaml | kubectl create -f -
+kubectl create -f sub.yaml
 
 krun_kafka() { kubectl run krun-"$(date +%s)" -it --rm --restart="Never" --image="$STRIMZI_IMAGE" -- "$@"; }
 
