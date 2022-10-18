@@ -17,8 +17,8 @@ for x in curl oc kubectl openssl keytool unzip yq jq git java javac jshell mvn; 
 done
 
 echo "Getting Kafka from $KAFKA_URL"
-ps -ef | grep "[k]afka.Kafka" | grep -v grep | awk '{print $2}' | xargs kill -9 &>/dev/null ||true
-ps -ef | grep "[q]uorum.QuorumPeerMain" | grep -v grep | awk '{print $2}' | xargs kill -9 &>/dev/null ||true
+pkill -f "kafka.Kafka" ||true
+pkill -f "quorum.QuorumPeerMain" ||true
 rm -rf /tmp/kafka-logs /tmp/zookeeper
 KAFKA_HOME="$(mktemp -d -t kafka.XXXXXXX)" && export KAFKA_HOME
 curl -sLk "$KAFKA_URL" | tar xz -C "$KAFKA_HOME" --strip-components 1
