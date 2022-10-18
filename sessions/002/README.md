@@ -81,7 +81,7 @@ $ kafka-console-producer.sh --producer.config /tmp/client.properties --bootstrap
 
 When dealing with TLS issues, it is useful to look inside the certificate to verify its configuration and expiration.
 For example, let's get the cluster CA certificate which is used to sign all server certificates.
-We can use use `kubectl` to do so, but let's suppose we have the output of the must-gather script.
+We can use use `kubectl` to do so, but let's suppose we have a must-gather script output (use the command form the first session to generate a new report from the current cluster).
 
 ```sh
 $ unzip -q report-10-09-2022_16-45-32.zip
