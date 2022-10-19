@@ -88,7 +88,7 @@ Note that we are using the "default" group id, but you can specify a custom name
 $ curl -s -X POST -H "Content-Type: application/json" \
   -H "X-Registry-ArtifactId: my-topic-value" -H "X-Registry-ArtifactType: AVRO" \
   -d @sessions/003/kafka-avro/src/main/resources/greeting.avsc \
-  $REGISTRY_URL/groups/default/artifacts?ifExists=RETURN_OR_UPDATE | jq
+  "$REGISTRY_URL/groups/default/artifacts?ifExists=RETURN_OR_UPDATE" | jq
 {
   "name": "Greeting",
   "createdBy": "",
@@ -108,7 +108,7 @@ Finally, let's use the REST API to confirm that our schema was registered correc
 We can also look at the schema content and metadata, which may be useful for debugging.
 
 ```sh
-$ curl -s $REGISTRY_URL/search/artifacts | jq
+$ curl -s "$REGISTRY_URL/search/artifacts" | jq
 {
   "artifacts": [
     {
@@ -125,7 +125,7 @@ $ curl -s $REGISTRY_URL/search/artifacts | jq
   "count": 1
 }
 
-$ curl -s $REGISTRY_URL/groups/default/artifacts/my-topic-value | jq
+$ curl -s "$REGISTRY_URL/groups/default/artifacts/my-topic-value" | jq
 {
   "type": "record",
   "name": "Greeting",
@@ -141,7 +141,7 @@ $ curl -s $REGISTRY_URL/groups/default/artifacts/my-topic-value | jq
   ]
 }
 
-$ curl -s $REGISTRY_URL/groups/default/artifacts/my-topic-value/meta | jq
+$ curl -s "$REGISTRY_URL/groups/default/artifacts/my-topic-value/meta" | jq
 {
   "name": "Greeting",
   "createdBy": "",
