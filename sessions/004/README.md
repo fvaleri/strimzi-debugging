@@ -1,7 +1,13 @@
 ## Kafka Connect and change data capture
 
-Kafka Connect is a **configuration-driven fault-tolerant integration platform** based on the Kafka client APIs, which runs in standalone or distributed mode (cluster of workers).
+Kafka Connect is a **configuration-driven fault-tolerant integration platform** based on Kafka client APIs, which runs in standalone or distributed mode (cluster of workers).
 When running in distributed mode, configurations and other metadata are stored inside internal topics to provide HA.
+
+- `offset.storage.topic`: The name of the compacted topic where source connector offsets are stored.
+  Sink connectors store the offset inside `__consumer_offsets` like normal consumer groups.
+- `config.storage.topic`: The name of the compacted topic where connector configurations are stored.
+- `status.storage.topic`: The name of the compacted topic where connector and task states are stored.
+
 The platform can be extended by using connector, converter and transformation plugins which implement the connect API interfaces.
 The recommended way to add them is by using the `plugin.path` property, that provides some level of isolation.
 
@@ -10,9 +16,9 @@ Only few connectors are officially part of Kafka, but there are many available o
 
 Each connector job is split into a number of **single thread tasks** which run on worker nodes.
 You can configure the max number of created tasks by setting the `maxTasks` at the connector configuration level, but the actual number of tasks depends on the specific connector and, for sink connectors, on how many input partitions we have.
-Tasks rebalancing reuses the CG protocol and happens when a worker fails, a new connector is added or there is a configuration change, but not when a task fails.
+Tasks rebalancing happens when a worker fails, a new connector is added or there is a configuration change, but not when a task fails.
 
-The **converters** are used by connectors to serialize and deserialize data when talking to the Kafka cluster, while **transformations**, also called single message transformations (SMTs), can be optionally used to apply lightweight changes at the record level (filters, mappings, replacements).
+The **converters** are used by connectors to serialize and deserialize data when talking to the Kafka cluster, while **transformations**, also called single message transformations (SMTs), can be used to apply lightweight changes at the record level (filters, mappings, replacements).
 When you need to do heavy transformations (e.g. aggregations, joins, call external services), you should use a stream processing library like Kafka Streams.
 
 ![](images/debezium.png)
@@ -21,16 +27,16 @@ The **change data capture** (CDC) pattern describes a system that captures and e
 [Debezium](https://debezium.io) is a CDC engine that works best when deployed on top of Kafka Connect.
 It is actually a collection of source connectors, that can be used to create data pipelines to bridge traditional data stores with Kafka.
 
-The connector produces **change events** by performing an initial snapshot and then reads the internal transaction log from the point at which the snapshot was made.
+The connector produces change events by performing an initial snapshot and then reads the **internal transaction log** from the point at which the snapshot was made.
 There is also the possibility to configure incremental snapshots.
-The main disadvantage of using Debezium is that every connector requires a specific configuration to enable transaction log access.
-If you can bear that, the advantages over a poll-based connector or application are significant:
+The main disadvantage of using Debezium is that every connector requires a specific configuration to enable access to the transaction log.
+If you are fine with that, the advantages over a poll-based connector or application are significant:
 
 - **Low overhead**: near real-time reaction to data changes avoids increased CPU load due to frequent polling.
 - **No lost changes**: using a poll loop you may miss intermediary changes between two runs (updates, deletes).
 - **No data model impact**: no need for timestamp columns to determine the last update of data.
 
-Debezium change events are self contained because they include the JSON Schema, so that you can always consume them even if the data source schema changes over time.
+Debezium change events are self contained because each message includes the JSON Schema, so that we can always consume them even if the data source schema changes over time.
 By default, Debezium provides **at-least-once semantics**, which means duplicates can arise in failure scenarios.
 The change event contains elements that can be used to identify and filter out duplicates.
 
