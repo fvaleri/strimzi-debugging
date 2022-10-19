@@ -59,6 +59,7 @@ Use the `init.sh` script to initialize the environment passing your OpenShift pa
 When it returns, you should have two processes running on your system, one is Kafka and the other is ZooKeeper.
 
 ```sh
+# use your credentials
 $ OCP_API_URL="https://api.cluster-openshift.example.com:6443" \
   OCP_ADMIN_USR="my-user" OCP_ADMIN_PWD="my-password"; source init.sh
 Checking prerequisites
@@ -186,6 +187,7 @@ Remember that CRDs are cluster wide resources, we can't deploy multiple operator
 If you delete the CRDs, every Kafka cluster deployed on that OpenShift cluster will be garbage collected.
 
 ```sh
+# use your credentials
 $ OCP_API_URL="https://api.cluster-openshift.example.com:6443" \
   OCP_ADMIN_USR="my-user" OCP_ADMIN_PWD="my-password"; source init.sh
 Checking prerequisites
