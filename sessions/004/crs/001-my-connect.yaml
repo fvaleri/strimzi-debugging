@@ -7,7 +7,11 @@ metadata:
 spec:
   replicas: 1
   version: 3.2.3
-  bootstrapServers: my-cluster-kafka-bootstrap:9092
+  bootstrapServers: my-cluster-kafka-bootstrap:9093
+  tls:
+    trustedCertificates:
+      - secretName: my-cluster-cluster-ca-cert
+        certificate: ca.crt
   config:
     group.id: my-connect
     offset.storage.topic: connect-cluster-offsets

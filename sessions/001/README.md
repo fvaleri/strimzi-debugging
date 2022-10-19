@@ -59,19 +59,19 @@ Use the `init.sh` script to initialize the environment passing your OpenShift pa
 When it returns, you should have two processes running on your system, one is Kafka and the other is ZooKeeper.
 
 ```sh
-# use your credentials
-$ OCP_API_URL="https://api.cluster-openshift.example.com:6443" \
-  OCP_ADMIN_USR="my-user" OCP_ADMIN_PWD="my-password"; source init.sh
+$ source init.sh
 Checking prerequisites
-Getting Kafka from https://archive.apache.org/dist/kafka/3.2.3/kafka_2.13-3.2.3.tgz
-Authenticating to https://api.cluster-openshift.example.com:6443
-Deploying cluster-wide operators
+Getting Kafka from ASF
+Authenticating to OpenShift
+API URL: https://api.openshift.example.com:6443
+Username: my-user
+Password: 
 namespace/test created
 subscription.operators.coreos.com/my-streams created
 subscription.operators.coreos.com/my-registry created
 Environment READY!
-  |__Kafka home: /tmp/kafka.Dt7Q7VV
-  |__Current namespace: test
+    |__ Kafka home: /tmp/kafka.aj1CPG4
+    |__ Current namespace: test
 
 $ zookeeper-server-start.sh -daemon $KAFKA_HOME/config/zookeeper.properties \
   && sleep 5 && kafka-server-start.sh -daemon $KAFKA_HOME/config/server.properties
@@ -187,19 +187,16 @@ Remember that CRDs are cluster wide resources, we can't deploy multiple operator
 If you delete the CRDs, every Kafka cluster deployed on that OpenShift cluster will be garbage collected.
 
 ```sh
-# use your credentials
-$ OCP_API_URL="https://api.cluster-openshift.example.com:6443" \
-  OCP_ADMIN_USR="my-user" OCP_ADMIN_PWD="my-password"; source init.sh
+$ source init.sh
 Checking prerequisites
-Getting Kafka from https://archive.apache.org/dist/kafka/3.2.3/kafka_2.13-3.2.3.tgz
-Authenticating to https://api.cluster-openshift.example.com:6443
-Deploying cluster-wide operators
+Getting Kafka from /tmp
+Authenticating to OpenShift
 namespace/test created
 subscription.operators.coreos.com/my-streams created
 subscription.operators.coreos.com/my-registry created
 Environment READY!
-  |__Kafka home: /tmp/kafka.Dt7Q7VV
-  |__Current namespace: test
+    |__ Kafka home: /tmp/kafka.adbBKpv
+    |__ Current namespace: test
 
 $ kubectl -n openshift-operators get po
 NAME                                                         READY   STATUS    RESTARTS   AGE
