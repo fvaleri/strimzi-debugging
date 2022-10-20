@@ -5,6 +5,8 @@ KAFKA_VERSION="3.2.3"
 STRIMZI_IMAGE="registry.redhat.io/amq7/amq-streams-kafka-32-rhel8:2.2.0"
 NAMESPACE="test"
 
+SCRIPT_DIR="" && pushd "$(dirname "$(readlink -f "${BASH_SOURCE[0]}")")" >/dev/null \
+  && { SCRIPT_DIR=$PWD; popd >/dev/null || exit; }
 echo "Checking prerequisites"
 for x in curl oc kubectl openssl keytool unzip yq jq git java javac jshell mvn; do
   if ! command -v "$x" &>/dev/null; then
@@ -52,9 +54,9 @@ authn_ocp() {
   local file="/tmp/ocp-login"
   if [[ ! -f $file ]]; then
     local ocp_url ocp_usr ocp_pwd
-    printf "API URL: " && read ocp_url
-    printf "Username: " && read ocp_usr
-    printf "Password: " && read -s ocp_pwd && echo ""
+    printf "API URL: " && read -r ocp_url
+    printf "Username: " && read -r ocp_usr
+    printf "Password: " && read -rs ocp_pwd && echo ""
     declare -px ocp_url ocp_usr ocp_pwd > "$file"
   else
     # shellcheck source=/dev/null
@@ -78,7 +80,7 @@ if authn_ocp; then
   kubectl create ns "$NAMESPACE"
   kubectl -n openshift-operators delete csv --all &>/dev/null ||true
   kubectl -n openshift-operators delete sub --all &>/dev/null ||true
-  kubectl create -f sub.yaml
+  kubectl create -f "$SCRIPT_DIR"/sub.yaml
 
   krun_kafka() { kubectl run krun-"$(date +%s)" -it --rm --restart="Never" --image="$STRIMZI_IMAGE" -- "$@"; }
 
