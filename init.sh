@@ -49,24 +49,25 @@ find_cp() {
 
 authn_ocp() {
   echo "Authenticating to OpenShift"
-  local login="/tmp/ocp-login"
-  if [[ ! -f $login ]]; then
-    read -rp "API URL: " OCP_URL
-    read -rp "Username: " OCP_USR
-    read -rp "Password: " -s OCP_PWD && echo ""
-    declare -px OCP_URL OCP_USR OCP_PWD > "$OCP_LOGIN"
+  local file="/tmp/ocp-login"
+  if [[ ! -f $file ]]; then
+    local ocp_url ocp_usr ocp_pwd
+    printf "API URL: " && read ocp_url
+    printf "Username: " && read ocp_usr
+    printf "Password: " && read -s ocp_pwd && echo ""
+    declare -px ocp_url ocp_usr ocp_pwd > "$file"
   else
     # shellcheck source=/dev/null
-    source "$login"
-    if [[ -z $OCP_URL || -z $OCP_USR || -z $OCP_PWD ]]; then
+    source "$file"
+    if [[ -z $ocp_url || -z $ocp_usr || -z $ocp_pwd ]]; then
       echo "Missing OpenShift parameters" && return 1
     fi
   fi
-  if oc login -u "$OCP_USR" -p "$OCP_PWD" "$OCP_URL" --insecure-skip-tls-verify=true &>/dev/null; then
+  if oc login -u "$ocp_usr" -p "$ocp_pwd" "$ocp_url" --insecure-skip-tls-verify=true &>/dev/null; then
     return
   else
     echo "Authentication failed"
-    rm -rf $login
+    rm -rf $file
     return 1
   fi
 }
