@@ -1,27 +1,27 @@
 ## Kafka Connect and change data capture
 
 Kafka Connect is a **configuration-driven fault-tolerant integration platform** based on Kafka client APIs, which runs in standalone or distributed mode (cluster of workers).
-When running in distributed mode, configurations and other metadata are stored inside internal topics to provide HA.
-
-- `offset.storage.topic`: The name of the compacted topic where source connector offsets are stored.
-  Sink connectors store the offset inside `__consumer_offsets` like normal consumer groups.
-- `config.storage.topic`: The name of the compacted topic where connector configurations are stored.
-- `status.storage.topic`: The name of the compacted topic where connector and task states are stored.
-
 The platform can be extended by using connector, converter and transformation plugins which implement the connect API interfaces.
 The recommended way to add them is by using the `plugin.path` property, that provides some level of isolation.
 
 There are two kinds of **connectors**: source connector, for importing data from an external system to Kafka, and sink connector, for exporting data from Kafka to an external system.
 Only few connectors are officially part of Kafka, but there are many available on GitHub or on public registries like Confluent Hub.
 
-Each connector job is split into a number of **single thread tasks** which run on worker nodes.
-You can configure the max number of created tasks by setting the `maxTasks` at the connector configuration level, but the actual number of tasks depends on the specific connector and, for sink connectors, on how many input partitions we have.
-Tasks rebalancing happens when a worker fails, a new connector is added or there is a configuration change, but not when a task fails.
-
 The **converters** are used by connectors to serialize and deserialize data when talking to the Kafka cluster, while **transformations**, also called single message transformations (SMTs), can be used to apply lightweight changes at the record level (filters, mappings, replacements).
 When you need to do heavy transformations (e.g. aggregations, joins, call external services), you should use a stream processing library like Kafka Streams.
 
-![](images/debezium.png)
+![](images/connect.png)
+
+Each connector job is split into a number of **single thread tasks** which run on worker nodes.
+You can configure the max number of created tasks by setting the `maxTasks` at the connector configuration level, but the actual number of tasks depends on the specific connector and, for sink connectors, on how many input partitions we have.
+
+Tasks rebalancing happens when a worker fails, a new connector is added or there is a configuration change, but not when a task fails.
+Configurations and other metadata are stored inside internal Kafka topics so that they can be easily recovered in case of worker crash.
+
+- `offset.storage.topic`: The name of the compacted topic where source connector offsets are stored.
+  Sink connectors store the offset inside `__consumer_offsets` like normal consumer groups.
+- `config.storage.topic`: The name of the compacted topic where connector configurations are stored.
+- `status.storage.topic`: The name of the compacted topic where connector and task states are stored.
 
 The **change data capture** (CDC) pattern describes a system that captures and emit data changes, so that other applications can respond to those events.
 [Debezium](https://debezium.io) is a CDC engine that works best when deployed on top of Kafka Connect.
@@ -37,12 +37,10 @@ If you are fine with that, the advantages over a poll-based connector or applica
 - **No data model impact**: no need for timestamp columns to determine the last update of data.
 
 Debezium change events are self contained because each message includes the JSON Schema, so that we can always consume them even if the data source schema changes over time.
+In case of Kafka or external system failure, Debezium connector will reconnect and resume once they are restored.
+If the connector stops for too long and the transaction log is purged, then the connector lose its position and performs another initial snapshot.
 By default, Debezium provides **at-least-once semantics**, which means duplicates can arise in failure scenarios.
 The change event contains elements that can be used to identify and filter out duplicates.
-
-If the source data store or Kafka fail, the connector will reconnect and resume once they are restored.
-If the connector stops for too long and the transaction log is purged, then the connector lose its position and performs another initial snapshot.
-If one of the Kafka Connect workers crashes, the task will be restarted in another worker and duplicates can arise.
 
 ### Example: cloud-native CDC pipeline
 
