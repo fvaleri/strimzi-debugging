@@ -23,7 +23,7 @@ The server can present multiple certificates on the same IP address and port num
 For example, it is used by OpenShift to route external connections to the right pod when having passthrough routes, which also allows to tunnel the Kafka TCP protocol through the HTTP reverse proxy.
 
 Kafka clients don't need to trust TLS certificates when they are signed by a **well-known CA**, which is already included in the system truststore (e.g. `$JAVA_HOME/jre/lib/security/cacerts`).
-When enabling TLS authentication, the server must support CN mapping to the user identity, in addition to the two-way certificate verification (mTLS).
+When enabling TLS mutual authentication (mTLS), the server should also support the certificate CN mapping to the user identity.
 Before the encryption starts, the peers agree to the protocol version and cipher suite to be used, exchange certificates and share encryption keys (connection overhead).
 Almost all the problems occur within this initial handshake.
 
