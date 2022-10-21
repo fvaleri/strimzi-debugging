@@ -62,16 +62,15 @@ When it returns, you should have two processes running on your system, one is Ka
 $ source init.sh
 Checking prerequisites
 Getting Kafka from ASF
-Authenticating to OpenShift
+Kafka home: /tmp/kafka.9bAqs71
+Configuring OpenShift
 API URL: https://api.openshift.example.com:6443
 Username: my-user
 Password: 
 namespace/test created
 subscription.operators.coreos.com/my-streams created
 subscription.operators.coreos.com/my-registry created
-Environment READY!
-    |__ Kafka home: /tmp/kafka.aj1CPG4
-    |__ Current namespace: test
+READY!
 
 $ zookeeper-server-start.sh -daemon $KAFKA_HOME/config/zookeeper.properties \
   && sleep 5 && kafka-server-start.sh -daemon $KAFKA_HOME/config/server.properties
@@ -190,13 +189,12 @@ If you delete the CRDs, every Kafka cluster deployed on that OpenShift cluster w
 $ source init.sh
 Checking prerequisites
 Getting Kafka from /tmp
-Authenticating to OpenShift
+Kafka home: /tmp/kafka.9bAqs71
+Configuring OpenShift
 namespace/test created
 subscription.operators.coreos.com/my-streams created
 subscription.operators.coreos.com/my-registry created
-Environment READY!
-    |__ Kafka home: /tmp/kafka.adbBKpv
-    |__ Current namespace: test
+READY!
 
 $ kubectl -n openshift-operators get po
 NAME                                                         READY   STATUS    RESTARTS   AGE

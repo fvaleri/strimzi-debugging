@@ -3,7 +3,6 @@
 
 KAFKA_VERSION="3.2.3"
 STRIMZI_IMAGE="registry.redhat.io/amq7/amq-streams-kafka-32-rhel8:2.2.0"
-NAMESPACE="test"
 
 SCRIPT_DIR="" && pushd "$(dirname "$(readlink -f "${BASH_SOURCE[0]}")")" >/dev/null \
   && { SCRIPT_DIR=$PWD; popd >/dev/null || exit; }
@@ -40,6 +39,7 @@ pkill -f "kafka.Kafka" ||true
 pkill -f "quorum.QuorumPeerMain" ||true
 rm -rf /tmp/kafka-logs /tmp/zookeeper
 get_kafka
+echo "Kafka home: $KAFKA_HOME"
 
 find_cp() {
   local id="$1"
@@ -52,7 +52,6 @@ find_cp() {
 }
 
 authn_ocp() {
-  echo "Authenticating to OpenShift"
   local file="/tmp/ocp-login"
   if [[ ! -f $file ]]; then
     local ocp_url ocp_usr ocp_pwd
@@ -76,17 +75,20 @@ authn_ocp() {
   fi
 }
 
+echo "Configuring OpenShift"
 if authn_ocp; then
-  kubectl config set-context --current --namespace="$NAMESPACE" &>/dev/null
-  kubectl delete ns "$NAMESPACE" &>/dev/null ||true
-  kubectl create ns "$NAMESPACE"
-  kubectl -n openshift-operators delete csv --all &>/dev/null ||true
-  kubectl -n openshift-operators delete sub --all &>/dev/null ||true
+  kubectl delete ns test target &>/dev/null
+  kubectl wait --for=delete ns/test --timeout=60s &>/dev/null
+  kubectl -n openshift-operators delete csv -l operators.coreos.com/amq-streams.openshift-operators &>/dev/null
+  kubectl -n openshift-operators delete csv -l operators.coreos.com/service-registry-operator.openshift-operators &>/dev/null
+  kubectl -n openshift-operators delete sub -l operators.coreos.com/amq-streams.openshift-operators &>/dev/null
+  kubectl -n openshift-operators delete sub -l operators.coreos.com/service-registry-operator.openshift-operators &>/dev/null
+  kubectl -n openshift-operators delete pv -l app=retain-patch &>/dev/null
+
+  kubectl create ns test
+  kubectl config set-context --current --namespace=test &>/dev/null
   kubectl create -f "$SCRIPT_DIR"/sub.yaml
 
   krun_kafka() { kubectl run krun-"$(date +%s)" -it --rm --restart="Never" --image="$STRIMZI_IMAGE" -- "$@"; }
-
-  echo "Environment READY!
-    |__ Kafka home: $KAFKA_HOME
-    |__ Current namespace: $NAMESPACE"
+  echo "READY!"
 fi

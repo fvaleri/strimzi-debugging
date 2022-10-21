@@ -35,13 +35,6 @@ Volumes with either `persistentVolumeReclaimPolicy: Retain`, or using a storage 
 When the cluster is ready, we purposely break it by sending 11 GiB of data to a topic with RF=3 (33 GiB in total), which exceeds the combined cluster disk capacity of 30 GiB.
 
 ```sh
-$ source init.sh
-Getting Kafka from https://archive.apache.org/dist/kafka/3.2.3/kafka_2.13-3.2.3.tgz
-Authenticating to https://api.cluster-pdbcm.pdbcm.sandbox1150.opentlc.com:6443
-Environment READY!
-  |__Kafka home: /tmp/kafka.rUbW288
-  |__Current namespace: test
-
 $ kubectl get pvc | grep kafka
 data-my-cluster-kafka-0       Bound    pvc-8c21101b-a7d0-4b57-922b-d79f0207ffdc   10Gi       RWO            gp2            28m
 data-my-cluster-kafka-1       Bound    pvc-100f7351-9d2c-4048-b3a4-e04685a3cd3d   10Gi       RWO            gp2            28m
@@ -181,6 +174,9 @@ pvc-e05bb77e-9bc6-431c-9d59-bf2f5d664d95   10Gi       RWO            Delete     
 
 $ for pv in $(kubectl get pv | grep "my-cluster" | awk '{print $1}'); do
   kubectl patch pv $pv --type merge -p '
+    metadata:
+      labels:
+        app: retain-patch
     spec:
       persistentVolumeReclaimPolicy: Retain'
 done
@@ -206,7 +202,7 @@ As expected, persistent volumes are still there and their status changed to "Rel
 Note that OpenShift also retains some useful information that is needed when reattaching them (capacity, claim, storage class).
 
 ```sh
-$ krun_kafka bin/kafka-console-producer.sh --bootstrap-server my-cluster-kafka-bootstrap:9092 --topic my-topic.
+$ krun_kafka bin/kafka-console-producer.sh --bootstrap-server my-cluster-kafka-bootstrap:9092 --topic my-topic
 >hello
 >world
 >^Cpod "my-producer" deleted

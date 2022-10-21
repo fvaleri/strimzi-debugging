@@ -25,7 +25,7 @@ It would also be good to have virtual hosts or a cluster proxy, so that you can 
 
 ![](images/mm2.png)
 
-### Example: active-passive configuration
+### Example: active-passive mirroring
 
 [Deploy Streams operator and Kafka cluster](/sessions/001).
 Then, we create the target namespace for the backup cluster.
