@@ -14,21 +14,24 @@ for x in curl oc kubectl openssl keytool unzip yq jq git java javac jshell mvn; 
   fi
 done
 
+add_path() {
+  if [[ -d "$1" && ":$PATH:" != *":$1:"* ]]; then
+    PATH="${PATH:+"$PATH:"}$1"
+  fi
+}
+
 get_kafka() {
   local home && home="$(find /tmp -name 'kafka.*' -printf '%T@ %p\n' 2>/dev/null |sort -n |tail -n1 |awk '{print $2}')"
   if [[ -n $home ]]; then
     local version && version="$("$home"/bin/kafka-topics.sh --version 2>/dev/null |awk '{print $1}')"
     if [[ $version == "$KAFKA_VERSION" ]]; then
       echo "Getting Kafka from /tmp"
-      KAFKA_HOME="$home" && export KAFKA_HOME \
-        && PATH="$KAFKA_HOME/bin:$PATH" && export PATH
-      PATH="$KAFKA_HOME/bin:$PATH" && export PATH
+      KAFKA_HOME="$home" && export KAFKA_HOME && add_path "$KAFKA_HOME/bin"
       return
     fi
   fi
   echo "Getting Kafka from ASF"
-  KAFKA_HOME="$(mktemp -d -t kafka.XXXXXXX)" && export KAFKA_HOME \
-    && PATH="$KAFKA_HOME/bin:$PATH" && export PATH
+  KAFKA_HOME="$(mktemp -d -t kafka.XXXXXXX)" && export KAFKA_HOME && add_path "$KAFKA_HOME/bin"
   curl -sLk "https://archive.apache.org/dist/kafka/$KAFKA_VERSION/kafka_2.13-$KAFKA_VERSION.tgz" \
     | tar xz -C "$KAFKA_HOME" --strip-components 1
 }
@@ -38,7 +41,6 @@ pkill -f "quorum.QuorumPeerMain" ||true
 rm -rf /tmp/kafka-logs /tmp/zookeeper
 get_kafka
 
-# find coordinating partition (JDK 9+ required)
 find_cp() {
   local id="$1"
   local part="${2-50}"
