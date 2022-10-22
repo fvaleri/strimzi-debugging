@@ -129,7 +129,7 @@ my-cluster-kafka-0   1/1     Running   0          9m10s
 my-cluster-kafka-1   1/1     Running   0          7m47s
 my-cluster-kafka-2   1/1     Running   0          6m24s
 
-$ krun_kafka bin/kafka-topics.sh --bootstrap-server my-cluster-kafka-bootstrap:9092 --topic my-topic --describe
+$ krun_kafka /opt/kafka/bin/kafka-topics.sh --bootstrap-server my-cluster-kafka-bootstrap:9092 --topic my-topic --describe
 Topic: my-topic	TopicId: fVMGczk2RWGPZ3HF0grObg	PartitionCount: 3	ReplicationFactor: 3	Configs: min.insync.replicas=2,message.format.version=3.0-IV1,retention.bytes=1073741824
 	Topic: my-topic	Partition: 0	Leader: 1	Replicas: 2,1,0	Isr: 0,1,2
 	Topic: my-topic	Partition: 1	Leader: 1	Replicas: 1,0,2	Isr: 0,1,2
@@ -174,7 +174,7 @@ NAME          CLUSTER      PENDINGPROPOSAL   PROPOSALREADY   REBALANCING   READY
 add-brokers   my-cluster                                     True
 add-brokers   my-cluster                                                   True
 
-$ krun_kafka bin/kafka-topics.sh --bootstrap-server my-cluster-kafka-bootstrap:9092 --topic my-topic --describe
+$ krun_kafka /opt/kafka/bin/kafka-topics.sh --bootstrap-server my-cluster-kafka-bootstrap:9092 --topic my-topic --describe
 Topic: my-topic	TopicId: fVMGczk2RWGPZ3HF0grObg	PartitionCount: 3	ReplicationFactor: 3	Configs: min.insync.replicas=2,message.format.version=3.0-IV1,retention.bytes=1073741824
 	Topic: my-topic	Partition: 0	Leader: 2	Replicas: 2,1,3	Isr: 1,2,3
 	Topic: my-topic	Partition: 1	Leader: 1	Replicas: 1,3,2	Isr: 1,2,3

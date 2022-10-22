@@ -89,6 +89,6 @@ if authn_ocp; then
   kubectl config set-context --current --namespace=test &>/dev/null
   kubectl create -f "$SCRIPT_DIR"/sub.yaml
 
-  krun_kafka() { kubectl run krun-"$(date +%s)" -it --rm --restart="Never" --image="$STRIMZI_IMAGE" -- "$@"; }
+  krun_kafka() { kubectl run krun-"$(date +%s)" -itq --rm --restart="Never" --image="$STRIMZI_IMAGE" -- "$@"; }
   echo "READY!"
 fi

@@ -83,7 +83,6 @@ $ jps -v | grep kafka
 Create a new topic with 3 partitions, produce and consume some messages.
 When consuming messages, we print additional data such as the partition number.
 Every consumer with the same `group.id` will be part of the same consumer group.
-If you don't use the `--group` option, a randomly generated `group.id` is used at every invocation.
 
 ```sh
 $ kafka-topics.sh --bootstrap-server :9092 --topic my-topic --create --partitions 3 --replication-factor 1 
@@ -239,12 +238,12 @@ Note that we are using a nice function to avoid repeating that for every client 
 You can also use the broker pods for that, but it is always risky to spin up another JVM inside a pod, especially in production.
 
 ```sh
-$ krun_kafka bin/kafka-console-producer.sh --bootstrap-server my-cluster-kafka-bootstrap:9092 --topic my-topic
+$ krun_kafka /opt/kafka/bin/kafka-console-producer.sh --bootstrap-server my-cluster-kafka-bootstrap:9092 --topic my-topic
 >hello
 >world
 >^Cpod "krun-1664886431" deleted
 
-$ krun_kafka bin/kafka-console-consumer.sh --bootstrap-server my-cluster-kafka-bootstrap:9092 \
+$ krun_kafka /opt/kafka/bin/kafka-console-consumer.sh --bootstrap-server my-cluster-kafka-bootstrap:9092 \
   --topic my-topic --group my-group --from-beginning
 world
 hello

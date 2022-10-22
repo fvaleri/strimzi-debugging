@@ -40,7 +40,7 @@ data-my-cluster-kafka-0       Bound    pvc-8c21101b-a7d0-4b57-922b-d79f0207ffdc 
 data-my-cluster-kafka-1       Bound    pvc-100f7351-9d2c-4048-b3a4-e04685a3cd3d   10Gi       RWO            gp2            28m
 data-my-cluster-kafka-2       Bound    pvc-65550116-3ae6-4f4f-9be9-a098cdc49002   10Gi       RWO            gp2            28m
 
-$ krun_kafka bin/kafka-producer-perf-test.sh --topic my-topic --record-size 1000 --num-records 12000000 \
+$ krun_kafka /opt/kafka/bin/kafka-producer-perf-test.sh --topic my-topic --record-size 1000 --num-records 12000000 \
   --throughput -1 --producer-props acks=1 bootstrap.servers=my-cluster-kafka-bootstrap:9092
 287699 records sent, 57528.3 records/sec (54.86 MB/sec), 144.6 ms avg latency, 455.0 ms max latency.
 309618 records sent, 61923.6 records/sec (59.05 MB/sec), 29.1 ms avg latency, 132.0 ms max latency.
@@ -202,7 +202,7 @@ As expected, persistent volumes are still there and their status changed to "Rel
 Note that OpenShift also retains some useful information that is needed when reattaching them (capacity, claim, storage class).
 
 ```sh
-$ krun_kafka bin/kafka-console-producer.sh --bootstrap-server my-cluster-kafka-bootstrap:9092 --topic my-topic
+$ krun_kafka /opt/kafka/bin/kafka-console-producer.sh --bootstrap-server my-cluster-kafka-bootstrap:9092 --topic my-topic
 >hello
 >world
 >^Cpod "my-producer" deleted
@@ -251,6 +251,7 @@ persistentvolumeclaim/data-my-cluster-kafka-2 created
 ```
 
 Volumes are "Bound" again and deploying a new Kafka cluster with the same spec we should be able to consume messages.
+Important: `KafkaTopic` resources must be created before deploying the topic operator, otherwise it will delete them along with our precious data.
 
 ```sh
 $ kubectl get pv
@@ -262,14 +263,16 @@ pvc-99e25916-b37d-4c72-aeaf-5aadcea6347a   5Gi        RWO            Retain     
 pvc-d64b4012-e8ea-4c5d-b2b0-90730740896f   10Gi       RWO            Retain           Bound    test/data-my-cluster-kafka-0       gp2                     18m
 pvc-e05bb77e-9bc6-431c-9d59-bf2f5d664d95   10Gi       RWO            Retain           Bound    test/data-my-cluster-kafka-2       gp2                     18m
 
-$ kubectl create -f sessions/001/crs
-kafka.kafka.strimzi.io/my-cluster created
+$ kubectl create -f sessions/001/crs/001-my-topic.yaml
 kafkatopic.kafka.strimzi.io/my-topic created
 
-$ krun_kafka bin/kafka-console-consumer.sh --bootstrap-server my-cluster-kafka-bootstrap:9092 \
+$ kubectl create -f sessions/001/crs/000-my-cluster.yaml
+kafka.kafka.strimzi.io/my-cluster created
+
+$ krun_kafka /opt/kafka/bin/kafka-console-consumer.sh --bootstrap-server my-cluster-kafka-bootstrap:9092 \
   --topic my-topic --from-beginning
-hello
 world
+hello
 ^CProcessed a total of 3 messages
 pod "my-consumer" deleted
 ```
