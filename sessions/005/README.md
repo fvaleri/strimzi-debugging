@@ -148,12 +148,37 @@ pod "producer-perf" deleted
 $ kubectl -n target scale kmm2 my-mm2 --replicas 1
 kafkamirrormaker2.kafka.strimzi.io/my-mm2 scaled
 
-$ kubectl -n target exec -it $(kubectl -n target get po | grep my-mm2 | awk '{print $1}') -- \
-  bin/kafka-run-class.sh kafka.tools.JmxTool --jmx-url service:jmx:rmi:///jndi/rmi://:9999/jmxrmi \
-    --date-format yyyy-MM-dd_HH:mm:ss --one-time true --wait \
+# took about 3 minutes
+$ kubectl -n target exec -it $(kubectl -n target get po | grep my-mm2 | awk '{print $1}') -- bash -c '\
+  for i in {1..100}; do /opt/kafka/bin/kafka-run-class.sh kafka.tools.JmxTool --jmx-url service:jmx:rmi:///jndi/rmi://:9999/jmxrmi \
     --object-name kafka.producer:type=producer-metrics,client-id=\""connector-producer-my-cluster->my-cluster-tgt.MirrorSourceConnector-0\"" \
-    --attributes batch-size-avg,request-latency-avg
-2022-09-27_16:36:22,16224.29945722409,3.705901141898906
+    --attributes batch-size-avg,request-latency-avg --date-format yyyy-MM-dd_HH:mm:ss --one-time true --wait \
+      2>/dev/null | grep $(date +"%Y") && sleep 5; done'
+2022-10-24_07:40:17,16193.412715517241,3.6808625336927223
+2022-10-24_07:40:24,16239.756451806506,3.295798319327731
+2022-10-24_07:40:32,16254.623251117842,3.024812463935372
+2022-10-24_07:40:40,16261.989066279632,2.7141958583317205
+2022-10-24_07:40:47,16265.681841394908,2.5584780388151174
+2022-10-24_07:40:55,16267.953788740197,2.4651427238533983
+2022-10-24_07:41:03,16269.49235385211,2.3892222813725015
+2022-10-24_07:41:11,16277.0,2.1200891909110213
+2022-10-24_07:41:19,16277.0,2.124041432986151
+2022-10-24_07:41:27,16277.0,2.119467330906304
+2022-10-24_07:41:35,16277.0,2.1087781172466116
+2022-10-24_07:41:43,16277.0,2.132085932085932
+2022-10-24_07:41:50,16277.0,2.109539547389648
+2022-10-24_07:41:58,16277.0,2.1147420902152594
+2022-10-24_07:42:06,16277.0,2.104702499088663
+2022-10-24_07:42:13,16276.468756710328,2.0123094539468975
+2022-10-24_07:42:19,16276.468756710328,2.0123094539468975
+2022-10-24_07:42:26,16276.468756710328,2.0123094539468975
+2022-10-24_07:42:33,16276.468756710328,2.0123094539468975
+2022-10-24_07:42:39,16274.825131810194,1.3645147123407992
+2022-10-24_07:42:46,16274.825131810194,1.3645147123407992
+2022-10-24_07:42:53,16274.825131810194,1.3645147123407992
+2022-10-24_07:43:00,16274.825131810194,1.3645147123407992
+2022-10-24_07:43:06,16274.825131810194,1.3645147123407992
+2022-10-24_07:43:13,NaN,NaN
 ```
 
 When the replication is done (NaN metrics), we increase the producer buffer by overriding its configuration.
@@ -191,10 +216,29 @@ $ krun_kafka /opt/kafka/bin/kafka-producer-perf-test.sh --topic my-topic --recor
 $ kubectl -n target scale kmm2 my-mm2 --replicas 1
 kafkamirrormaker2.kafka.strimzi.io/my-mm2 scaled
 
-$ kubectl -n target exec -it $(kubectl -n target get po | grep my-mm2 | awk '{print $1}') -- \
-  bin/kafka-run-class.sh kafka.tools.JmxTool --jmx-url service:jmx:rmi:///jndi/rmi://:9999/jmxrmi \
-    --date-format yyyy-MM-dd_HH:mm:ss --one-time true --wait \
+# took less than 2 minutes
+$ kubectl -n target exec -it $(kubectl -n target get po | grep my-mm2 | awk '{print $1}') -- bash -c '\
+  for i in {1..100}; do /opt/kafka/bin/kafka-run-class.sh kafka.tools.JmxTool --jmx-url service:jmx:rmi:///jndi/rmi://:9999/jmxrmi \
     --object-name kafka.producer:type=producer-metrics,client-id=\""connector-producer-my-cluster->my-cluster-tgt.MirrorSourceConnector-0\"" \
-    --attributes batch-size-avg,request-latency-avg
-2022-09-27_17:13:43,241694.3748256625,21.546531892645522
+    --attributes batch-size-avg,request-latency-avg --date-format yyyy-MM-dd_HH:mm:ss --one-time true --wait \
+      2>/dev/null | grep $(date +"%Y") && sleep 5; done'
+2022-10-24_08:25:34,114822.21625544268,3.096321393998064
+2022-10-24_08:25:41,115199.66019845645,2.9993381866313698
+2022-10-24_08:25:47,117026.9576514499,3.007466973004021
+2022-10-24_08:25:54,117950.39076923077,2.9892826825127337
+2022-10-24_08:26:01,119469.38660141749,3.000253164556962
+2022-10-24_08:26:07,120710.9489424289,3.0178608951460393
+2022-10-24_08:26:14,120531.58528009536,2.996602694004053
+2022-10-24_08:26:21,120200.73555854087,2.96770526533354
+2022-10-24_08:26:28,121498.74598787447,2.9101213852195644
+2022-10-24_08:26:34,128486.59536263565,2.9788231616785183
+2022-10-24_08:26:41,136136.2307097681,3.0344633563089043
+2022-10-24_08:26:47,137990.7292217925,3.044473112438892
+2022-10-24_08:26:54,137990.7292217925,3.044473112438892
+2022-10-24_08:27:00,189254.9140625,3.4906398435317127
+2022-10-24_08:27:07,189254.9140625,3.4906398435317127
+2022-10-24_08:27:13,189254.9140625,3.4906398435317127
+2022-10-24_08:27:20,189254.9140625,3.4906398435317127
+2022-10-24_08:27:26,189254.9140625,3.4906398435317127
+2022-10-24_08:27:32,NaN,NaN
 ```
