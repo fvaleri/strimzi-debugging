@@ -69,7 +69,7 @@ my-cluster-tgt-zookeeper-1                        1/1     Running   0          1
 my-cluster-tgt-zookeeper-2                        1/1     Running   0          13m
 my-mm2-mirrormaker2-7c87647dcd-vdftr              1/1     Running   0          2m19s
 
-$ kubectl -n target get kmm2 my-mm2 -o yaml | yq e '.status'
+$ kubectl -n target get kmm2 my-mm2 -o yaml | yq '.status'
 conditions:
   - lastTransitionTime: "2022-09-15T15:42:39.600109Z"
     status: "True"

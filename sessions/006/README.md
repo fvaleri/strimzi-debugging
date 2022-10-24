@@ -8,7 +8,7 @@ You can also use JBOD (just a bunch of disks), that gives good performance when 
 The recommended file system is XFS.
 An easy optimization is to disable the last access time file attribute (noatime).
 
-Ideally, the **retention policy** should be set properly when provisioning a new cluster or topic, based on requirements and the expected volume of messages (GB/s).
+Ideally, the **retention policy** should be set properly when provisioning a new cluster or topic, based on requirements and the expected throughput (MB/s).
 A non active segment can be deleted based on `segment.ms` or `segment.bytes`.
 Even if one record is not yet eligible for deletion based on `retention.ms` or `retention.bytes`, the broker will keep the entire segment file.
 Deletion timing also depends on the cluster load and how many `background.threads` are available for normal topics, and `log.cleaner.threads` for compacted topics.
@@ -23,7 +23,7 @@ storage_capacity (MB) = retention_sec * topic_write_rate (MB/s) * replication_fa
 storage_capacity (MB) = retention_mb * replication_factor * part_number
 ```
 
-In OpenShift, a **persistent volume** (PV) lives outside any namespace and it is claimed by using a **persistent volume claim** (PVC).
+In OpenShift, a **persistent volume** (PV) lives outside any namespace, and it is claimed by using a **persistent volume claim** (PVC).
 You can specify the **storage class** (SC) used for provisioning directly in the Kafka CR.
 Only volumes created and managed by a SC with `allowVolumeExpansion: true` can be increased, but not decreased.
 When using JBOD, you can also remove a volume, but data needs to be migrated to other volumes upfront.
@@ -65,7 +65,7 @@ If volume expansion is supported, you can simply edit the Kafka CR increasing th
 We didn't specify any storage class, so we have been assigned the default one.
 
 ```sh
-$ kubectl get sc $(kubectl get pv | grep data-my-cluster-kafka-0 | awk '{print $7}') -o yaml | yq e '.allowVolumeExpansion'
+$ kubectl get sc $(kubectl get pv | grep data-my-cluster-kafka-0 | awk '{print $7}') -o yaml | yq '.allowVolumeExpansion'
 true
 
 $ kubectl patch k my-cluster --type merge -p '

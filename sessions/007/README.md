@@ -5,14 +5,14 @@ This is achieved through the concept of **preferred replica**, which is the firs
 This is designated as the leader and assigned to a broker in order to balance leader distribution.
 A background thread moves leader to preferred replica when it is in sync.
 
-Sometimes, this may not be enough and we may end up with **uneven distribution of load across brokers** as a consequence of some broker failures, the addition of new brokers or simply because some partitions are used more than others.
+Sometimes, this may not be enough, and we may end up with **uneven distribution of load across brokers** as a consequence of some broker failures, the addition of new brokers or simply because some partitions are used more than others.
 The `kafka.server:type=KafkaRequestHandlerPool,name=RequestHandlerAvgIdlePercent` broker metric is a good overall load metric for Kafka scaling and rebalance decisions.
 Good rule of thumb is when it hits 20% (i.e. the request handler threads are busy 80% of the time), then it's time to plan your cluster expansion, at 10% you need to scale it now.
 
 **Rebalancing** means moving partitions between brokers (inter brokers), between disks on the same broker (intra broker), or simply change leaders in order to restore the balance.
 Usually we need some combination of partition movements and leadership changes.
 When using `kafka-reassign-partitions.sh` for rebalancing, the task of figuring out which replica changes are needed and possible is left to the user.
-This requires some calculations that may be hard and time consuming, especially on big clusters with lots of partitions.
+This requires some calculations that may be hard and time-consuming, especially on big clusters with lots of partitions.
 Automating this complex task is the reason why [Cruise Control](https://github.com/linkedin/cruise-control) (CC) was created.
 
 ![](images/cc.png)
@@ -137,7 +137,7 @@ Topic: my-topic	TopicId: fVMGczk2RWGPZ3HF0grObg	PartitionCount: 3	ReplicationFac
 ```
 
 Now we add one broker, deploy CC by adding the `spec.cruiseControl` section to the Kafka CR and create a rebalance CR with `mode: add-brokers`.
-The first rebalance proposal takes some time because the workload model needs to be created from scratch, then a new one will generated every 15 minutes.
+The first rebalance proposal takes some time because the workload model needs to be created from scratch, then it will be automatically refreshed every 15 minutes.
 When the new broker is ready, we can force the proposal refresh by using an annotation.
 Then, we wait for the rebalance to become ready.
 

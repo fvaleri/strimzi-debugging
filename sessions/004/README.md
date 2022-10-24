@@ -101,7 +101,7 @@ As you may have guessed at this point, we are going to emit MySQL row changes an
 Let's check if the connector and its tasks are running fine by using the `KafkaConnector` resource, which is easier than interacting via REST requests.
 
 ```sh
-$ kubectl get kctr mysql-source -o yaml | yq e '.status'
+$ kubectl get kctr mysql-source -o yaml | yq '.status'
 conditions:
   - lastTransitionTime: "2022-09-15T07:56:48.585862Z"
     status: "True"
@@ -128,7 +128,7 @@ The value of `server_id` must be unique for each server and replication client i
 In this case, MySQL user must have appropriate permissions on all databases for which the connector captures changes.
 
 ```sh
-$ kubectl get cm my-mysql-cfg -o yaml | yq e '.data'
+$ kubectl get cm my-mysql-cfg -o yaml | yq '.data'
 my.cnf: |
   !include /etc/my.cnf
   [mysqld]
@@ -141,7 +141,7 @@ my.cnf: |
   gtid_mode = ON
   enforce_gtid_consistency = ON
 
-$ kubectl get cm my-mysql-init -o yaml | yq e '.data'
+$ kubectl get cm my-mysql-init -o yaml | yq '.data'
 initdb.sql: |
   use testdb;
     CREATE TABLE customers (
@@ -155,13 +155,13 @@ initdb.sql: |
   GRANT SELECT, RELOAD, SHOW DATABASES, REPLICATION SLAVE, REPLICATION CLIENT ON *.* TO 'debezium'@'%';
   FLUSH PRIVILEGES;
 
-$ kubectl get kc my-connect -o yaml | yq e '.spec.build.plugins'
+$ kubectl get kc my-connect -o yaml | yq '.spec.build.plugins'
 - artifacts:
     - type: zip
       url: https://maven.repository.redhat.com/ga/io/debezium/debezium-connector-mysql/1.9.5.Final-redhat-00001/debezium-connector-mysql-1.9.5.Final-redhat-00001-plugin.zip
   name: debezium-mysql
 
-$ kubectl get kctr mysql-source -o yaml | yq e '.spec'
+$ kubectl get kctr mysql-source -o yaml | yq '.spec'
 class: io.debezium.connector.mysql.MySqlConnector
 config:
   database.allowPublicKeyRetrieval: true

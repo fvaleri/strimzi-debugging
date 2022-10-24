@@ -43,7 +43,7 @@ The previous command adds a new authentication element to the external listener,
 It also creates a Kafka user resource with a matching configuration.
 
 ```sh
-$ kubectl get k my-cluster -o yaml | yq e '.spec.kafka.listeners[2]'
+$ kubectl get k my-cluster -o yaml | yq '.spec.kafka.listeners[2]'
 authentication:
   type: tls
 name: external
@@ -51,7 +51,7 @@ port: 9094
 tls: true
 type: route
 
-$ kubectl get ku my-user -o yaml | yq e '.spec'
+$ kubectl get ku my-user -o yaml | yq '.spec'
 authentication:
   type: tls
 ```
@@ -86,7 +86,7 @@ We can use use `kubectl` to do so, but let's suppose we have a must-gather scrip
 
 ```sh
 $ unzip -q report-10-09-2022_16-45-32.zip
-$ cat reports/secrets/my-cluster-cluster-ca-cert.yaml | yq e '.data."ca.crt"' | base64 -d > /tmp/ca.crt
+$ cat reports/secrets/my-cluster-cluster-ca-cert.yaml | yq '.data."ca.crt"' | base64 -d > /tmp/ca.crt
 $ openssl crl2pkcs7 -nocrl -certfile /tmp/ca.crt | openssl pkcs7 -print_certs -text -noout
 Certificate:
     Data:
@@ -189,7 +189,7 @@ $ kubectl create secret generic ext-listener-crt \
 $ kubectl apply -f sessions/002/crs/ccrt
 kafka.kafka.strimzi.io/my-cluster configured
 
-$ kubectl get k my-cluster -o yaml | yq e '.spec.kafka.listeners[2]'
+$ kubectl get k my-cluster -o yaml | yq '.spec.kafka.listeners[2]'
 configuration:
   brokerCertChainAndKey:
     certificate: bundle.crt
