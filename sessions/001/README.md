@@ -100,7 +100,7 @@ $ kafka-console-producer.sh --bootstrap-server :9092 --topic my-topic --property
 >^C
 
 $ kafka-console-consumer.sh --bootstrap-server :9092 --topic my-topic --group my-group --from-beginning \
-  --property print.partition=true -property print.key=true
+  --property print.partition=true --property print.key=true
 Partition:0	1	hello
 Partition:2	2	world
 ^CProcessed a total of 2 messages
