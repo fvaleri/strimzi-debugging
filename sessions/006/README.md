@@ -35,10 +35,10 @@ Volumes with either `persistentVolumeReclaimPolicy: Retain`, or using a storage 
 When the cluster is ready, we purposely break it by sending 11 GiB of data to a topic with RF=3 (33 GiB in total), which exceeds the combined cluster disk capacity of 30 GiB.
 
 ```sh
-$ kubectl get pvc | grep kafka
-data-my-cluster-kafka-0       Bound    pvc-8c21101b-a7d0-4b57-922b-d79f0207ffdc   10Gi       RWO            gp2            28m
-data-my-cluster-kafka-1       Bound    pvc-100f7351-9d2c-4048-b3a4-e04685a3cd3d   10Gi       RWO            gp2            28m
-data-my-cluster-kafka-2       Bound    pvc-65550116-3ae6-4f4f-9be9-a098cdc49002   10Gi       RWO            gp2            28m
+$ kubectl get pv | grep kafka
+pvc-2e3c7665-2b92-4376-bb1d-22b1d23fcc6a   10Gi       RWO            Delete           Bound    test/data-my-cluster-kafka-2       gp2                     4m1s
+pvc-b1e5e0a3-ab83-487f-9b81-c38e1badfccc   10Gi       RWO            Delete           Bound    test/data-my-cluster-kafka-0       gp2                     4m1s
+pvc-e66030cd-3992-4adc-9d94-d9d4ab164a45   10Gi       RWO            Delete           Bound    test/data-my-cluster-kafka-1       gp2                     4m1s
 
 $ krun_kafka /opt/kafka/bin/kafka-producer-perf-test.sh --topic my-topic --record-size 1000 --num-records 12000000 \
   --throughput -1 --producer-props acks=1 bootstrap.servers=my-cluster-kafka-bootstrap:9092
@@ -80,10 +80,10 @@ $ kubectl -n openshift-operators logs $(kubectl -n openshift-operators get po | 
 2022-09-21 16:21:44 INFO  KafkaAssemblyOperator:2915 - Reconciliation #1(watch) Kafka(test/my-cluster): Resizing PVC data-my-cluster-kafka-1 from 10 to 20Gi.
 2022-09-21 16:21:44 INFO  KafkaAssemblyOperator:2915 - Reconciliation #1(watch) Kafka(test/my-cluster): Resizing PVC data-my-cluster-kafka-2 from 10 to 20Gi.
 
-$ kubectl get pvc | grep kafka
-data-my-cluster-kafka-0       Bound    pvc-8c21101b-a7d0-4b57-922b-d79f0207ffdc   20Gi       RWO            gp2            33m
-data-my-cluster-kafka-1       Bound    pvc-100f7351-9d2c-4048-b3a4-e04685a3cd3d   20Gi       RWO            gp2            33m
-data-my-cluster-kafka-2       Bound    pvc-65550116-3ae6-4f4f-9be9-a098cdc49002   20Gi       RWO            gp2            33m
+$ kubectl get pv | grep kafka
+pvc-2e3c7665-2b92-4376-bb1d-22b1d23fcc6a   20Gi       RWO            Delete           Bound    test/data-my-cluster-kafka-2       gp2                     30m
+pvc-b1e5e0a3-ab83-487f-9b81-c38e1badfccc   20Gi       RWO            Delete           Bound    test/data-my-cluster-kafka-0       gp2                     30m
+pvc-e66030cd-3992-4adc-9d94-d9d4ab164a45   20Gi       RWO            Delete           Bound    test/data-my-cluster-kafka-1       gp2                     30m
 
 $ kubectl get po | grep kafka
 my-cluster-kafka-0                            1/1     Running   0             2m22s
@@ -156,7 +156,12 @@ my-cluster-kafka-1                            1/1     Running   0          18m
 my-cluster-kafka-2                            1/1     Running   0          18m
 ```
 
-### Example: unintentional namespace deletion with retained volumes
+### Example: unintentional cluster deletion with retained volumes
+
+The Streams examples have `.spec.kafka.storage.deleteClaim: false`, which is also the default value. 
+This means that the PVC are not deleted when the cluster is undeployed, but the user may have changed that.
+In this case, they lose all data by garbage collection if someone deletes the CRDs or the namespace by mistake.
+That said, if the PV reclaim policy is set to retain, there is still hope to recover them.
 
 [Deploy Streams operator and Kafka cluster](/sessions/001).
 When the cluster is ready, we change the reclaim policy at the persistent volume level.
@@ -197,7 +202,7 @@ pvc-d64b4012-e8ea-4c5d-b2b0-90730740896f   10Gi       RWO            Retain     
 pvc-e05bb77e-9bc6-431c-9d59-bf2f5d664d95   10Gi       RWO            Retain           Bound    test/data-my-cluster-kafka-2       gp2                     9m37s
 ```
 
-Now we send some data and then delete the namespace. 
+Now we send some data and then delete the entire namespace (ops!). 
 As expected, persistent volumes are still there and their status changed to "Released".
 Note that OpenShift also retains some useful information that is needed when reattaching them (capacity, claim, storage class).
 
