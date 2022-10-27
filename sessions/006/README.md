@@ -202,15 +202,16 @@ pvc-d64b4012-e8ea-4c5d-b2b0-90730740896f   10Gi       RWO            Retain     
 pvc-e05bb77e-9bc6-431c-9d59-bf2f5d664d95   10Gi       RWO            Retain           Bound    test/data-my-cluster-kafka-2       gp2                     9m37s
 ```
 
-Now we send some data and then delete the entire namespace (ops!). 
-As expected, persistent volumes are still there and their status changed to "Released".
+Now we send some data and then delete the entire namespace by mistake.
+As expected, all persistent volumes are still there after the namespace deletion, and their status changed to "Released".
 Note that OpenShift also retains some useful information that is needed when reattaching them (capacity, claim, storage class).
 
 ```sh
 $ krun_kafka /opt/kafka/bin/kafka-console-producer.sh --bootstrap-server my-cluster-kafka-bootstrap:9092 --topic my-topic
->hello
->world
->^Cpod "my-producer" deleted
+aaa
+>bbb
+>ccc
+>^Cpod test/krun-1666875504 terminated (Error)
 
 $ kubectl delete ns test
 namespace "test" deleted
@@ -225,8 +226,9 @@ pvc-c7fa720d-ad1b-4f2a-91de-40fa2b8d48ee   10Gi       RWO            Retain     
 pvc-df8f24d6-f558-43ad-87f3-a7b578d55725   10Gi       RWO            Retain           Released   test/data-my-cluster-kafka-2       gp2                     10m
 ```
 
-Before deploying a new Kafka cluster, we need to create the conditions so that the old volumes are reattached.
-We use a simple script to collect required data, remove the old `claimRef` metadata and create the new volume claims.
+We need to create the conditions so that the old volumes can be reattached by the new Streams cluster.
+We use a simple script to collect all required data from the retained PVs, remove the old `claimRef` metadata and create the new PVCs.
+Volumes are "Bound" again, and they should be reattached if we deploy a new Kafka cluster with the same configuration.
 
 ```sh
 $ kubectl create ns test
@@ -253,12 +255,7 @@ persistentvolume/pvc-d64b4012-e8ea-4c5d-b2b0-90730740896f patched
 persistentvolumeclaim/data-my-cluster-kafka-0 created
 persistentvolume/pvc-e05bb77e-9bc6-431c-9d59-bf2f5d664d95 patched
 persistentvolumeclaim/data-my-cluster-kafka-2 created
-```
 
-Volumes are "Bound" again and deploying a new Kafka cluster with the same spec we should be able to consume messages.
-Important: `KafkaTopic` resources must be created before deploying the topic operator, otherwise it will delete them along with our precious data.
-
-```sh
 $ kubectl get pv
 NAME                                       CAPACITY   ACCESS MODES   RECLAIM POLICY   STATUS   CLAIM                              STORAGECLASS   REASON   AGE
 pvc-32b4c2cf-e4f1-453b-b86d-498324a3a1fa   5Gi        RWO            Retain           Bound    test/data-my-cluster-zookeeper-1   gp2                     19m
@@ -267,17 +264,54 @@ pvc-8b3e6629-8466-4c83-a47a-c6f12d2d0f4c   5Gi        RWO            Retain     
 pvc-99e25916-b37d-4c72-aeaf-5aadcea6347a   5Gi        RWO            Retain           Bound    test/data-my-cluster-zookeeper-2   gp2                     19m
 pvc-d64b4012-e8ea-4c5d-b2b0-90730740896f   10Gi       RWO            Retain           Bound    test/data-my-cluster-kafka-0       gp2                     18m
 pvc-e05bb77e-9bc6-431c-9d59-bf2f5d664d95   10Gi       RWO            Retain           Bound    test/data-my-cluster-kafka-2       gp2                     18m
+```
 
-$ kubectl create -f sessions/001/crs/001-my-topic.yaml
+Now we can deploy the new Stream cluster.
+Note that this is actually the same Kafka cluster, because retained volumes maintain the same Kafka cluster ID.
+
+Important: before deploying the TO, we must delete its internal topics so that it can reinitialize them correctly from Kafka.
+If you don't do this, there is a high change that the TO will delete all topics with your data.
+Topic deletion happens asinchronously, so always make sure to confirm that it is actually deleted.
+
+```sh
+$ cat sessions/001/crs/000-my-cluster.yaml | yq e 'del(.spec.entityOperator.topicOperator)' | kubectl create -f -
+kafka.kafka.strimzi.io/my-cluster created
 kafkatopic.kafka.strimzi.io/my-topic created
 
-$ kubectl create -f sessions/001/crs/000-my-cluster.yaml
-kafka.kafka.strimzi.io/my-cluster created
+$ krun_kafka /opt/kafka/bin/kafka-topics.sh --bootstrap-server my-cluster-kafka-bootstrap:9092 --list
+__consumer_offsets
+__strimzi-topic-operator-kstreams-topic-store-changelog
+__strimzi_store_topic
+my-topic
 
+$ krun_kafka /opt/kafka/bin/kafka-topics.sh --bootstrap-server my-cluster-kafka-bootstrap:9092 --topic '__strimzi_store_topic' --delete \
+  && krun_kafka /opt/kafka/bin/kafka-topics.sh --bootstrap-server my-cluster-kafka-bootstrap:9092 --topic '.*topic-store-changelog' --delete
+  
+$ krun_kafka /opt/kafka/bin/kafka-topics.sh --bootstrap-server my-cluster-kafka-bootstrap:9092 --list
+__consumer_offsets
+my-topic
+```
+
+When these topics are deleted, we can safely deploy the TO and try to consume our messages from the restored cluster.
+
+```sh
+$ kubectl apply -f  sessions/001/crs/000-my-cluster.yaml
+kafka.kafka.strimzi.io/my-cluster configured
+
+$ kubectl get kt my-topic -o yaml | yq '.status'
+conditions:
+  - lastTransitionTime: "2022-10-27T14:04:46.869214Z"
+    status: "True"
+    type: Ready
+observedGeneration: 1
+topicName: my-topic
+
+# drumroll
 $ krun_kafka /opt/kafka/bin/kafka-console-consumer.sh --bootstrap-server my-cluster-kafka-bootstrap:9092 \
   --topic my-topic --from-beginning
-world
-hello
+bbb
+aaa
+ccc
 ^CProcessed a total of 3 messages
-pod "my-consumer" deleted
+pod test/krun-1666879561 terminated (Error)
 ```
