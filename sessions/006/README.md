@@ -170,12 +170,12 @@ Also note that the status is "Bound".
 ```sh
 $ kubectl get pv
 NAME                                       CAPACITY   ACCESS MODES   RECLAIM POLICY   STATUS   CLAIM                              STORAGECLASS   REASON   AGE
-pvc-32b4c2cf-e4f1-453b-b86d-498324a3a1fa   5Gi        RWO            Delete           Bound    test/data-my-cluster-zookeeper-1   gp2                     10m
-pvc-3f8fbc95-0cbe-4e08-88b1-3ed6f339749f   10Gi       RWO            Delete           Bound    test/data-my-cluster-kafka-1       gp2                     8m43s
-pvc-8b3e6629-8466-4c83-a47a-c6f12d2d0f4c   5Gi        RWO            Delete           Bound    test/data-my-cluster-zookeeper-0   gp2                     10m
-pvc-99e25916-b37d-4c72-aeaf-5aadcea6347a   5Gi        RWO            Delete           Bound    test/data-my-cluster-zookeeper-2   gp2                     10m
-pvc-d64b4012-e8ea-4c5d-b2b0-90730740896f   10Gi       RWO            Delete           Bound    test/data-my-cluster-kafka-0       gp2                     8m43s
-pvc-e05bb77e-9bc6-431c-9d59-bf2f5d664d95   10Gi       RWO            Delete           Bound    test/data-my-cluster-kafka-2       gp2                     8m43s
+pvc-162c6551-f05f-4c89-9319-637a4b3d417c   5Gi        RWO            Delete           Bound    test/data-my-cluster-zookeeper-1   gp2                     2m50s
+pvc-3c131641-dca8-4648-8cfb-ea844145a5a3   5Gi        RWO            Delete           Bound    test/data-my-cluster-zookeeper-2   gp2                     2m50s
+pvc-566ffb72-4b5e-454e-8e40-03877f0100e5   10Gi       RWO            Delete           Bound    test/data-my-cluster-kafka-2       gp2                     79s
+pvc-8587e7b0-bedd-494c-b43f-0f249cec03c7   10Gi       RWO            Delete           Bound    test/data-my-cluster-kafka-0       gp2                     79s
+pvc-c2cb8453-b953-4bb1-83b5-f4e4c76fbf91   10Gi       RWO            Delete           Bound    test/data-my-cluster-kafka-1       gp2                     79s
+pvc-f5b75d58-b621-4cf9-8c5c-2e9215b268e0   5Gi        RWO            Delete           Bound    test/data-my-cluster-zookeeper-0   gp2                     2m50s
 
 $ for pv in $(kubectl get pv | grep "my-cluster" | awk '{print $1}'); do
   kubectl patch pv $pv --type merge -p '
@@ -185,21 +185,21 @@ $ for pv in $(kubectl get pv | grep "my-cluster" | awk '{print $1}'); do
     spec:
       persistentVolumeReclaimPolicy: Retain'
 done
-persistentvolume/pvc-32b4c2cf-e4f1-453b-b86d-498324a3a1fa patched
-persistentvolume/pvc-3f8fbc95-0cbe-4e08-88b1-3ed6f339749f patched
-persistentvolume/pvc-8b3e6629-8466-4c83-a47a-c6f12d2d0f4c patched
-persistentvolume/pvc-99e25916-b37d-4c72-aeaf-5aadcea6347a patched
-persistentvolume/pvc-d64b4012-e8ea-4c5d-b2b0-90730740896f patched
-persistentvolume/pvc-e05bb77e-9bc6-431c-9d59-bf2f5d664d95 patched
+persistentvolume/pvc-162c6551-f05f-4c89-9319-637a4b3d417c patched
+persistentvolume/pvc-3c131641-dca8-4648-8cfb-ea844145a5a3 patched
+persistentvolume/pvc-566ffb72-4b5e-454e-8e40-03877f0100e5 patched
+persistentvolume/pvc-8587e7b0-bedd-494c-b43f-0f249cec03c7 patched
+persistentvolume/pvc-c2cb8453-b953-4bb1-83b5-f4e4c76fbf91 patched
+persistentvolume/pvc-f5b75d58-b621-4cf9-8c5c-2e9215b268e0 patched
 
 $ kubectl get pv
 NAME                                       CAPACITY   ACCESS MODES   RECLAIM POLICY   STATUS   CLAIM                              STORAGECLASS   REASON   AGE
-pvc-32b4c2cf-e4f1-453b-b86d-498324a3a1fa   5Gi        RWO            Retain           Bound    test/data-my-cluster-zookeeper-1   gp2                     11m
-pvc-3f8fbc95-0cbe-4e08-88b1-3ed6f339749f   10Gi       RWO            Retain           Bound    test/data-my-cluster-kafka-1       gp2                     9m37s
-pvc-8b3e6629-8466-4c83-a47a-c6f12d2d0f4c   5Gi        RWO            Retain           Bound    test/data-my-cluster-zookeeper-0   gp2                     11m
-pvc-99e25916-b37d-4c72-aeaf-5aadcea6347a   5Gi        RWO            Retain           Bound    test/data-my-cluster-zookeeper-2   gp2                     11m
-pvc-d64b4012-e8ea-4c5d-b2b0-90730740896f   10Gi       RWO            Retain           Bound    test/data-my-cluster-kafka-0       gp2                     9m37s
-pvc-e05bb77e-9bc6-431c-9d59-bf2f5d664d95   10Gi       RWO            Retain           Bound    test/data-my-cluster-kafka-2       gp2                     9m37s
+pvc-162c6551-f05f-4c89-9319-637a4b3d417c   5Gi        RWO            Retain           Bound    test/data-my-cluster-zookeeper-1   gp2                     3m22s
+pvc-3c131641-dca8-4648-8cfb-ea844145a5a3   5Gi        RWO            Retain           Bound    test/data-my-cluster-zookeeper-2   gp2                     3m22s
+pvc-566ffb72-4b5e-454e-8e40-03877f0100e5   10Gi       RWO            Retain           Bound    test/data-my-cluster-kafka-2       gp2                     111s
+pvc-8587e7b0-bedd-494c-b43f-0f249cec03c7   10Gi       RWO            Retain           Bound    test/data-my-cluster-kafka-0       gp2                     111s
+pvc-c2cb8453-b953-4bb1-83b5-f4e4c76fbf91   10Gi       RWO            Retain           Bound    test/data-my-cluster-kafka-1       gp2                     111s
+pvc-f5b75d58-b621-4cf9-8c5c-2e9215b268e0   5Gi        RWO            Retain           Bound    test/data-my-cluster-zookeeper-0   gp2                     3m22s
 ```
 
 Now we send some data and then delete the entire namespace by mistake.
@@ -211,19 +211,19 @@ $ krun_kafka /opt/kafka/bin/kafka-console-producer.sh --bootstrap-server my-clus
 aaa
 >bbb
 >ccc
->^Cpod test/krun-1666875504 terminated (Error)
+>^Cpod test/krun-1666882172 terminated (Error)
 
 $ kubectl delete ns test
 namespace "test" deleted
 
 $ kubectl get pv
 NAME                                       CAPACITY   ACCESS MODES   RECLAIM POLICY   STATUS     CLAIM                              STORAGECLASS   REASON   AGE
-pvc-15de615a-af90-4c41-be31-fa25a4388ef6   5Gi        RWO            Retain           Released   test/data-my-cluster-zookeeper-1   gp2                     12m
-pvc-3374a8b4-7b37-42ee-b996-7c7722beedbb   5Gi        RWO            Retain           Released   test/data-my-cluster-zookeeper-2   gp2                     12m
-pvc-c29a98b1-e8a8-48ac-a837-3874e280b2b9   5Gi        RWO            Retain           Released   test/data-my-cluster-zookeeper-0   gp2                     12m
-pvc-c66dd69f-4f46-4fdf-be60-fb4672ab7d0c   10Gi       RWO            Retain           Released   test/data-my-cluster-kafka-0       gp2                     10m
-pvc-c7fa720d-ad1b-4f2a-91de-40fa2b8d48ee   10Gi       RWO            Retain           Released   test/data-my-cluster-kafka-1       gp2                     10m
-pvc-df8f24d6-f558-43ad-87f3-a7b578d55725   10Gi       RWO            Retain           Released   test/data-my-cluster-kafka-2       gp2                     10m
+pvc-162c6551-f05f-4c89-9319-637a4b3d417c   5Gi        RWO            Retain           Released   test/data-my-cluster-zookeeper-1   gp2                     5m48s
+pvc-3c131641-dca8-4648-8cfb-ea844145a5a3   5Gi        RWO            Retain           Released   test/data-my-cluster-zookeeper-2   gp2                     5m48s
+pvc-566ffb72-4b5e-454e-8e40-03877f0100e5   10Gi       RWO            Retain           Released   test/data-my-cluster-kafka-2       gp2                     4m17s
+pvc-8587e7b0-bedd-494c-b43f-0f249cec03c7   10Gi       RWO            Retain           Released   test/data-my-cluster-kafka-0       gp2                     4m17s
+pvc-c2cb8453-b953-4bb1-83b5-f4e4c76fbf91   10Gi       RWO            Retain           Released   test/data-my-cluster-kafka-1       gp2                     4m17s
+pvc-f5b75d58-b621-4cf9-8c5c-2e9215b268e0   5Gi        RWO            Retain           Released   test/data-my-cluster-zookeeper-0   gp2                     5m48s
 ```
 
 We need to create the conditions so that the old volumes can be reattached by the new Streams cluster.
@@ -243,27 +243,27 @@ $ for line in $(kubectl get pv | grep "my-cluster" | awk '{print $1 "#" $2 "#" $
   sed "s#value0#$pvc#g; s#value1#$size#g; s#value2#$sc#g; s#value3#$pv#g" \
     sessions/006/pvc.yaml | kubectl create -f -
 done
-persistentvolume/pvc-32b4c2cf-e4f1-453b-b86d-498324a3a1fa patched
+persistentvolume/pvc-162c6551-f05f-4c89-9319-637a4b3d417c patched
 persistentvolumeclaim/data-my-cluster-zookeeper-1 created
-persistentvolume/pvc-3f8fbc95-0cbe-4e08-88b1-3ed6f339749f patched
-persistentvolumeclaim/data-my-cluster-kafka-1 created
-persistentvolume/pvc-8b3e6629-8466-4c83-a47a-c6f12d2d0f4c patched
-persistentvolumeclaim/data-my-cluster-zookeeper-0 created
-persistentvolume/pvc-99e25916-b37d-4c72-aeaf-5aadcea6347a patched
+persistentvolume/pvc-3c131641-dca8-4648-8cfb-ea844145a5a3 patched
 persistentvolumeclaim/data-my-cluster-zookeeper-2 created
-persistentvolume/pvc-d64b4012-e8ea-4c5d-b2b0-90730740896f patched
-persistentvolumeclaim/data-my-cluster-kafka-0 created
-persistentvolume/pvc-e05bb77e-9bc6-431c-9d59-bf2f5d664d95 patched
+persistentvolume/pvc-566ffb72-4b5e-454e-8e40-03877f0100e5 patched
 persistentvolumeclaim/data-my-cluster-kafka-2 created
+persistentvolume/pvc-8587e7b0-bedd-494c-b43f-0f249cec03c7 patched
+persistentvolumeclaim/data-my-cluster-kafka-0 created
+persistentvolume/pvc-c2cb8453-b953-4bb1-83b5-f4e4c76fbf91 patched
+persistentvolumeclaim/data-my-cluster-kafka-1 created
+persistentvolume/pvc-f5b75d58-b621-4cf9-8c5c-2e9215b268e0 patched
+persistentvolumeclaim/data-my-cluster-zookeeper-0 created
 
 $ kubectl get pv
 NAME                                       CAPACITY   ACCESS MODES   RECLAIM POLICY   STATUS   CLAIM                              STORAGECLASS   REASON   AGE
-pvc-32b4c2cf-e4f1-453b-b86d-498324a3a1fa   5Gi        RWO            Retain           Bound    test/data-my-cluster-zookeeper-1   gp2                     19m
-pvc-3f8fbc95-0cbe-4e08-88b1-3ed6f339749f   10Gi       RWO            Retain           Bound    test/data-my-cluster-kafka-1       gp2                     18m
-pvc-8b3e6629-8466-4c83-a47a-c6f12d2d0f4c   5Gi        RWO            Retain           Bound    test/data-my-cluster-zookeeper-0   gp2                     19m
-pvc-99e25916-b37d-4c72-aeaf-5aadcea6347a   5Gi        RWO            Retain           Bound    test/data-my-cluster-zookeeper-2   gp2                     19m
-pvc-d64b4012-e8ea-4c5d-b2b0-90730740896f   10Gi       RWO            Retain           Bound    test/data-my-cluster-kafka-0       gp2                     18m
-pvc-e05bb77e-9bc6-431c-9d59-bf2f5d664d95   10Gi       RWO            Retain           Bound    test/data-my-cluster-kafka-2       gp2                     18m
+pvc-162c6551-f05f-4c89-9319-637a4b3d417c   5Gi        RWO            Retain           Bound    test/data-my-cluster-zookeeper-1   gp2                     6m37s
+pvc-3c131641-dca8-4648-8cfb-ea844145a5a3   5Gi        RWO            Retain           Bound    test/data-my-cluster-zookeeper-2   gp2                     6m37s
+pvc-566ffb72-4b5e-454e-8e40-03877f0100e5   10Gi       RWO            Retain           Bound    test/data-my-cluster-kafka-2       gp2                     5m6s
+pvc-8587e7b0-bedd-494c-b43f-0f249cec03c7   10Gi       RWO            Retain           Bound    test/data-my-cluster-kafka-0       gp2                     5m6s
+pvc-c2cb8453-b953-4bb1-83b5-f4e4c76fbf91   10Gi       RWO            Retain           Bound    test/data-my-cluster-kafka-1       gp2                     5m6s
+pvc-f5b75d58-b621-4cf9-8c5c-2e9215b268e0   5Gi        RWO            Retain           Bound    test/data-my-cluster-zookeeper-0   gp2                     6m37s
 ```
 
 Now we can deploy the new Stream cluster.
@@ -274,7 +274,7 @@ If you don't do this, there is a high change that the TO will delete all topics 
 Topic deletion happens asinchronously, so always make sure to confirm that it is actually deleted.
 
 ```sh
-$ cat sessions/001/crs/000-my-cluster.yaml | yq e 'del(.spec.entityOperator.topicOperator)' | kubectl create -f -
+$ cat sessions/001/crs/000-my-cluster.yaml | yq 'del(.spec.entityOperator.topicOperator)' | kubectl create -f -
 kafka.kafka.strimzi.io/my-cluster created
 kafkatopic.kafka.strimzi.io/my-topic created
 
@@ -284,8 +284,9 @@ __strimzi-topic-operator-kstreams-topic-store-changelog
 __strimzi_store_topic
 my-topic
 
-$ krun_kafka /opt/kafka/bin/kafka-topics.sh --bootstrap-server my-cluster-kafka-bootstrap:9092 --topic '__strimzi_store_topic' --delete \
-  && krun_kafka /opt/kafka/bin/kafka-topics.sh --bootstrap-server my-cluster-kafka-bootstrap:9092 --topic '.*topic-store-changelog' --delete
+$ for topic in "__strimzi_store_topic" ".*topic-store-changelog"; do
+  krun_kafka /opt/kafka/bin/kafka-topics.sh --bootstrap-server my-cluster-kafka-bootstrap:9092 --topic $topic --delete
+done
   
 $ krun_kafka /opt/kafka/bin/kafka-topics.sh --bootstrap-server my-cluster-kafka-bootstrap:9092 --list
 __consumer_offsets
@@ -295,12 +296,12 @@ my-topic
 When these topics are deleted, we can safely deploy the TO and try to consume our messages from the restored cluster.
 
 ```sh
-$ kubectl apply -f  sessions/001/crs/000-my-cluster.yaml
+$ kubectl apply -f sessions/001/crs/000-my-cluster.yaml
 kafka.kafka.strimzi.io/my-cluster configured
 
 $ kubectl get kt my-topic -o yaml | yq '.status'
 conditions:
-  - lastTransitionTime: "2022-10-27T14:04:46.869214Z"
+  - lastTransitionTime: "2022-10-27T15:04:21.052978Z"
     status: "True"
     type: Ready
 observedGeneration: 1
@@ -313,5 +314,5 @@ bbb
 aaa
 ccc
 ^CProcessed a total of 3 messages
-pod test/krun-1666879561 terminated (Error)
+pod test/krun-1666883115 terminated (Error)
 ```

@@ -169,7 +169,7 @@ commonName=my-cluster
 [ext]
 subjectAltName=@san
 [san]
-DNS.1=$(kubectl get route my-cluster-kafka-bootstrap -o yaml | yq -e '.status.ingress.[0].routerCanonicalHostname' | sed "s#router-default#*#")
+DNS.1=$(kubectl get route my-cluster-kafka-bootstrap -o yaml | yq '.status.ingress.[0].routerCanonicalHostname' | sed "s#router-default#*#")
 "
 $ openssl genrsa -out /tmp/listener.key 2048
 $ openssl req -new -x509 -days 3650 -key /tmp/listener.key -out /tmp/bundle.crt -config <(echo "$CONFIG")
