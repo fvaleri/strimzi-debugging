@@ -77,8 +77,8 @@ authn_ocp() {
 
 echo "Configuring OpenShift"
 if authn_ocp; then
-  kubectl delete ns test target &>/dev/null
-  kubectl wait --for=delete ns/test --timeout=60s &>/dev/null
+  kubectl delete ns test target --wait &>/dev/null
+  kubectl wait --for=delete ns/test --timeout=120s &>/dev/null
   kubectl -n openshift-operators delete csv -l operators.coreos.com/amq-streams.openshift-operators &>/dev/null
   kubectl -n openshift-operators delete csv -l operators.coreos.com/service-registry-operator.openshift-operators &>/dev/null
   kubectl -n openshift-operators delete sub -l operators.coreos.com/amq-streams.openshift-operators &>/dev/null
