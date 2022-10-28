@@ -96,6 +96,9 @@ This a risky procedure and should only be applied by experts as a last resort an
 I'm only showing how to do it on broker-0, but this should be done for every broker.
 Once you are done with all partitions, you can scale up again and unpause the cluster operator.
 
+This technique is also used by the [cold-backup script](https://github.com/strimzi/strimzi-kafka-operator/tree/main/tools/cold-backup).
+This script can be useful to backup and restore dev/test clusters, but it is not production-ready.
+
 ```sh
 $ kubectl annotate k my-cluster strimzi.io/pause-reconciliation="true" \
   && kubectl scale sts my-cluster-kafka --replicas=0
@@ -269,7 +272,7 @@ pvc-f5b75d58-b621-4cf9-8c5c-2e9215b268e0   5Gi        RWO            Retain     
 Now we can deploy the new Stream cluster.
 Note that this is actually the same Kafka cluster, because retained volumes maintain the same Kafka cluster ID.
 
-Important: before deploying the TO, we must delete its internal topics so that it can reinitialize them correctly from Kafka.
+Important: before deploying the TO, we must delete its internal topics so that it can safely reinitialize from Kafka on startup.
 If you don't do this, there is a high change that the TO will delete all topics with your data.
 Topic deletion happens asinchronously, so always make sure to confirm that it is actually deleted.
 
