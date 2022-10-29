@@ -96,8 +96,7 @@ This a risky procedure and should only be applied by experts as a last resort an
 I'm only showing how to do it on broker-0, but this should be done for every broker.
 Once you are done with all partitions, you can scale up again and unpause the cluster operator.
 
-This technique is also used by the [cold-backup script](https://github.com/strimzi/strimzi-kafka-operator/tree/main/tools/cold-backup).
-This script can be useful to backup and restore dev/test clusters, but it is not production-ready.
+A similar technique can also be used to copy data to your local disk and from there to new and bigger volumes.
 
 ```sh
 $ kubectl annotate k my-cluster strimzi.io/pause-reconciliation="true" \

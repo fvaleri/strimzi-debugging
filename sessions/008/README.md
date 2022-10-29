@@ -12,7 +12,8 @@ The **exactly-once semantics** (EOS) helps to achieve all or nothing behavior wh
 
 ![](images/trans.png)
 
-The transactional producer configure a static and unique `transactional.id` (TID), that is mapped to the PID and epoch (they are used for zombie fencing). 
+The transactional producer configure a static and unique `transactional.id` (TID), that is mapped to the PID and epoch.
+Never assign a random value to the TID because you would invalidate the zombie fencing logic which prevents duplicates.
 A producer can have **only one ongoing transaction** (ordering guarantee).
 Consumers with `isolation.level=read_committed` receive committed messages only, ignoring ongoing and discarding aborted transactions (they get few additional metadata to do that).
 Transactions overhead is minimal and the biggest impact is on producers.

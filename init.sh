@@ -42,8 +42,7 @@ get_kafka
 echo "Kafka home: $KAFKA_HOME"
 
 find_cp() {
-  local id="$1"
-  local part="${2-50}"
+  local id="$1" part="${2-50}"
   if [[ -n $id && -n $part ]]; then
     echo 'public void run(String id, int part) { System.out.println(abs(id.hashCode()) % part); }
       private int abs(int n) { return (n == Integer.MIN_VALUE) ? 0 : Math.abs(n); }
