@@ -9,11 +9,12 @@ Unfortunately, the idempotent producer does not guarantee the atomicity when you
 For these reasons the idempotent producer only works for a single partition.
 Instead, a typical streaming application have multiple instances and runs read-process-write cycles involving multiple topics at the same time.
 The **exactly-once semantics** (EOS) helps to achieve all or nothing behavior when writing to multiple partitions, much like you need transactions to atomically write to more than one table in a relational database.
+This semantic in only supported inside a single Kafka cluster, so if external resources are involved, then you need to provide that guarantee (i.e. Outbox pattern, Spring TM).
 
 ![](images/trans.png)
 
-The transactional producer configure a static and unique `transactional.id` (TID), that is mapped to the PID and epoch.
-Never assign a random value to the TID because you would invalidate the zombie fencing logic which prevents duplicates.
+Transactions are are typically used for the **read-process-write** application pattern where the exactly once semantics is required.
+It is crucial to make sure that each application instance has its own static and unique `transactional.id` (TID), that the broker map to PID and epoch for zombie fencing.
 A producer can have **only one ongoing transaction** (ordering guarantee).
 Consumers with `isolation.level=read_committed` receive committed messages only, ignoring ongoing and discarding aborted transactions (they get few additional metadata to do that).
 Transactions overhead is minimal and the biggest impact is on producers.
@@ -33,22 +34,27 @@ This was fixed by forcing the producer to send the consumer group metadata along
 ### Example: word count with the transaction API
 
 [Deploy a Kafka cluster on localhost](/sessions/001).
-This time, we use a local deployment just because it's more convenient for inspecting partition content.
-Let's run the application on a different shell, send one sentence to the input topic and check the result in the output topic.
-[Look at the code](/sessions/008/kafka-trans) to see how the transaction API is used within the read-process-write process.
+This time, we use a local deployment just because it's easier for inspecting partition content.
+Let's run the application on a different shell (note that there is a new poll/read every 60 seconds).
+[Look at the code](/sessions/008/kafka-trans) to see how the low level transaction API is used.
 
 ```sh
-$ kafka-topics.sh --bootstrap-server :9092 --create --topic wc-input --partitions 1 --replication-factor 1 \
-  && kafka-topics.sh --bootstrap-server :9092 --create --topic wc-output --partitions 1 --replication-factor 1
-Created topic wc-input.
-Created topic wc-output.
-
-# run in a different shell
 $ mvn clean compile exec:java -f sessions/008/kafka-trans/pom.xml -q
+Creating a new admin client
 Creating a new transactional producer
-Creating a new transaction-aware consumer
+Creating a new transactional consumer
 READ: Waiting for new user sentence
+PROCESS: Computing word counts for wc-input-0
+WRITE: Sending offsets and counts atomically
+Topic wc-output created
+READ: Waiting for new user sentence
+READ: Waiting for new user sentence
+READ: Waiting for new user sentence
+```
 
+Then, send one sentence to the input topic and check the result from the output topic.
+
+```sh
 $ kafka-console-producer.sh --bootstrap-server :9092 --topic wc-input
 >a long time ago in a galaxy far far away
 >^C
