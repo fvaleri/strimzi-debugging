@@ -5,31 +5,29 @@ This is achieved through the concept of **preferred replica**, which is the firs
 The preferred replica is designated as the partition leader and assigned to a broker so that we have balanced leader distribution.
 A background thread moves the leader role to the preferred replica when it is in sync.
 
-Sometimes, this may not be enough, and we may end up with **uneven distribution of load across brokers** as a consequence of some broker failures, the addition of new brokers or simply because some partitions are used more than others.
-The `kafka.server:type=KafkaRequestHandlerPool,name=RequestHandlerAvgIdlePercent` broker metric is a good overall load metric for Kafka scaling and rebalance decisions.
-A good rule of thumb is when it hits 20% (i.e. the request handler threads are busy 80% of the time), then it's time to plan your cluster expansion, at 10% you need to scale it now.
+This may not be enough, and we may end up with **uneven distribution of load across brokers** as a consequence of broker failures, addition of new brokers or simply because some partitions are used more than others.
+The `kafka.server:type=KafkaRequestHandlerPool,name=RequestHandlerAvgIdlePercent` metric is a good overall load metric for Kafka scaling and rebalance decisions.
+A good rule of thumb is when it hits 20% (i.e. the request handler threads are busy 80% of the time), then it's time to plan your cluster expansion, at 10% you need to scale or rebalance now.
 
-**Rebalancing** means moving partitions between brokers (inter brokers), between disks on the same broker (intra broker), or simply change leaders in order to restore the balance.
-Usually we need some combination of partition movements and leadership changes.
-When using `kafka-reassign-partitions.sh` for rebalancing, the task of figuring out which replica changes are needed and possible is left to the user.
-This requires some calculations that may be hard and time-consuming, especially on big clusters containing lots of partitions.
-Automating this complex task is the reason why [Cruise Control](https://github.com/linkedin/cruise-control) (CC) was created.
+**Rebalancing** means moving partitions between brokers (inter brokers), between broker disks (intra broker), or simply change partition leaders to restore the cluster balance.
+We can apply partition and leadership movements using the `kafka-reassign-partitions.sh` tool, but the user has to determine the **rebalance proposal**, which can be tricky and time-consuming.
+This is why [Cruise Control](https://github.com/linkedin/cruise-control) (CC) was created.
 
 ![](images/cc.png)
 
-A replica level **workload model** is periodically updated from the resource utilization metrics (CPU, disk, bytes-in, bytes-out).
-The analyzer component uses this model to create a valid **rebalance proposal** when possible (one that must satisfy all configured hard goals, and possibly soft goals too).
-The executor ensures that there is only one active rebalancing at a time and enables graceful cancellation applying changes in batches.
+A replica workload model is periodically updated by the **workload monitor** using the resource utilization metrics from broker agents (CPU, disk, bytes-in, bytes-out).
+The **analyzer** uses this model to create a valid rebalance proposal when possible (one that must satisfy all configured hard goals, and possibly soft goals).
+The **executor** ensures that there is only one active rebalancing at any given time and applies changes in batches, enabling graceful cancellation.
 If two equivalent changes are possible, the one with the lower cost is selected (leadership change > replica move > replica swap).
 
 As of today, Streams still requires the manual approval of the auto-generated rebalance proposal, but we are working to enable full automation.
 In order to have accurate rebalance proposals when using CPU goals, we can set CPU requests equal to CPU limits in `.spec.kafka.resources`.
-That way, all CPU resources are reserved upfront (Guaranteed QoS) and CC can properly evaluate CPU utilization when preparing the rebalance proposals.
+That way, all CPU resources are reserved upfront (Guaranteed QoS) and CC can properly evaluate CPU utilization when generating the rebalance proposals.
 
 ### Example: scaling up the cluster
 
 [Deploy Streams operator and Kafka cluster](/sessions/001).
-When the cluster is ready, we want to scale it up and move some replicas to the new broker in order to reduce the load on the other brokers.
+When the cluster is ready, we want to scale it up and put some load on the new broker, which otherwise will sit idle waiting for new topic creations.
 Thanks to the CO, we can scale the cluster up by simply raising the number of broker replicas in the Kafka CR.
 
 ```sh
@@ -47,11 +45,10 @@ my-cluster-kafka-2   1/1     Running   0          5m4s
 my-cluster-kafka-3   1/1     Running   0          2m30s
 ```
 
-By default, the new broker will sit there idle, until new partitions are crated and assigned to it.
 One option to put some load on the new broker is to use the `kafka-reassign-partitions.sh` tool to move existing data.
 We only have one topic here, but you may have hundreds of them, where some of them are busier than others.
-You would need a custom procedure to figure out which replica changes can be done in order to redistribute the load evenly, also considering available disk space and preferred replicas.
-The result of this procedure would be a `reassign.json` file describing the desired partition state for each topic, that we can directly pass to the tool.
+You would need a custom procedure to figure out which replica changes can be done in order to improve the balance, also considering available disk space and preferred replicas.
+The result of this procedure would be a `reassign.json` file describing the desired partition state for each topic that we can pass to the tool.
 
 ```sh
 $ krun_kafka
@@ -116,35 +113,36 @@ exit
 
 ### Example: scaling up the cluster with CC
 
-Let's repeat the cluster scale up example, but this time using Cruise Control to see how it helps.
+Let's repeat the cluster scale up example, but this time using Cruise Control to see how it helps with the planning phase.
 CC can figure out by itself the required changes, given a set of high level goals (sensible default are provided).
 
-[Deploy Streams operator and Kafka cluster](/sessions/001). 
-When the cluster is ready, we verify how the topic partitions are distributed among the available brokers.
+[Deploy Streams operator and Kafka cluster](/sessions/001).
+When the cluster is ready, we verify how the topic partitions are distributed between the available brokers.
+Then we add one broker, deploy CC by adding the `.spec.cruiseControl` section to the Kafka CR and create a rebalance CR with `mode: add-brokers`.
 
 ```sh
-$ kubectl get po -l app.kubernetes.io/name=kafka
-NAME                 READY   STATUS    RESTARTS   AGE
-my-cluster-kafka-0   1/1     Running   0          9m10s
-my-cluster-kafka-1   1/1     Running   0          7m47s
-my-cluster-kafka-2   1/1     Running   0          6m24s
-
 $ krun_kafka /opt/kafka/bin/kafka-topics.sh --bootstrap-server my-cluster-kafka-bootstrap:9092 --topic my-topic --describe
 Topic: my-topic	TopicId: n1QKre80QFmnEKWIXfrLDw	PartitionCount: 3	ReplicationFactor: 3	Configs: min.insync.replicas=2,message.format.version=3.0-IV1,retention.bytes=1073741824
 	Topic: my-topic	Partition: 0	Leader: 2	Replicas: 2,1,0	Isr: 2,1,0
 	Topic: my-topic	Partition: 1	Leader: 1	Replicas: 1,0,2	Isr: 1,0,2
 	Topic: my-topic	Partition: 2	Leader: 0	Replicas: 0,2,1	Isr: 0,2,1
-```
-
-Now we add one broker, deploy CC by adding the `.spec.cruiseControl` section to the Kafka CR and create a rebalance CR with `mode: add-brokers`.
-The first rebalance proposal takes some time because the workload model needs to be created from scratch, then it will be automatically refreshed every 15 minutes.
-Before moving on, wait for the proposal to become ready.
-
-```sh
+	
 $ kubectl apply -f sessions/007/crs
 kafka.kafka.strimzi.io/my-cluster configured
 kafkarebalance.kafka.strimzi.io/my-rebalance created
 
+$ kubectl get po -l app.kubernetes.io/name=kafka
+NAME                 READY   STATUS    RESTARTS   AGE
+my-cluster-kafka-0   1/1     Running   0          3m41s
+my-cluster-kafka-1   1/1     Running   0          6m17s
+my-cluster-kafka-2   1/1     Running   0          5m4s
+my-cluster-kafka-3   1/1     Running   0          2m30s
+```
+
+The first rebalance proposal generation takes some time because the workload model is created from scratch, then it will be automatically refreshed every 15 minutes.
+Before moving on, wait for the proposal to become ready.
+
+```sh
 $ kubectl get kr add-brokers -o wide -w
 NAME          CLUSTER      PENDINGPROPOSAL   PROPOSALREADY   REBALANCING   READY   NOTREADY
 add-brokers   my-cluster   True                                                    
@@ -176,7 +174,7 @@ sessionId: f0605d40-37be-43b9-be1f-83167633f37c
 ```
 
 When the proposal is ready, we can approve it by using another annotation and wait for CC to move partitions ande replica roles around.
-When the rebalance is ready, we see that we obtained the same result as the previous example, without the need to do any complex planning activity.
+When the rebalance is ready, we can look at the result and see if the new broker has picked some of the existing partitions.
 
 ```sh
 $ kubectl annotate kr add-brokers strimzi.io/rebalance=approve
