@@ -1,17 +1,18 @@
 #!/usr/bin/env bash
-# source init.sh to initialize the env
-
-KAFKA_VERSION="3.2.3"
-STRIMZI_IMAGE="registry.redhat.io/amq7/amq-streams-kafka-32-rhel8:2.2.0"
-
-SCRIPT_DIR="" && pushd "$(dirname "$(readlink -f "${BASH_SOURCE[0]}")")" >/dev/null \
-  && { SCRIPT_DIR=$PWD; popd >/dev/null || exit; }
 echo "Checking prerequisites"
 for x in curl oc kubectl openssl keytool unzip yq jq git java javac jshell mvn; do
   if ! command -v "$x" &>/dev/null; then
     echo "Missing required utility: $x" && return 1
   fi
 done
+
+# shared state
+INIT_HOME="" && pushd "$(dirname "$(readlink -f "${BASH_SOURCE[0]}")")" >/dev/null \
+  && { INIT_HOME=$PWD; popd >/dev/null || exit; }
+INIT_KAFKA_VERSION="3.2.3"
+INIT_STRIMZI_IMAGE="registry.redhat.io/amq7/amq-streams-kafka-32-rhel8:2.2.0"
+INIT_OPERATOR_NS="openshift-operators"
+INIT_TEST_NS="test"
 
 add_path() {
   if [[ -d "$1" && ":$PATH:" != *":$1:"* ]]; then
@@ -23,7 +24,7 @@ get_kafka() {
   local home && home="$(find /tmp -name 'kafka.*' -printf '%T@ %p\n' 2>/dev/null |sort -n |tail -n1 |awk '{print $2}')"
   if [[ -n $home ]]; then
     local version && version="$("$home"/bin/kafka-topics.sh --version 2>/dev/null |awk '{print $1}')"
-    if [[ $version == "$KAFKA_VERSION" ]]; then
+    if [[ $version == "$INIT_KAFKA_VERSION" ]]; then
       echo "Getting Kafka from /tmp"
       KAFKA_HOME="$home" && export KAFKA_HOME && add_path "$KAFKA_HOME/bin"
       return
@@ -31,7 +32,7 @@ get_kafka() {
   fi
   echo "Getting Kafka from ASF"
   KAFKA_HOME="$(mktemp -d -t kafka.XXXXXXX)" && export KAFKA_HOME && add_path "$KAFKA_HOME/bin"
-  curl -sLk "https://archive.apache.org/dist/kafka/$KAFKA_VERSION/kafka_2.13-$KAFKA_VERSION.tgz" \
+  curl -sLk "https://archive.apache.org/dist/kafka/$INIT_KAFKA_VERSION/kafka_2.13-$INIT_KAFKA_VERSION.tgz" \
     | tar xz -C "$KAFKA_HOME" --strip-components 1
 }
 
@@ -76,18 +77,18 @@ authn_ocp() {
 
 echo "Configuring OpenShift"
 if authn_ocp; then
-  kubectl delete ns test target --wait &>/dev/null
-  kubectl wait --for=delete ns/test --timeout=120s &>/dev/null
-  kubectl -n openshift-operators delete csv -l operators.coreos.com/amq-streams.openshift-operators &>/dev/null
-  kubectl -n openshift-operators delete csv -l operators.coreos.com/service-registry-operator.openshift-operators &>/dev/null
-  kubectl -n openshift-operators delete sub -l operators.coreos.com/amq-streams.openshift-operators &>/dev/null
-  kubectl -n openshift-operators delete sub -l operators.coreos.com/service-registry-operator.openshift-operators &>/dev/null
-  kubectl -n openshift-operators delete pv -l app=retain-patch &>/dev/null
+  kubectl delete ns "$INIT_TEST_NS" target --wait &>/dev/null
+  kubectl wait --for=delete ns/"$INIT_TEST_NS" --timeout=120s &>/dev/null
+  kubectl -n "$INIT_OPERATOR_NS" delete csv -l "operators.coreos.com/amq-streams.$INIT_OPERATOR_NS" &>/dev/null
+  kubectl -n "$INIT_OPERATOR_NS" delete csv -l "operators.coreos.com/service-registry-operator.$INIT_OPERATOR_NS" &>/dev/null
+  kubectl -n "$INIT_OPERATOR_NS" delete sub -l "operators.coreos.com/amq-streams.$INIT_OPERATOR_NS" &>/dev/null
+  kubectl -n "$INIT_OPERATOR_NS" delete sub -l "operators.coreos.com/service-registry-operator.$INIT_OPERATOR_NS" &>/dev/null
+  kubectl -n "$INIT_OPERATOR_NS" delete pv -l "app=retain-patch" &>/dev/null
 
-  kubectl create ns test
-  kubectl config set-context --current --namespace=test &>/dev/null
-  kubectl create -f "$SCRIPT_DIR"/sub.yaml
+  kubectl create ns "$INIT_TEST_NS"
+  kubectl config set-context --current --namespace="$INIT_TEST_NS" &>/dev/null
+  kubectl create -f "$INIT_HOME"/sub.yaml
 
-  krun_kafka() { kubectl run krun-"$(date +%s)" -itq --rm --restart="Never" --image="$STRIMZI_IMAGE" -- "$@"; }
+  krun_kafka() { kubectl run krun-"$(date +%s)" -itq --rm --restart="Never" --image="$INIT_STRIMZI_IMAGE" -- "$@"; }
   echo "READY!"
 fi
