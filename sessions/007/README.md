@@ -1,23 +1,23 @@
 ## Cruise Control and unbalanced clusters
 
 By default, Kafka try to distribute the load evenly across brokers.
-This is achieved through the concept of **preferred replica**, which is the first replica created for a new topic.
+This is achieved through the concept of preferred replica, which is the first replica created for a new topic.
 The preferred replica is designated as the partition leader and assigned to a broker so that we have balanced leader distribution.
 A background thread moves the leader role to the preferred replica when it is in sync.
 
-This may not be enough, and we may end up with **uneven distribution of load across brokers** as a consequence of broker failures, addition of new brokers or simply because some partitions are used more than others.
+This may not be enough, and we may end up with uneven distribution of load across brokers as a consequence of broker failures, addition of new brokers or simply because some partitions are used more than others.
 The `kafka.server:type=KafkaRequestHandlerPool,name=RequestHandlerAvgIdlePercent` metric is a good overall load metric for Kafka scaling and rebalance decisions.
 A good rule of thumb is when it hits 20% (i.e. the request handler threads are busy 80% of the time), then it's time to plan your cluster expansion, at 10% you need to scale or rebalance now.
 
-**Rebalancing** means moving partitions between brokers (inter brokers), between broker disks (intra broker), or simply change partition leaders to restore the cluster balance.
-We can apply partition and leadership movements using the `kafka-reassign-partitions.sh` tool, but the user has to determine the **rebalance proposal**, which can be tricky and time-consuming.
+Rebalancing means moving partitions between brokers (inter brokers), between broker disks (intra broker), or simply change partition leaders to restore the cluster balance.
+We can apply partition and leadership movements using the `kafka-reassign-partitions.sh` tool, but the user has to determine the rebalance proposal, which can be tricky and time-consuming.
 This is why [Cruise Control](https://github.com/linkedin/cruise-control) (CC) was created.
 
 ![](images/cc.png)
 
-A replica workload model is periodically updated by the **workload monitor** using the resource utilization metrics from broker agents (CPU, disk, bytes-in, bytes-out).
-The **analyzer** uses this model to create a valid rebalance proposal when possible (one that must satisfy all configured hard goals, and possibly soft goals).
-The **executor** ensures that there is only one active rebalancing at any given time and applies changes in batches, enabling graceful cancellation.
+A replica workload model is periodically updated by the workload monitor using the resource utilization metrics from broker agents (CPU, disk, bytes-in, bytes-out).
+The analyzer uses this model to create a valid rebalance proposal when possible (one that must satisfy all configured hard goals, and possibly soft goals).
+The executor ensures that there is only one active rebalancing at any given time and applies changes in batches, enabling graceful cancellation.
 If two equivalent changes are possible, the one with the lower cost is selected (leadership change > replica move > replica swap).
 
 As of today, Streams still requires the manual approval of the auto-generated rebalance proposal, but we are working to enable full automation.

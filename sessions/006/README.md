@@ -1,14 +1,14 @@
 ## Storage requirements and volume recovery
 
-Kafka requires **low latency storage** to store both broker commit logs and ZooKeeper data.
+Kafka requires low latency storage to store both broker commit logs and ZooKeeper data.
 File storage like NFS does not work well (silly rename problem).
-Both Kafka and Zookeeper have **built-in data replication**, so they do not need replicated storage to ensure data availability, which would only add network overhead.
+Both Kafka and Zookeeper have built-in data replication, so they do not need replicated storage to ensure data availability, which would only add network overhead.
 Streams can also work with network attached block storage, such as iSCSI or Fibre Channel, and with most block storage services such as Amazon EBS.
 You can also use JBOD (just a bunch of disks), that gives good performance when using multiple disk in parallel.
 The recommended file system is XFS.
 An easy optimization is to disable the last access time file attribute (noatime).
 
-Ideally, the **retention policy** should be set properly when provisioning a new cluster or topic, based on requirements and the expected throughput (MB/s).
+Ideally, the retention policy should be set properly when provisioning a new cluster or topic, based on requirements and the expected throughput (MB/s).
 A non active segment can be deleted based on `segment.ms` or `segment.bytes`.
 Even if one record is not yet eligible for deletion based on `retention.ms` or `retention.bytes`, the broker will keep the entire segment file.
 Deletion timing also depends on the cluster load and how many `background.threads` are available for normal topics, and `log.cleaner.threads` for compacted topics.
@@ -23,8 +23,8 @@ storage_capacity (MB) = retention_sec * topic_write_rate (MB/s) * replication_fa
 storage_capacity (MB) = retention_mb * replication_factor * part_number
 ```
 
-In OpenShift, a **persistent volume** (PV) lives outside any namespace, and it is claimed by using a **persistent volume claim** (PVC).
-You can specify the **storage class** (SC) used for provisioning directly in the Kafka CR.
+In OpenShift, a persistent volume (PV) lives outside any namespace, and it is claimed by using a persistent volume claim (PVC).
+You can specify the storage class (SC) used for provisioning directly in the Kafka CR.
 Only volumes created and managed by a SC with `allowVolumeExpansion: true` can be increased, but not decreased.
 When using JBOD, you can also remove a volume, but data needs to be migrated to other volumes upfront.
 Volumes with either `persistentVolumeReclaimPolicy: Retain`, or using a storage class with `reclaimPolicy: Retain` are retained when the Kafka cluster is deleted.

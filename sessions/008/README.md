@@ -1,27 +1,27 @@
 ## Transactions and how to rollback
 
-Kafka provides **at-least-once semantics** by default and duplicates can arise due to either producer retries or consumer restarts after failure.
-The **idempotent producer** configuration (now default) solves the duplicates problem by creating a producer session identified by a producer id (PID) and an epoch.
+Kafka provides at-least-once semantics by default and duplicates can arise due to either producer retries or consumer restarts after failure.
+The idempotent producer configuration (now default) solves the duplicates problem by creating a producer session identified by a producer id (PID) and an epoch.
 A sequence number is assigned when the record batch is first added to a produce request and it is never changed, even if the batch is resent.
 That way, the broker hosting the partition leader can identify and filter out duplicates.
 
 Unfortunately, the idempotent producer does not guarantee atomicity when you need to write to multiple partitions as a single unit of work.
 Duplicates can also arise if you have two or more producer instances.
-In all these cases, the **exactly-once semantics** (EOS) allows the desired all or nothing behavior when writing to distributed partitions.
+In all these cases, the exactly-once semantics (EOS) allows the desired all or nothing behavior when writing to distributed partitions.
 The EOS in only supported inside a single Kafka cluster, excluding external systems (see the Outbox pattern and Spring TM).
 
 ![](images/trans.png)
 
-Transactions are are typically used for **read-process-write** streaming applications where the EOS is required.
+Transactions are are typically used for read-process-write streaming applications where the EOS is required.
 It is crucial that each application instance has its own static and unique `transactional.id` (TID), which is mapped to PID and epoch for zombie fencing.
-A producer can have **only one ongoing transaction** (ordering guarantee).
+A producer can have only one ongoing transaction (ordering guarantee).
 Consumers with `isolation.level=read_committed` only receive committed messages, ignoring ongoing and discarding aborted transactions.
 The EOS client overhead is minimal and you can tune tuning the `commit.interval.ms` to meet the required latency.
 Enabling EOS with the Streams API is much easier than using the low level transaction API, as we just need to set `processing.guarantee=exactly_once_v2`.
 
-The transaction state is stored in a specific `__transaction_state` partition, whose leader is a broker called the **transaction coordinator**. 
+The transaction state is stored in a specific `__transaction_state` partition, whose leader is a broker called the transaction coordinator. 
 Each partition also contains `.snapshot` logs that helps in rebuilding the producers state in case of broker crash or restart.
-The offset of the first still-open transaction is called the **last stable offset** (LSO <= HW).
+The offset of the first still-open transaction is called the last stable offset (LSO <= HW).
 The transaction coordinator automatically aborts any ongoing transaction that is not committed or aborted within `transaction.timeout.ms`.
 
 Before Kafka 2.5.0 the TID had to be a static encoding of the input partition (i.e. `my-app.my-group.my-topic.0`), which also means one producer per partiton.

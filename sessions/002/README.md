@@ -1,28 +1,28 @@
 ## TLS authentication and custom certificates
 
-The TLS protocol provides **communications security over a computer network**.
+The TLS protocol provides communications security over a computer network.
 Encryption without proper identification is insecure.
 Hostname verification through common name (CN) or subject alternative name (SAN) protects against man in the middle attacks, so it should never be disabled in production.
 
-A **certificate** contains the public key along with the ownership data and expiration date.
-A **self-signed** certificate (Issuer == Subject) is secure enough, but only if it is trusted upfront by the application.
-It is also possible to create a **wildcard** certificate (e.g. `commonName=*.example.com`), that can be used by all application running in a specific subdomain (e.g. an OpenShift cluster).
+A certificate contains the public key along with the ownership data and expiration date.
+A self-signed certificate (Issuer == Subject) is secure enough, but only if it is trusted upfront by the application.
+It is also possible to create a wildcard certificate (e.g. `commonName=*.example.com`), that can be used by all application running in a specific subdomain (e.g. an OpenShift cluster).
 Cipher suites contain algorithms for key exchange, encryption and authentication.
 
-A **public key infrastructure** (PKI) is an arrangement that binds public keys with respective identities (e.g. organizations, people, applications).
-The binding is established through a process of registration and issuance of certificates by a **certificate authority** (CA).
+A public key infrastructure (PKI) is an arrangement that binds public keys with respective identities (e.g. organizations, people, applications).
+The binding is established through a process of registration and issuance of certificates by a certificate authority (CA).
 
 ![](images/connections.png)
 
-Within a Kafka cluster, in addition to the **client-server** communication, you also need to protect the **inter-cluster** communication and renew certificates when they expire.
+Within a Kafka cluster, in addition to the client-server communication, you also need to protect the inter-cluster communication and renew certificates when they expire.
 All of this work is done by the Streams CO, which is a great example of how the operator simplifies cluster management.
 Two self-signed CAs are automatically generated and used to sign all cluster (cluster CA) and user (clients CA) certificates.
 
-The **server name indication** (SNI) extension allows a client to indicate which hostname it is trying to connect to at the start of the TLS handshake.
+The server name indication (SNI) extension allows a client to indicate which hostname it is trying to connect to at the start of the TLS handshake.
 The server can present multiple certificates on the same IP address and port number.
 For example, it is used by OpenShift to route external connections to the right pod when having passthrough routes, which also allows to tunnel the Kafka TCP protocol through the HTTP reverse proxy.
 
-Kafka clients don't need to trust TLS certificates when they are signed by a **well-known CA**, which is already included in the system truststore (e.g. `$JAVA_HOME/jre/lib/security/cacerts`).
+Kafka clients don't need to trust TLS certificates when they are signed by a well-known CA, which is already included in the system truststore (e.g. `$JAVA_HOME/jre/lib/security/cacerts`).
 When enabling TLS mutual authentication (mTLS), the server should also support the certificate CN mapping to the user identity.
 Before the encryption starts, the peers agree to the protocol version and cipher suite to be used, exchange certificates and share encryption keys (connection overhead).
 Almost all the problems occur within this initial handshake.
