@@ -1,4 +1,4 @@
-## Kafka cluster deployments and tools
+## Kafka introduction and deployments
 
 [Apache Kafka](https://kafka.apache.org) is an **Open Source distributed streaming platform** that lets you read, write, store, and process messages across many machines.
 [Red Hat AMQ Streams](https://catalog.redhat.com/software/operators/detail/5ef20efd46bc301a95a1e9a4) includes Kafka and a set of operators from the [CNCF Strimzi](https://strimzi.io) project.
@@ -59,17 +59,10 @@ Use the `init.sh` script to initialize the environment passing your OpenShift pa
 When it returns, you should have two processes running on your system, one is Kafka and the other is ZooKeeper.
 
 ```sh
-$ source init.sh
+$ source init.sh --skip-ocp
 Checking prerequisites
 Getting Kafka from ASF
 Kafka home: /tmp/kafka.9bAqs71
-Configuring OpenShift
-API URL: https://api.openshift.example.com:6443
-Username: my-user
-Password: 
-namespace/test created
-subscription.operators.coreos.com/my-streams created
-subscription.operators.coreos.com/my-registry created
 READY!
 
 $ zookeeper-server-start.sh -daemon $KAFKA_HOME/config/zookeeper.properties \
@@ -190,6 +183,9 @@ Checking prerequisites
 Getting Kafka from /tmp
 Kafka home: /tmp/kafka.9bAqs71
 Configuring OpenShift
+API URL: https://api.openshift.example.com:6443
+Username: my-user
+Password: 
 namespace/test created
 subscription.operators.coreos.com/my-streams created
 subscription.operators.coreos.com/my-registry created

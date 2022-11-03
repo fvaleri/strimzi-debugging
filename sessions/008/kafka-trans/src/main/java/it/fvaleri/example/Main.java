@@ -47,10 +47,12 @@ public class Main {
         } else {
             transactionalId = "kafka-trans-0";
         }
-        adminClient = createKafkaAdminClient();
     }
 
     public static void main(String[] args) {
+        System.out.printf("Starting application instance with TID %s%n", transactionalId);
+        adminClient = createKafkaAdminClient();
+        createTopic(INPUT_TOPIC);
         try (var producer = createKafkaProducer();
              var consumer = createKafkaConsumer()) {
             // transaction APIs are all blocking with a max.block.ms timeout
@@ -113,14 +115,14 @@ public class Main {
     }
 
     private static AdminClient createKafkaAdminClient() {
-        System.out.println("Creating a new admin client");
+        System.out.println("Creating admin client");
         Properties props = new Properties();
         props.put(AdminClientConfig.BOOTSTRAP_SERVERS_CONFIG, bootstrapServers);
         return KafkaAdminClient.create(props);
     }
 
     private static KafkaProducer<String, String> createKafkaProducer() {
-        System.out.println("Creating a new transactional producer");
+        System.out.println("Creating transactional producer");
         Properties props = new Properties();
         props.put(ProducerConfig.BOOTSTRAP_SERVERS_CONFIG, bootstrapServers);
         props.put(ProducerConfig.KEY_SERIALIZER_CLASS_CONFIG, StringSerializer.class.getName());
@@ -134,7 +136,7 @@ public class Main {
     }
 
     private static KafkaConsumer<String, String> createKafkaConsumer() {
-        System.out.println("Creating a new transactional consumer");
+        System.out.println("Creating transactional consumer");
         Properties props = new Properties();
         props.put(ConsumerConfig.BOOTSTRAP_SERVERS_CONFIG, bootstrapServers);
         props.put(ConsumerConfig.KEY_DESERIALIZER_CLASS_CONFIG, StringDeserializer.class.getName());

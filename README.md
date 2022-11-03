@@ -8,11 +8,11 @@ Contributions are welcomed.
 
 ## Outline
 
-1. [Kafka cluster deployments and tools](/sessions/001)
+1. [Kafka introduction and deployments](/sessions/001)
 2. [TLS authentication and custom certificates](/sessions/002)
 3. [Schema registry and why it is useful](/sessions/003)
 4. [Kafka Connect and change data capture](/sessions/004)
 5. [Mirror Maker and disaster recovery](/sessions/005)
 6. [Storage requirements and volume recovery](/sessions/006)
 7. [Cruise Control and unbalanced clusters](/sessions/007)
-8. [Transactions and how to rollback them](/sessions/008)
+8. [Transactions and how to rollback](/sessions/008)

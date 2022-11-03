@@ -75,20 +75,24 @@ authn_ocp() {
   fi
 }
 
-echo "Configuring OpenShift"
-if authn_ocp; then
-  kubectl delete ns "$INIT_TEST_NS" target --wait &>/dev/null
-  kubectl wait --for=delete ns/"$INIT_TEST_NS" --timeout=120s &>/dev/null
-  kubectl -n "$INIT_OPERATOR_NS" delete csv -l "operators.coreos.com/amq-streams.$INIT_OPERATOR_NS" &>/dev/null
-  kubectl -n "$INIT_OPERATOR_NS" delete csv -l "operators.coreos.com/service-registry-operator.$INIT_OPERATOR_NS" &>/dev/null
-  kubectl -n "$INIT_OPERATOR_NS" delete sub -l "operators.coreos.com/amq-streams.$INIT_OPERATOR_NS" &>/dev/null
-  kubectl -n "$INIT_OPERATOR_NS" delete sub -l "operators.coreos.com/service-registry-operator.$INIT_OPERATOR_NS" &>/dev/null
-  kubectl -n "$INIT_OPERATOR_NS" delete pv -l "app=retain-patch" &>/dev/null
+[[ $1 = "--skip-ocp" ]] && SKIP_OCP=true || SKIP_OCP=false
+if [[ $SKIP_OCP != true ]]; then
+  echo "Configuring OpenShift"
+  if authn_ocp; then
+    kubectl delete ns "$INIT_TEST_NS" target --wait &>/dev/null
+    kubectl wait --for=delete ns/"$INIT_TEST_NS" --timeout=120s &>/dev/null
+    kubectl -n "$INIT_OPERATOR_NS" delete csv -l "operators.coreos.com/amq-streams.$INIT_OPERATOR_NS" &>/dev/null
+    kubectl -n "$INIT_OPERATOR_NS" delete csv -l "operators.coreos.com/service-registry-operator.$INIT_OPERATOR_NS" &>/dev/null
+    kubectl -n "$INIT_OPERATOR_NS" delete sub -l "operators.coreos.com/amq-streams.$INIT_OPERATOR_NS" &>/dev/null
+    kubectl -n "$INIT_OPERATOR_NS" delete sub -l "operators.coreos.com/service-registry-operator.$INIT_OPERATOR_NS" &>/dev/null
+    kubectl -n "$INIT_OPERATOR_NS" delete pv -l "app=retain-patch" &>/dev/null
 
-  kubectl create ns "$INIT_TEST_NS"
-  kubectl config set-context --current --namespace="$INIT_TEST_NS" &>/dev/null
-  kubectl create -f "$INIT_HOME"/sub.yaml
+    kubectl create ns "$INIT_TEST_NS"
+    kubectl config set-context --current --namespace="$INIT_TEST_NS" &>/dev/null
+    kubectl create -f "$INIT_HOME"/sub.yaml
 
-  krun_kafka() { kubectl run krun-"$(date +%s)" -itq --rm --restart="Never" --image="$INIT_STRIMZI_IMAGE" -- "$@"; }
-  echo "READY!"
+    krun_kafka() { kubectl run krun-"$(date +%s)" -itq --rm --restart="Never" --image="$INIT_STRIMZI_IMAGE" -- "$@"; }
+  fi
 fi
+
+echo "READY!"
