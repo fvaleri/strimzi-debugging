@@ -8,11 +8,11 @@ That way, the broker hosting the partition leader can identify and filter out du
 Unfortunately, the idempotent producer does not guarantee atomicity when you need to write to multiple partitions as a single unit of work.
 Duplicates can also arise if you have two or more producer instances.
 In all these cases, the exactly-once semantics (EOS) allows the desired all or nothing behavior when writing to distributed partitions.
+Transactions are are typically used for read-process-write streaming applications where the EOS is required.
 The EOS in only supported inside a single Kafka cluster, excluding external systems (see the Outbox pattern and Spring TM).
 
 ![](images/trans.png)
 
-Transactions are are typically used for read-process-write streaming applications where the EOS is required.
 It is crucial that each application instance has its own static and unique `transactional.id` (TID), which is mapped to PID and epoch for zombie fencing.
 A producer can have only one ongoing transaction (ordering guarantee).
 Consumers with `isolation.level=read_committed` only receive committed messages, ignoring ongoing and discarding aborted transactions.
@@ -71,7 +71,7 @@ long	1
 ```
 
 Now we can stop the application (Ctrl+C) and take a look at partitions content.
-Our output topic has one partition, but what are the `__consumer_offsets` and `__transaction_state`coordinating partitions?
+Our output topic has one partition, but what are the `__consumer_offsets` and `__transaction_state` coordinating partitions?
 We can use the same function that we saw in the first session passing the `group.id` and `transactional.id`.
 
 ```sh
