@@ -16,7 +16,7 @@ The EOS in only supported inside a single Kafka cluster, excluding external syst
 It is crucial that each application instance has its own static and unique `transactional.id` (TID), which is mapped to PID and epoch for zombie fencing.
 A producer can have only one ongoing transaction (ordering guarantee).
 Consumers with `isolation.level=read_committed` only receive committed messages, ignoring ongoing and discarding aborted transactions.
-The EOS client overhead is minimal and you can tune tuning the `commit.interval.ms` to meet the required latency.
+The EOS client overhead is minimal and you can tune the `commit.interval.ms` to meet the required latency.
 Enabling EOS with the Streams API is much easier than using the low level transaction API, as we just need to set `processing.guarantee=exactly_once_v2`.
 
 The transaction state is stored in a specific `__transaction_state` partition, whose leader is a broker called the transaction coordinator. 
