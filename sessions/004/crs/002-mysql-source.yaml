@@ -12,9 +12,9 @@ spec:
     # the server.id must be unique for each server or replication client
     database.server.id: "222222"
     # never change server.name after connector startup
-    database.server.name: "my-mysql"
+    database.server.name: "my-connect-mysql"
     database.dbname: "testdb"
-    database.hostname: "my-mysql-svc"
+    database.hostname: "my-connect-mysql-svc"
     database.port: 3306
     database.user: "debezium"
     database.password: "changeit"

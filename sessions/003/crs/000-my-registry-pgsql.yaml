@@ -1,7 +1,7 @@
 apiVersion: v1
 kind: PersistentVolumeClaim
 metadata:
-  name: my-pgsql-data
+  name: my-registry-pgsql-data
 spec:
   accessModes:
     - ReadWriteOnce
@@ -10,37 +10,29 @@ spec:
       storage: 10Gi
 ---
 apiVersion: v1
-kind: ConfigMap
+kind: Secret
 metadata:
-  name: my-pgsql-env
-data:
-  POSTGRESQL_DATABASE: testdb
+  name: my-registry-pgsql-env
+type: Opaque
+stringData:
+  POSTGRESQL_DATABASE: registry
   POSTGRESQL_USER: admin
   POSTGRESQL_PASSWORD: changeit
----
-apiVersion: v1
-kind: ConfigMap
-metadata:
-  name: my-pgsql-init
-data:
-  initdb.sql: |
-    \connect testdb;
-    GRANT ALL PRIVILEGES ON DATABASE testdb to admin;
 ---
 apiVersion: apps/v1
 kind: StatefulSet
 metadata:
-  name: my-pgsql-ss
+  name: my-registry-pgsql
 spec:
   replicas: 1
   serviceName: postgres
   selector:
     matchLabels:
-      app: pgsql
+      app: my-registry-pgsql
   template:
     metadata:
       labels:
-        app: pgsql
+        app: my-registry-pgsql
     spec:
       containers:
         - name: postgres
@@ -49,16 +41,14 @@ spec:
             limits:
               memory: 1Gi
           envFrom:
-            - configMapRef:
-                name: my-pgsql-env
+            - secretRef:
+                name: my-registry-pgsql-env
           ports:
             - containerPort: 5432
               protocol: TCP
           volumeMounts:
-            - name: my-pgsql-data
+            - name: my-registry-pgsql-data
               mountPath: /var/lib/postgresql
-            - name: my-pgsql-init
-              mountPath: /tmp/sql
           readinessProbe:
             exec:
               command: [ "psql", "template1", "-c", "SELECT 1" ]
@@ -70,17 +60,14 @@ spec:
             initialDelaySeconds: 60
             timeoutSeconds: 10
       volumes:
-        - name: my-pgsql-data
+        - name: my-registry-pgsql-data
           persistentVolumeClaim:
-            claimName: my-pgsql-data
-        - name: my-pgsql-init
-          configMap:
-            name: my-pgsql-init
+            claimName: my-registry-pgsql-data
 ---
 apiVersion: v1
 kind: Service
 metadata:
-  name: my-pgsql-svc
+  name: my-registry-pgsql-svc
 spec:
   ports:
     - name: pgsql
@@ -88,4 +75,4 @@ spec:
       protocol: TCP
       targetPort: 5432
   selector:
-    app: pgsql
+    app: my-registry-pgsql

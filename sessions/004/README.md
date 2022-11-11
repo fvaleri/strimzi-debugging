@@ -58,18 +58,18 @@ $ kubectl create secret docker-registry registry-authn \
 secret/registry-authn replaced
 
 # use your image name
-$ for file in sessions/004/crs/*.yaml; do sed "s#value0#quay.io/fvaleri/my-connect:latest#g" $file | kubectl create -f -; done \
-  && kubectl wait --for="condition=Ready" pod -l app=mysql --timeout=300s \
-  && kubectl exec my-mysql-ss-0 -- bash -c 'mysql -u root < /tmp/sql/initdb.sql'
-persistentvolumeclaim/my-mysql-data created
-configmap/my-mysql-cfg created
-configmap/my-mysql-env created
-configmap/my-mysql-init created
-statefulset.apps/my-mysql-ss created
-service/my-mysql-svc created
+$ for f in sessions/004/crs/*.yaml; do sed "s#value0#quay.io/fvaleri/my-connect:latest#g" $f | kubectl create -f -; done \
+  && kubectl wait --for="condition=Ready" pod -l app=my-connect-mysql --timeout=300s \
+  && kubectl exec my-connect-mysql-0 -- bash -c 'mysql -u root < /tmp/sql/initdb.sql'
+persistentvolumeclaim/my-connect-mysql-data created
+configmap/my-connect-mysql-cfg created
+configmap/my-connect-mysql-env created
+configmap/my-connect-mysql-init created
+statefulset.apps/my-connect-mysql created
+service/my-connect-mysql-svc created
 kafkaconnect.kafka.strimzi.io/my-connect created
 kafkaconnector.kafka.strimzi.io/mysql-source created
-pod/my-mysql-ss-0 condition met
+pod/my-connect-mysql-0 condition met
 
 $ kubectl get po,kt
 NAME                                              READY   STATUS      RESTARTS   AGE
@@ -82,15 +82,15 @@ pod/my-cluster-zookeeper-1                        1/1     Running     0         
 pod/my-cluster-zookeeper-2                        1/1     Running     0          34m
 pod/my-connect-connect-95d5c7478-2vkwt            1/1     Running     0          10m
 pod/my-connect-connect-build-1-build              0/1     Completed   0          11m
-pod/my-mysql-ss-0                                 1/1     Running     0          11m
+pod/my-connect-mysql-0                            1/1     Running     0          11m
 
 NAME                                                                                                                           CLUSTER      PARTITIONS   REPLICATION FACTOR   READY
 kafkatopic.kafka.strimzi.io/connect-cluster-configs                                                                            my-cluster   1            3                    True
 kafkatopic.kafka.strimzi.io/connect-cluster-offsets                                                                            my-cluster   25           3                    True
 kafkatopic.kafka.strimzi.io/connect-cluster-status                                                                             my-cluster   5            3                    True
 kafkatopic.kafka.strimzi.io/consumer-offsets---84e7a678d08f4bd226872e5cdd4eb527fadc1c6a                                        my-cluster   50           3                    True
-kafkatopic.kafka.strimzi.io/debezium-heartbeat.my-mysql---76187ecaffdb5bfe72afa38b976011f2e16fa30b                             my-cluster   3            3                    True
-kafkatopic.kafka.strimzi.io/my-mysql                                                                                           my-cluster   3            3                    True
+kafkatopic.kafka.strimzi.io/debezium-heartbeat.my-connect-mysql---76187ecaffdb5bfe72afa38b976011f2e16fa30b                     my-cluster   3            3                    True
+kafkatopic.kafka.strimzi.io/my-connect-mysql                                                                                   my-cluster   3            3                    True
 kafkatopic.kafka.strimzi.io/my-topic                                                                                           my-cluster   3            3                    True
 kafkatopic.kafka.strimzi.io/strimzi-store-topic---effb8e3e057afce1ecf67c3f5d8e4e3ff177fc55                                     my-cluster   1            3                    True
 kafkatopic.kafka.strimzi.io/strimzi-topic-operator-kstreams-topic-store-changelog---b75e702040b99be8a9263134de3507fc0cc4017b   my-cluster   1            3                    True
@@ -119,8 +119,8 @@ connectorStatus:
 observedGeneration: 1
 tasksMax: 1
 topics:
-  - __debezium-heartbeat.my-mysql
-  - my-mysql
+  - __debezium-heartbeat.my-connect-mysql
+  - my-connect-mysql
 ```
 
 Debezium configuration is specific to each connector and it is documented in details.
@@ -128,7 +128,7 @@ The value of `server_id` must be unique for each server and replication client i
 In this case, MySQL user must have appropriate permissions on all databases for which the connector captures changes.
 
 ```sh
-$ kubectl get cm my-mysql-cfg -o yaml | yq '.data'
+$ kubectl get cm my-connect-mysql-cfg -o yaml | yq '.data'
 my.cnf: |
   !include /etc/my.cnf
   [mysqld]
@@ -141,7 +141,7 @@ my.cnf: |
   gtid_mode = ON
   enforce_gtid_consistency = ON
 
-$ kubectl get cm my-mysql-init -o yaml | yq '.data'
+$ kubectl get cm my-connect-mysql-init -o yaml | yq '.data'
 initdb.sql: |
   use testdb;
     CREATE TABLE customers (
@@ -168,12 +168,12 @@ config:
   database.dbname: testdb
   database.history.kafka.bootstrap.servers: my-cluster-kafka-bootstrap:9092
   database.history.kafka.topic: testdb.history
-  database.hostname: my-mysql-svc
+  database.hostname: my-connect-mysql-svc
   database.include.list: testdb
   database.password: changeit
   database.port: 3306
   database.server.id: "222222"
-  database.server.name: my-mysql
+  database.server.name: my-connect-mysql
   database.user: debezium
   heartbeat.interval.ms: 10000
   snapshot.mode: when_needed
@@ -184,7 +184,7 @@ tasksMax: 1
 Enough with describing the configuration, now let's create some changes using the good old SQL.
 
 ```sh
-$ kubectl exec my-mysql-ss-0 -- sh -c 'MYSQL_PWD="changeit" mysql -u admin testdb -e "
+$ kubectl exec my-connect-mysql-0 -- sh -c 'MYSQL_PWD="changeit" mysql -u admin testdb -e "
   INSERT INTO customers (first_name, last_name, email) VALUES (\"John\", \"Doe\", \"jdoe@example.com\");
   UPDATE customers SET first_name = \"Jane\" WHERE id = 1;
   INSERT INTO customers (first_name, last_name, email) VALUES (\"Dylan\", \"Dog\", \"ddog@example.com\");
@@ -200,10 +200,10 @@ It's interesting to look at some record properties: `op` is the change type (c=c
 
 ```sh
 $ krun_kafka /opt/kafka/bin/kafka-console-consumer.sh --bootstrap-server my-cluster-kafka-bootstrap:9092 \
-  --topic my-mysql.testdb.customers --from-beginning --timeout-ms 5000
-Struct{after=Struct{id=2,first_name=Dylan,last_name=Dog,email=ddog@example.com},source=Struct{version=1.9.5.Final-redhat-00001,connector=mysql,name=my-mysql,ts_ms=1663228576000,db=testdb,table=customers,server_id=224466,gtid=1c90a695-34cb-11ed-aba8-0a580a810216:16,file=mysql-bin.000002,pos=2585,row=0,thread=67},op=c,ts_ms=1663228576092}
-Struct{after=Struct{id=1,first_name=John,last_name=Doe,email=jdoe@example.com},source=Struct{version=1.9.5.Final-redhat-00001,connector=mysql,name=my-mysql,ts_ms=1663228576000,db=testdb,table=customers,server_id=224466,gtid=1c90a695-34cb-11ed-aba8-0a580a810216:14,file=mysql-bin.000002,pos=1690,row=0,thread=67},op=c,ts_ms=1663228576088}
-Struct{before=Struct{id=1,first_name=John,last_name=Doe,email=jdoe@example.com},after=Struct{id=1,first_name=Jane,last_name=Doe,email=jdoe@example.com},source=Struct{version=1.9.5.Final-redhat-00001,connector=mysql,name=my-mysql,ts_ms=1663228576000,db=testdb,table=customers,server_id=224466,gtid=1c90a695-34cb-11ed-aba8-0a580a810216:15,file=mysql-bin.000002,pos=2103,row=0,thread=67},op=u,ts_ms=1663228576091}
+  --topic my-connect-mysql.testdb.customers --from-beginning --timeout-ms 5000
+Struct{after=Struct{id=2,first_name=Dylan,last_name=Dog,email=ddog@example.com},source=Struct{version=1.9.5.Final-redhat-00001,connector=mysql,name=my-connect-mysql,ts_ms=1663228576000,db=testdb,table=customers,server_id=224466,gtid=1c90a695-34cb-11ed-aba8-0a580a810216:16,file=mysql-bin.000002,pos=2585,row=0,thread=67},op=c,ts_ms=1663228576092}
+Struct{after=Struct{id=1,first_name=John,last_name=Doe,email=jdoe@example.com},source=Struct{version=1.9.5.Final-redhat-00001,connector=mysql,name=my-connect-mysql,ts_ms=1663228576000,db=testdb,table=customers,server_id=224466,gtid=1c90a695-34cb-11ed-aba8-0a580a810216:14,file=mysql-bin.000002,pos=1690,row=0,thread=67},op=c,ts_ms=1663228576088}
+Struct{before=Struct{id=1,first_name=John,last_name=Doe,email=jdoe@example.com},after=Struct{id=1,first_name=Jane,last_name=Doe,email=jdoe@example.com},source=Struct{version=1.9.5.Final-redhat-00001,connector=mysql,name=my-connect-mysql,ts_ms=1663228576000,db=testdb,table=customers,server_id=224466,gtid=1c90a695-34cb-11ed-aba8-0a580a810216:15,file=mysql-bin.000002,pos=2103,row=0,thread=67},op=u,ts_ms=1663228576091}
 org.apache.kafka.common.errors.TimeoutException
 Processed a total of 3 messages
 pod "krun-1664982897" deleted

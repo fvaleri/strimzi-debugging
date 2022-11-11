@@ -39,11 +39,10 @@ Then, we can deploy the Service Registry instance with PostgreSQL as storage sys
 
 ```sh
 $ kubectl create -f sessions/003/crs
-persistentvolumeclaim/my-pgsql-data created
-configmap/my-pgsql-env created
-configmap/my-pgsql-init created
-statefulset.apps/my-pgsql-ss created
-service/my-pgsql-svc created
+persistentvolumeclaim/my-registry-pgsql-data created
+configmap/my-registry-pgsql-env created
+statefulset.apps/my-registry-pgsql created
+service/my-registry-pgsql-svc created
 apicurioregistry.registry.apicur.io/my-registry created
 
 $ kubectl get po
@@ -55,8 +54,8 @@ pod/my-cluster-kafka-2                            1/1     Running   0          1
 pod/my-cluster-zookeeper-0                        1/1     Running   0          168m
 pod/my-cluster-zookeeper-1                        1/1     Running   0          168m
 pod/my-cluster-zookeeper-2                        1/1     Running   0          168m
-pod/my-pgsql-ss-0                                 1/1     Running   0          8m36s
 pod/my-registry-deployment-5f5fb7c786-7tj75       1/1     Running   0          53s
+pod/my-registry-pgsql-0                           1/1     Running   0          8m36s
 ```
 
 Now, we just need to tell our client application where it can find the Kafka cluster by setting the bootstrap URL and the schema registry REST endpoint.

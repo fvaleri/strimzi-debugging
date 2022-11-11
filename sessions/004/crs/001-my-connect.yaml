@@ -49,4 +49,4 @@ spec:
       - name: debezium-mysql
         artifacts:
           - type: zip
-            url: https://maven.repository.redhat.com/ga/io/debezium/debezium-connector-mysql/1.9.5.Final-redhat-00001/debezium-connector-mysql-1.9.5.Final-redhat-00001-plugin.zip
+            url: https://maven.repository.redhat.com/ga/io/debezium/debezium-connector-mysql/1.9.7.Final-redhat-00003/debezium-connector-mysql-1.9.7.Final-redhat-00003-plugin.zip
