@@ -58,7 +58,7 @@ $ kubectl create secret docker-registry registry-authn \
 secret/registry-authn replaced
 
 # use your image name
-$ for f in sessions/004/crs/*.yaml; do sed "s#value0#quay.io/fvaleri/my-connect:latest#g" $f | kubectl create -f -; done \
+$ for f in sessions/004/resources/*.yaml; do sed "s#value0#quay.io/fvaleri/my-connect:latest#g" $f | kubectl create -f -; done \
   && kubectl wait --for="condition=Ready" pod -l app=my-connect-mysql --timeout=300s \
   && kubectl exec my-connect-mysql-0 -- bash -c 'mysql -u root < /tmp/sql/initdb.sql'
 persistentvolumeclaim/my-connect-mysql-data created

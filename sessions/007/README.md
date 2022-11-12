@@ -127,7 +127,7 @@ Topic: my-topic	TopicId: n1QKre80QFmnEKWIXfrLDw	PartitionCount: 3	ReplicationFac
 	Topic: my-topic	Partition: 1	Leader: 1	Replicas: 1,0,2	Isr: 1,0,2
 	Topic: my-topic	Partition: 2	Leader: 0	Replicas: 0,2,1	Isr: 0,2,1
 	
-$ kubectl apply -f sessions/007/crs
+$ kubectl apply -f sessions/007/resources
 kafka.kafka.strimzi.io/my-cluster configured
 kafkarebalance.kafka.strimzi.io/my-rebalance created
 

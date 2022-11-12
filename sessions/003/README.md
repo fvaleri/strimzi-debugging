@@ -38,7 +38,7 @@ Setting `apicurio.registry.check-period-ms` client property we can determine the
 Then, we can deploy the Service Registry instance with PostgreSQL as storage system.
 
 ```sh
-$ kubectl create -f sessions/003/crs
+$ kubectl create -f sessions/003/resources
 persistentvolumeclaim/my-registry-pgsql-data created
 configmap/my-registry-pgsql-env created
 statefulset.apps/my-registry-pgsql created

@@ -34,7 +34,7 @@ Then, apply the configuration changes to enable TLS authentication and wait for 
 If the Kafka cluster is operated correctly, it is possible to update the configuration with zero downtime.
 
 ```sh
-$ kubectl apply -f sessions/002/crs/mtls
+$ kubectl apply -f sessions/002/resources/mtls
 kafka.kafka.strimzi.io/my-cluster configured
 kafkauser.kafka.strimzi.io/my-user created
 ```
@@ -186,7 +186,7 @@ $ kubectl create secret generic ext-listener-crt \
   --from-file=/tmp/bundle.crt --from-file=/tmp/listener.key \
   --dry-run=client -o yaml | kubectl replace --force -f -
   
-$ kubectl apply -f sessions/002/crs/ccrt
+$ kubectl apply -f sessions/002/resources/ccrt
 kafka.kafka.strimzi.io/my-cluster configured
 
 $ kubectl get k my-cluster -o yaml | yq '.spec.kafka.listeners[2]'

@@ -48,7 +48,7 @@ $ EXP="del(.metadata.namespace, .metadata.resourceVersion, .metadata.selfLink, .
   && kubectl get secret "my-cluster-cluster-ca-cert" -o yaml | yq "$EXP" | kubectl -n target create -f -
 secret/my-cluster-cluster-ca-cert created
 
-$ kubectl -n target create -f sessions/005/crs
+$ kubectl -n target create -f sessions/005/resources
 kafka.kafka.strimzi.io/my-cluster-tgt created
 kafkamirrormaker2.kafka.strimzi.io/my-mm2 created
 configmap/mm2-metrics created

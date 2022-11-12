@@ -205,7 +205,7 @@ In addition to ZooKeeper and Kafka pods, the entity operator (EO) pod is also de
 If you want to deploy multiple Kafka clusters on the same namespace, make sure to have only one instance of these operators to avoid a race conditions.
 
 ```sh
-$ kubectl create -f sessions/001/crs
+$ kubectl create -f sessions/001/resources
 kafka.kafka.strimzi.io/my-cluster created
 kafkatopic.kafka.strimzi.io/my-topic created
 

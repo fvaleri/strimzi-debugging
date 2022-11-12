@@ -105,7 +105,7 @@ kafka.kafka.strimzi.io/my-cluster annotated
 statefulset.apps/my-cluster-kafka scaled
 
 $ kubectl run recovery --image "dummy" --restart "Never" \
-  --overrides "$(sed "s,value0,data-my-cluster-kafka-0,g" sessions/006/patch.json)"
+  --overrides "$(sed "s,value0,data-my-cluster-kafka-0,g" sessions/006/resources/patch.json)"
 pod/recovery created
 
 $ kubectl exec -it strimzi-debug -- bash
@@ -243,7 +243,7 @@ $ for line in $(kubectl get pv | grep "my-cluster" | awk '{print $1 "#" $2 "#" $
   pv="$(echo $line | awk -F'#' '{print $1}')"
   kubectl patch pv "$pv" --type json -p '[{"op":"remove","path":"/spec/claimRef"}]'
   sed "s#value0#$pvc#g; s#value1#$size#g; s#value2#$sc#g; s#value3#$pv#g" \
-    sessions/006/pvc.yaml | kubectl create -f -
+    sessions/006/resources/pvc.yaml | kubectl create -f -
 done
 persistentvolume/pvc-162c6551-f05f-4c89-9319-637a4b3d417c patched
 persistentvolumeclaim/data-my-cluster-zookeeper-1 created
@@ -276,7 +276,7 @@ If you don't do this, there is a high change that the TO will delete all topics 
 Topic deletion happens asinchronously, so always make sure to confirm that it is actually deleted.
 
 ```sh
-$ cat sessions/001/crs/000-my-cluster.yaml | yq 'del(.spec.entityOperator.topicOperator)' | kubectl create -f -
+$ cat sessions/001/resources/000-my-cluster.yaml | yq 'del(.spec.entityOperator.topicOperator)' | kubectl create -f -
 kafka.kafka.strimzi.io/my-cluster created
 kafkatopic.kafka.strimzi.io/my-topic created
 
@@ -298,7 +298,7 @@ my-topic
 When these topics are deleted, we can safely deploy the TO and try to consume our messages from the restored cluster.
 
 ```sh
-$ kubectl apply -f sessions/001/crs/000-my-cluster.yaml
+$ kubectl apply -f sessions/001/resources/000-my-cluster.yaml
 kafka.kafka.strimzi.io/my-cluster configured
 
 $ kubectl get kt my-topic -o yaml | yq '.status'
