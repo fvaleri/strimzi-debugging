@@ -234,12 +234,12 @@ Note that we are using a nice function to avoid repeating that for every client 
 You can also use the broker pods for that, but it is always risky to spin up another JVM inside a pod, especially in production.
 
 ```sh
-$ krun_kafka /opt/kafka/bin/kafka-console-producer.sh --bootstrap-server my-cluster-kafka-bootstrap:9092 --topic my-topic
+$ krun /opt/kafka/bin/kafka-console-producer.sh --bootstrap-server my-cluster-kafka-bootstrap:9092 --topic my-topic
 >hello
 >world
 >^Cpod "krun-1664886431" deleted
 
-$ krun_kafka /opt/kafka/bin/kafka-console-consumer.sh --bootstrap-server my-cluster-kafka-bootstrap:9092 \
+$ krun /opt/kafka/bin/kafka-console-consumer.sh --bootstrap-server my-cluster-kafka-bootstrap:9092 \
   --topic my-topic --group my-group --from-beginning
 world
 hello

@@ -1,4 +1,7 @@
-#!/usr/bin/env bash
+# Source this file to initialize or reset
+# the workspace after running an example.
+# Pass --skip-ocp if you only need local Kafka.
+
 echo "Checking prerequisites"
 for x in curl oc kubectl openssl keytool unzip yq jq git java javac jshell mvn; do
   if ! command -v "$x" &>/dev/null; then
@@ -91,7 +94,7 @@ if [[ $SKIP_OCP != true ]]; then
     kubectl config set-context --current --namespace="$INIT_TEST_NS" &>/dev/null
     kubectl create -f "$INIT_HOME"/sub.yaml
 
-    krun_kafka() { kubectl run krun-"$(date +%s)" -itq --rm --restart="Never" --image="$INIT_STRIMZI_IMAGE" -- "$@"; }
+    krun() { kubectl run krun-"$(date +%s)" -itq --rm --restart="Never" --image="$INIT_STRIMZI_IMAGE" -- "$@"; }
   fi
 fi
 
