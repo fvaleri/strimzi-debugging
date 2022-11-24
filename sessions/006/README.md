@@ -1,4 +1,4 @@
-## Storage requirements and volume recovery
+# Storage requirements and volume recovery
 
 Kafka requires low latency storage to store both broker commit logs and ZooKeeper data.
 File storage like NFS does not work well (silly rename problem).
@@ -29,7 +29,7 @@ Only volumes created and managed by a SC with `allowVolumeExpansion: true` can b
 When using JBOD, you can also remove a volume, but data needs to be migrated to other volumes upfront.
 Volumes with either `persistentVolumeReclaimPolicy: Retain`, or using a storage class with `reclaimPolicy: Retain` are retained when the Kafka cluster is deleted.
 
-### Example: no space left on device
+# Example: no space left on device
 
 [Deploy Streams operator and Kafka cluster](/sessions/001). 
 When the cluster is ready, we purposely break it by sending 11 GiB of data to a topic with RF=3 (33 GiB in total), which exceeds the combined cluster disk capacity of 30 GiB.
@@ -158,7 +158,7 @@ my-cluster-kafka-1                            1/1     Running   0          18m
 my-cluster-kafka-2                            1/1     Running   0          18m
 ```
 
-### Example: unintentional cluster deletion with retained volumes
+# Example: unintentional cluster deletion with retained volumes
 
 The Streams examples have `.spec.kafka.storage.deleteClaim: false`, which is also the default value. 
 This means that the PVC are not deleted when the cluster is undeployed, but the user may have changed that.

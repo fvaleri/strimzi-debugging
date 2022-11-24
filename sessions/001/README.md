@@ -1,4 +1,4 @@
-## Kafka introduction and deployments
+# Kafka introduction and deployments
 
 [Apache Kafka](https://kafka.apache.org) is an Open Source distributed streaming platform that lets you read, write, store, and process messages across many machines.
 [Red Hat AMQ Streams](https://catalog.redhat.com/software/operators/detail/5ef20efd46bc301a95a1e9a4) includes Kafka and a set of operators from the [CNCF Strimzi](https://strimzi.io) project.
@@ -6,13 +6,13 @@ The operators are a way of extending the OpenShift or Kubernetes platforms by de
 Not every use case justifies the additional complexity that Kafka brings to the table.
 It is best suited when you have a high throughput of relatively small messages, that traditional message brokers struggle to manage, or you have near realtime stream processing requirements.
 
-![](images/cluster.png)
-
 Kafka provides two main layers that can scale independently: the storage layer, which stores messages efficiently in a cluster of brokers, and the compute layer which is built on top of the producer and consumer APIs.
 There are also two higher level APIs: the connect API for external systems integration and the streams API for stream processing.
 Within a cluster, we have the control plane, which handles cluster metadata and the data plane, which handles user data.
 One of the brokers is elected as controller, which has the additional responsibility of managing the states of partitions and replicas and for performing administrative tasks like reassigning partitions.
 In ZooKeeper mode there is only one elected controller, while in the new KRaft mode we have a quorum of controllers, where only one is active at any time, while the others are ready to take over in case of failure.
+
+![](images/cluster.png)
 
 Kafka uses a binary protocol over TCP (KRPC).
 The protocol defines APIs as request/response message pairs and includes both the message format and error codes.
@@ -26,8 +26,6 @@ Each message is modeled as a record with timestamp, key, value and optional head
 Key and value are just byte arrays and this gives people the flexibility to encode the data in whatever format they want, using their favourite serializer.
 The timestamp is always present, but it can be set by the application when it sends (default), or by the Kafka runtime when it receives.
 Whenever possible, records are buffered and sent in batches (a single request can include multiple batches, one for each partition).
-
-![](images/replicas.png)
 
 Records are stored in a topic, which is further divided into one or more partitions, distributed evenly across the brokers.
 Each partition is stored on disk as a series of fixed-size commit logs called segments.
@@ -44,13 +42,15 @@ If you set a topic replication factor of N, the system can tolerate N-1 broker f
 The last committed offset of a partition is called the high watermark (HW).
 Records are guaranteed to be fully replicated up to this offset and only committed records are exposed to consumers.
 
+![](images/replicas.png)
+
 When sending messages, a producer with `acks=all` (now default) will not get a send ack until all `min.insync.replicas` (ISR) have replicated the message.
 At any time, the ISR only includes replicas that are up to date.
 Multiple consumers with the same `group.id` form a consumer group and partitions are distributed among them using a pluggable assignor(partition as unit of parallelism).
 Within a consumer group, a partition is assigned to exactly one consumer to not break ordering, but that consumer can handle multiple partitions.
 Each consumer periodically or manually commits its position (next offsets to read) to an internal topic called `__consumer_offsets`.
 
-### Example: deploy on localhost
+# Example: deploy on localhost
 
 We are going to deploy a Kafka cluster on your local machine.This is useful for quick tests where a multi node cluster is not required.
 We will use the latest upstream release because the downstream release is just a rebuild with few additional and optional plugins.
@@ -166,7 +166,7 @@ baseOffset: 15 lastOffset: 17 count: 3 baseSequence: 0 lastSequence: 2 producerI
 | offset: 17 CreateTime: 1662649581270 keySize: 26 valueSize: 24 sequence: 2 headerKeys: [] key: offset_commit::group=my-group,partition=my-topic-2 payload: offset=1
 ```
 
-### Example: deploy on OpenShift
+# Example: deploy on OpenShift
 
 We are going to deploy a 3-nodes cluster on OpenShift using the built-in OperatorHub (OLM) component, which is the preferred mode because you can use the web console and you get the additional benefit of automatic updates.
 

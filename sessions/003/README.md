@@ -1,4 +1,4 @@
-## Schema registry and why it is useful
+# Schema registry and why it is useful
 
 It is pretty obvious why schemas are useful when multiple clients need to collaborate on the same data.
 They all need to know the metadata, which fields are available and what are their types.
@@ -24,15 +24,14 @@ The `globalId` is the unique id of an artifact version, while the `contentId` is
 The serializer exchanges the `artifactId` for a `globalId`, which is then added as record header or as payload prefix, depending on the producer configuration.
 The default `artifactId` resolver strategy is the `TopicIdStrategy`, which looks for schema artifacts with the same `artifactId` as the Kafka topic, plus `-key` or `-value` suffixes.
 You might want to use the `RecordIdStrategy` strategy if you have different Kafka topics with the same Avro message type.
-
-When you scale up your application instances, there is a race condition if you let your application to register the schema at startup.
+When you scale up your application instances, there is a race condition if you register the schema at startup.
 In that case, you may end up with multiple schemas with different `globalId`, but the same `contentId`.
 The solution is to register the schema at build time using the Maven plugin.
 
 The deserializer fetches the right schema version using the `globalId`, but you can also configure to fetch by `contentId` (Confluent default).
 Setting `apicurio.registry.check-period-ms` client property we can determine the time after which a cached artifact is auto evicted and needs to be fetched again on the next record.
 
-### Example: schema registry in action
+# Example: schema registry in action
 
 [Deploy Streams operator and Kafka cluster](/sessions/001).
 Then, we can deploy the Service Registry instance with PostgreSQL as storage system.

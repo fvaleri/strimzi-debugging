@@ -1,4 +1,4 @@
-## Mirror Maker and disaster recovery
+# Mirror Maker and disaster recovery
 
 In order to create a disaster recovery (DR) plan you would need to decide the recovery point objective (RPO), which is the maximum amount of data you are willing to risk losing, and the recovery time objective (RTO), which is the maximum amount of downtime that your system can have.
 Zero RPO requires a really good infrastructure, but there are cheaper alternatives if you can relax this objective.
@@ -7,30 +7,28 @@ A solid monitoring system can help with failure detection and to know what you h
 
 A data corruption due to human error or bug would also be replicated, so having periodic backups from which you can restore the cluster at a specific point in time is a must in every case.
 One strategy here is to backup the full cluster configuration, while also taking disk/volume snapshots.
-Unfortunately, we do not have an integrated solution for that, so you would need to create some custom automation scripts.
+
+Assuming the right replication configuration, the only way to have zero RPO is to setup a stretch Kafka cluster, which is one that evenly spans multiple data centers (i.e. synchronous replication).
+In order to do that, you would need at least three data centers (DCs) that can support the required latency (<100ms).
+OpenShift supports stretch/multi-site clusters, so you can simply deploy Streams on top of that, using affinities rules to achieve the desired topolopgy.
+Then, you can set rack awareness to ensure that replicas are distributed evenly across DCs and deploy Cruise Control with rack awareness goals to make sure that replicas remain distributed across different racks.
 
 ![](images/stretch.png)
 
-Assuming the right replication configuration, the only way to have zero RPO is to setup a stretch Kafka cluster, which is one that evenly spans multiple data centers (i.e. synchronous replication).
-Usually only DCs that are close to each other (i.e. AWS availability zones in the same region) can support the required latency (<100ms).
-OpenShift supports stretch/multi-site clusters with some requirements, then you simply deploy Kafka on top of that setting rack awareness.
-If you are willing to sacrifice high availability for zero RPO, you can even use two DCs, at the cost of longer RTO (this is not recommended).
-
-![](images/mm2.png)
-
 The cheaper alternative to the stretch cluster is Mirror Maker 2 (MM2), where a passive/backup cluster is continuously kept in-sync, including consumer group offsets and topic ACLs.
 You can also have active/active replication using MM2, which means your clients will be distributed between two Kafka clusters resulting in a much more complex architecture.
-This also works across regions, but you can't completely avoid duplicates and data loss, because the replication is asynchronous with no transactions support (see KIP-656).
-Producers, should be able to re-send missing data, which means storing the latest sent messages somewhere.
-Consumers should be idempotent, so that they can tolerate some duplicates.
+This also works across regions, but you can't completely avoid duplicates and data loss, because the replication is asynchronous with no transactions support (KIP-656).
+Producers, should be able to re-send missing data, which means storing the latest sent messages somewhere, while consumers should be idempotent, so that they can tolerate some duplicates.
 In case of disaster, the amount of data that may be lost depends on MM2 connectors latency, so you should carefully monitor these metrics and set alerts.
 It would also be good to have virtual hosts or a cluster proxy, so that you can switch all clients at once from a central place.
 
-It is possible to combine stretch clusters and mirroring to create a multi-region or multi-cloud disaster recovery plan, where the service can survive to a cloud outage (yes, a region can fail).
-After the fail over phase, you can fail back once the original region is back online, or fail forward choosing another region as the backup cluster (faster).
+![](images/mm2.png)
+
+It is possible to combine stretch clusters and mirroring to create a multi-region or even multi-cloud disaster recovery plan, where the service can survive to a cloud outage (yes, a region can fail).
+After the fail over phase, you can fail back once the original region is back online, or fail forward selecting another region as the new backup cluster (faster).
 Finally, all DR processes should be documented in details and carefully tested, simulating all possible scenarios such as partial failures.
 
-### Example: active-passive mirroring
+# Example: active-passive mirroring
 
 [Deploy Streams operator and Kafka cluster](/sessions/001).
 Then, we create the target namespace for the backup cluster.
@@ -130,7 +128,7 @@ my-topic:2:287417
 pod "krun-1665758761" deleted
 ```
 
-### Example: tuning for throughput
+# Example: tuning for throughput
 
 Use cases like web activity tracking can generate a high volume of messages.
 A source cluster with moderate throughput can also cause that when having lots of existing data to mirror.

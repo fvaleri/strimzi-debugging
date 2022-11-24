@@ -1,4 +1,4 @@
-## Transactions and how to rollback
+# Transactions and how to rollback
 
 Kafka provides at-least-once semantics by default and duplicates can arise due to either producer retries or consumer restarts after failure.
 The idempotent producer configuration (now default) solves the duplicates problem by creating a producer session identified by a producer id (PID) and an epoch.
@@ -28,7 +28,7 @@ Before Kafka 2.5.0 the TID had to be a static encoding of the input partition (i
 This was ugely inefficient but required to avoid the partition ownership transfer on CG rebalances, that would invalidate the fencing logic.
 It was fixed by forcing the producer to send the consumer group metadata along with the offsets to commit (see `sendOffsetsToTransaction`).
 
-### Example: transactional word counter
+# Example: transactional word counter
 
 [Deploy a Kafka cluster on localhost](/sessions/001).
 Run the demo application included in this session on a different terminal (there is a new poll/read every 60 seconds).
@@ -136,7 +136,7 @@ baseOffset: 4 lastOffset: 4 count: 1 baseSequence: -1 lastSequence: -1 producerI
 | offset: 4 CreateTime: 1665506598005 keySize: 24 valueSize: 37 sequence: -1 headerKeys: [] key: transaction_metadata::transactionalId=kafka-trans-0 payload: producerId:0,producerEpoch:0,state=CompleteCommit,partitions=[],txnLastUpdateTimestamp=1665506597989,txnTimeoutMs=60000
 ```
 
-### Example: hanging transaction rollback
+# Example: hanging transaction rollback
 
 A hanging transaction is one which has a missing or out of order control record, due to a bug in the transaction handling.
 If a transaction is being left in an open state (no end TX marker), the LSO is stuck, which also means that any `read_committed` consumer is blocked.

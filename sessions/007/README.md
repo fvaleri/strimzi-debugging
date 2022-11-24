@@ -1,4 +1,4 @@
-## Cruise Control and unbalanced clusters
+# Cruise Control and unbalanced clusters
 
 By default, Kafka try to distribute the load evenly across brokers.
 This is achieved through the concept of preferred replica, which is the first replica created for a new topic.
@@ -13,18 +13,18 @@ Rebalancing means moving partitions between brokers (inter brokers), between bro
 We can apply partition and leadership movements using the `kafka-reassign-partitions.sh` tool, but the user has to determine the rebalance proposal, which can be tricky and time-consuming.
 This is why [Cruise Control](https://github.com/linkedin/cruise-control) (CC) was created.
 
-![](images/cc.png)
-
 A replica workload model is periodically updated by the workload monitor using the resource utilization metrics from broker agents (CPU, disk, bytes-in, bytes-out).
 The analyzer uses this model to create a valid rebalance proposal when possible (one that must satisfy all configured hard goals, and possibly soft goals).
 The executor ensures that there is only one active rebalancing at any given time and applies changes in batches, enabling graceful cancellation.
 If two equivalent changes are possible, the one with the lower cost is selected (leadership change > replica move > replica swap).
 
+![](images/cc.png)
+
 As of today, Streams still requires the manual approval of the auto-generated rebalance proposal, but we are working to enable full automation.
 In order to have accurate rebalance proposals when using CPU goals, we can set CPU requests equal to CPU limits in `.spec.kafka.resources`.
 That way, all CPU resources are reserved upfront (Guaranteed QoS) and CC can properly evaluate CPU utilization when generating the rebalance proposals.
 
-### Example: scaling up the cluster
+# Example: scaling up the cluster
 
 [Deploy Streams operator and Kafka cluster](/sessions/001).
 When the cluster is ready, we want to scale it up and put some load on the new broker, which otherwise will sit idle waiting for new topic creations.
@@ -111,7 +111,7 @@ Topic: my-topic	TopicId: odTuFAweSkSLsboC-QQ4wg	PartitionCount: 3	ReplicationFac
 exit
 ```
 
-### Example: scaling up the cluster with CC
+# Example: scaling up the cluster with CC
 
 Let's repeat the cluster scale up example, but this time using Cruise Control to see how it helps with the planning phase.
 CC can figure out by itself the required changes, given a set of high level goals (sensible default are provided).

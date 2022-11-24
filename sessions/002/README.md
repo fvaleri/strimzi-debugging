@@ -1,4 +1,4 @@
-## TLS authentication and custom certificates
+# TLS authentication and custom certificates
 
 The TLS protocol provides communications security over a computer network.
 Encryption without proper identification is insecure.
@@ -12,11 +12,11 @@ Cipher suites contain algorithms for key exchange, encryption and authentication
 A public key infrastructure (PKI) is an arrangement that binds public keys with respective identities (e.g. organizations, people, applications).
 The binding is established through a process of registration and issuance of certificates by a certificate authority (CA).
 
-![](images/connections.png)
-
 Within a Kafka cluster, in addition to the client-server communication, you also need to protect the inter-cluster communication and renew certificates when they expire.
 All of this work is done by the Streams CO, which is a great example of how the operator simplifies cluster management.
 Two self-signed CAs are automatically generated and used to sign all cluster (cluster CA) and user (clients CA) certificates.
+
+![](images/connections.png)
 
 The server name indication (SNI) extension allows a client to indicate which hostname it is trying to connect to at the start of the TLS handshake.
 The server can present multiple certificates on the same IP address and port number.
@@ -27,7 +27,7 @@ When enabling TLS mutual authentication (mTLS), the server should also support t
 Before the encryption starts, the peers agree to the protocol version and cipher suite to be used, exchange certificates and share encryption keys (connection overhead).
 Almost all the problems occur within this initial handshake.
 
-### Example: TLS authentication (mTLS)
+# Example: TLS authentication (mTLS)
 
 [Deploy Streams operator and Kafka cluster](/sessions/001). 
 Then, apply the configuration changes to enable TLS authentication and wait for the CO to restart all pods one by one (rolling update).
@@ -120,7 +120,7 @@ Certificate:
 If this is not enough to spot the issue, we can add the `-Djavax.net.debug=ssl:handshake` Java option to the client in order to get more details.
 As additional exercise, try to get the clients CA and user certificates to verify if the first signs the second.
 
-### Example: custom certificates
+# Example: custom certificates
 
 Often, security policies don't allow to run a Kafka cluster with self-signed certificates in production.
 The listener certificates functionality can be used to configure a custom certificate signed by an external or well-known CA.
