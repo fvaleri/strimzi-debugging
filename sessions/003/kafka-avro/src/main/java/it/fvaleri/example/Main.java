@@ -30,14 +30,14 @@ import java.util.Collections;
 import java.util.Properties;
 
 public class Main {
+    private static final String TOPIC_NAME = "my-topic";
+    private static final String ARTIFACT_GROUP = "default";
+    private static final String ARTIFACT_ID = TOPIC_NAME + "-value";
+
     private static String bootstrapServers;
     private static String registryUrl;
     private static String sslTruststoreLocation;
     private static String sslTruststorePassword;
-
-    private static final String TOPIC_NAME = "my-topic";
-    private static final String ARTIFACT_GROUP = "default";
-    private static final String ARTIFACT_ID = TOPIC_NAME + "-value";
 
     static {
         if (System.getenv("BOOTSTRAP_SERVERS") != null) {

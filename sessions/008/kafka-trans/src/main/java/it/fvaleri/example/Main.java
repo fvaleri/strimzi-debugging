@@ -1,6 +1,5 @@
 package it.fvaleri.example;
 
-import org.apache.kafka.clients.admin.AdminClient;
 import org.apache.kafka.clients.admin.AdminClientConfig;
 import org.apache.kafka.clients.admin.KafkaAdminClient;
 import org.apache.kafka.clients.admin.NewTopic;
@@ -33,7 +32,6 @@ public class Main {
     private static final String OUTPUT_TOPIC = "wc-output";
 
     private static String bootstrapServers, transactionalId;
-    private static AdminClient adminClient;
     private static boolean closed = false;
 
     static {
@@ -51,7 +49,6 @@ public class Main {
 
     public static void main(String[] args) {
         System.out.printf("Starting application instance with TID %s%n", transactionalId);
-        adminClient = createKafkaAdminClient();
         createTopic(INPUT_TOPIC);
         try (var producer = createKafkaProducer();
              var consumer = createKafkaConsumer()) {
@@ -97,28 +94,21 @@ public class Main {
             }
         } catch (Throwable e) {
             System.err.printf("%s%n", e);
-            adminClient.close();
         }
     }
 
     private static void createTopic(String topicName) {
-        try {
-            adminClient.createTopics(List.of(new NewTopic(topicName, -1, (short) -1))).all().get();
+        Properties props = new Properties();
+        props.put(AdminClientConfig.BOOTSTRAP_SERVERS_CONFIG, bootstrapServers);
+        try (var admin = KafkaAdminClient.create(props)) {
+            admin.createTopics(List.of(new NewTopic(topicName, -1, (short) -1))).all().get();
             System.out.printf("Topic %s created%n", topicName);
         } catch (Throwable e) {
             if (!(e.getCause() instanceof TopicExistsException)) {
-                adminClient.close();
                 throw new RuntimeException(e);
             }
             System.out.printf("Topic %s already exists%n", topicName);
         }
-    }
-
-    private static AdminClient createKafkaAdminClient() {
-        System.out.println("Creating admin client");
-        Properties props = new Properties();
-        props.put(AdminClientConfig.BOOTSTRAP_SERVERS_CONFIG, bootstrapServers);
-        return KafkaAdminClient.create(props);
     }
 
     private static KafkaProducer<String, String> createKafkaProducer() {
@@ -132,7 +122,8 @@ public class Main {
         props.put(ProducerConfig.TRANSACTIONAL_ID_CONFIG, transactionalId);
         props.put(ProducerConfig.TRANSACTION_TIMEOUT_CONFIG, 60_000);
         props.put(ProducerConfig.ENABLE_IDEMPOTENCE_CONFIG, "true");
-        return new KafkaProducer(props);
+        KafkaProducer<String, String> producer = new KafkaProducer<>(props);
+        return producer;
     }
 
     private static KafkaConsumer<String, String> createKafkaConsumer() {
