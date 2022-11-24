@@ -94,7 +94,7 @@ if [[ $SKIP_OCP != true ]]; then
     kubectl config set-context --current --namespace="$INIT_TEST_NS" &>/dev/null
     kubectl create -f "$INIT_HOME"/sub.yaml
 
-    krun() { kubectl run krun-"$(date +%s)" -itq --rm --restart="Never" --image="$INIT_STRIMZI_IMAGE" -- "$@"; }
+    krun() { kubectl run krun-"$(date +%s)" -itq --rm --restart="Never" --image="$INIT_STRIMZI_IMAGE" -- /opt/kafka/bin/"$@"; }
   fi
 fi
 
