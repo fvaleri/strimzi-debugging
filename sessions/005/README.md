@@ -9,7 +9,7 @@ A data corruption due to human error or bug would also be replicated, so having 
 One strategy here is to backup the full cluster configuration, while also taking disk/volume snapshots.
 
 Assuming the right replication configuration, the only way to have zero RPO is to setup a stretch Kafka cluster, which is one that evenly spans multiple data centers (i.e. synchronous replication).
-In order to do that, you would need at least three data centers (DCs) that can support the required latency (<100ms).
+In order to do that, you would need at least three data centers (DCs) with good and stable latency (<50ms).
 OpenShift supports stretch/multi-site clusters, so you can simply deploy Streams on top of that, using affinities rules to achieve the desired topolopgy.
 Then, you can set rack awareness to ensure that replicas are distributed evenly across DCs and deploy Cruise Control with rack awareness goals to make sure that replicas remain distributed across different racks.
 
