@@ -53,7 +53,7 @@ This component requires credentials for pushing to an external image registry, s
 ```sh
 # use your credentials
 $ kubectl create secret docker-registry registry-authn \
-  --docker-server="quay.io" --docker-username="fvaleri+r2d2" --docker-password="changeit" \
+  --docker-server="quay.io" --docker-username="fvaleri+test" --docker-password="changeit" \
   --dry-run=client -o yaml | kubectl replace --force -f -
 secret/registry-authn replaced
 
