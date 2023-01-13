@@ -75,10 +75,10 @@ Our output topic has one partition, but what are the `__consumer_offsets` and `_
 We can use the same function that we saw in the first session passing the `group.id` and `transactional.id`.
 
 ```sh
-$ find_cp my-group
+$ find-cp my-group
 12
 
-$ find_cp kafka-trans-0
+$ find-cp kafka-trans-0
 20
 ```
 
@@ -158,7 +158,7 @@ GROUP     TOPIC                  PARTITION  CURRENT-OFFSET  LOG-END-OFFSET  LAG 
 my-group  __consumer_offsets-27  9          913095344       913097449       2115  my-client-0  /10.60.172.97  my-client
 
 # last cleaned offset never changes
-$ grep "my-topic $(find_cp my-group)" /opt/kafka/data/kafka-0/cleaner-offset-checkpoint
+$ grep "my-topic $(find-cp my-group)" /opt/kafka/data/kafka-0/cleaner-offset-checkpoint
 my-topic 9 913090100
 ```
 

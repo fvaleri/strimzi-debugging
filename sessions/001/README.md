@@ -140,10 +140,10 @@ baseOffset: 0 lastOffset: 0 count: 1 baseSequence: 0 lastSequence: 0 producerId:
 Our consumer group should have committed the offsets to the `__consumer_offsets` internal topic.
 The problem is that this topic has 50 partitions by default, so how do I know which partition was used? 
 We can use the same algorithm that Kafka uses to map a `group.id` to a specific offset coordinating partition.
-The `find_cp` function is defined inside the `init.sh` script.
+The `find-cp` function is defined inside the `init.sh` script.
 
 ```sh
-$ find_cp my-group
+$ find-cp my-group
 12
 ```
 

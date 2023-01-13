@@ -1,6 +1,43 @@
-# Source this file to initialize or reset
-# the workspace after running an example.
-# Pass --skip-ocp if you only need local Kafka.
+#!/usr/bin/env bash
+# Source this file to initialize the bash environment.
+# You can skip local or OCP initialization by using --skip-local or --skip-ocp options.
+
+INIT_KAFKA_VERSION="3.2.3"
+INIT_KAFKA_IMAGE="registry.redhat.io/amq7/amq-streams-kafka-32-rhel8:2.2.0"
+INIT_OPERATOR_NS="openshift-operators"
+INIT_TEST_NS="test"
+INIT_SUBS_YAML="
+apiVersion: operators.coreos.com/v1alpha1
+kind: Subscription
+metadata:
+  name: my-streams
+  namespace: openshift-operators
+spec:
+  channel: amq-streams-2.2.x
+  name: amq-streams
+  installPlanApproval: Automatic
+  source: redhat-operators
+  sourceNamespace: openshift-marketplace
+  config:
+    env:
+      - name: FIPS_MODE
+        value: disabled
+---
+apiVersion: operators.coreos.com/v1alpha1
+kind: Subscription
+metadata:
+  name: my-registry
+  namespace: openshift-operators
+spec:
+  channel: 2.x
+  name: service-registry-operator
+  installPlanApproval: Automatic
+  source: redhat-operators
+  sourceNamespace: openshift-marketplace
+"
+
+[[ $1 == "--skip-local" ]] && INIT_LOCAL=false || INIT_LOCAL=true
+[[ $1 == "--skip-ocp" ]] && INIT_OCP=false || INIT_OCP=true
 
 echo "Checking prerequisites"
 for x in curl oc kubectl openssl keytool unzip yq jq git java javac jshell mvn; do
@@ -9,43 +46,38 @@ for x in curl oc kubectl openssl keytool unzip yq jq git java javac jshell mvn; 
   fi
 done
 
-# shared state
-INIT_HOME="" && pushd "$(dirname "$(readlink -f "${BASH_SOURCE[0]}")")" >/dev/null \
-  && { INIT_HOME=$PWD; popd >/dev/null || exit; }
-INIT_KAFKA_VERSION="3.2.3"
-INIT_STRIMZI_IMAGE="registry.redhat.io/amq7/amq-streams-kafka-32-rhel8:2.2.0"
-INIT_OPERATOR_NS="openshift-operators"
-INIT_TEST_NS="test"
-
-add_path() {
+add-path() {
   if [[ -d "$1" && ":$PATH:" != *":$1:"* ]]; then
     PATH="${PATH:+"$PATH:"}$1"
   fi
 }
 
-get_kafka() {
+get-kafka() {
   local home && home="$(find /tmp -name 'kafka.*' -printf '%T@ %p\n' 2>/dev/null |sort -n |tail -n1 |awk '{print $2}')"
   if [[ -n $home ]]; then
     local version && version="$("$home"/bin/kafka-topics.sh --version 2>/dev/null |awk '{print $1}')"
     if [[ $version == "$INIT_KAFKA_VERSION" ]]; then
       echo "Getting Kafka from /tmp"
-      KAFKA_HOME="$home" && export KAFKA_HOME && add_path "$KAFKA_HOME/bin"
+      KAFKA_HOME="$home" && export KAFKA_HOME && add-path "$KAFKA_HOME/bin"
       return
     fi
   fi
   echo "Getting Kafka from ASF"
-  KAFKA_HOME="$(mktemp -d -t kafka.XXXXXXX)" && export KAFKA_HOME && add_path "$KAFKA_HOME/bin"
+  KAFKA_HOME="$(mktemp -d -t kafka.XXXXXXX)" && export KAFKA_HOME && add-path "$KAFKA_HOME/bin"
   curl -sLk "https://archive.apache.org/dist/kafka/$INIT_KAFKA_VERSION/kafka_2.13-$INIT_KAFKA_VERSION.tgz" \
     | tar xz -C "$KAFKA_HOME" --strip-components 1
 }
 
-pkill -f "kafka.Kafka" ||true
-pkill -f "quorum.QuorumPeerMain" ||true
-rm -rf /tmp/kafka-logs /tmp/zookeeper
-get_kafka
-echo "Kafka home: $KAFKA_HOME"
+if [[ $INIT_LOCAL == true ]]; then
+  echo "Configuring Kafka on localhost"
+  pkill -f "kafka.Kafka" ||true
+  pkill -f "quorum.QuorumPeerMain" ||true
+  rm -rf /tmp/kafka-logs /tmp/zookeeper
+  get-kafka
+  echo "Kafka home: $KAFKA_HOME"
+fi
 
-find_cp() {
+find-cp() {
   local id="$1" part="${2-50}"
   if [[ -n $id && -n $part ]]; then
     echo 'public void run(String id, int part) { System.out.println(abs(id.hashCode()) % part); }
@@ -54,7 +86,7 @@ find_cp() {
   fi
 }
 
-authn_ocp() {
+oc-login() {
   local file="/tmp/ocp-login"
   if [[ ! -f $file ]]; then
     local ocp_url ocp_usr ocp_pwd
@@ -66,22 +98,21 @@ authn_ocp() {
     # shellcheck source=/dev/null
     source "$file"
     if [[ -z $ocp_url || -z $ocp_usr || -z $ocp_pwd ]]; then
-      echo "Missing OpenShift parameters" && return 1
+      echo "Missing login parameters" && return 1
     fi
   fi
   if oc login -u "$ocp_usr" -p "$ocp_pwd" "$ocp_url" --insecure-skip-tls-verify=true &>/dev/null; then
     return
   else
-    echo "Authentication failed"
+    echo "Login failed"
     rm -rf $file
     return 1
   fi
 }
 
-[[ $1 = "--skip-ocp" ]] && SKIP_OCP=true || SKIP_OCP=false
-if [[ $SKIP_OCP != true ]]; then
-  echo "Configuring OpenShift"
-  if authn_ocp; then
+if [[ $INIT_OCP == true ]]; then
+  echo "Configuring Kafka on OpenShift"
+  if oc-login; then
     kubectl delete ns "$INIT_TEST_NS" target --wait &>/dev/null
     kubectl wait --for=delete ns/"$INIT_TEST_NS" --timeout=120s &>/dev/null
     kubectl -n "$INIT_OPERATOR_NS" delete csv -l "operators.coreos.com/amq-streams.$INIT_OPERATOR_NS" &>/dev/null
@@ -92,9 +123,9 @@ if [[ $SKIP_OCP != true ]]; then
 
     kubectl create ns "$INIT_TEST_NS"
     kubectl config set-context --current --namespace="$INIT_TEST_NS" &>/dev/null
-    kubectl create -f "$INIT_HOME"/sub.yaml
+    echo -e "$INIT_SUBS_YAML" | kubectl create -f -
 
-    krun() { kubectl run krun-"$(date +%s)" -itq --rm --restart="Never" --image="$INIT_STRIMZI_IMAGE" -- /opt/kafka/bin/"$@"; }
+    krun() { kubectl run krun-"$(date +%s)" -itq --rm --restart="Never" --image="$INIT_KAFKA_IMAGE" -- sh -c "bin/$*"; }
   fi
 fi
 

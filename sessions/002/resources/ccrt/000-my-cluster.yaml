@@ -39,6 +39,8 @@ spec:
         kafka.root.logger.level: "INFO"
     resources:
       limits:
+        memory: 2Gi
+      requests:
         cpu: 1000m
         memory: 2Gi
     storage:
@@ -62,6 +64,8 @@ spec:
         zookeeper.root.logger: "INFO"
     resources:
       limits:
+        memory: 1Gi
+      requests:
         cpu: 500m
         memory: 1Gi
     storage:
@@ -82,7 +86,6 @@ spec:
           rootLogger.level: "INFO"
       resources:
         limits:
-          cpu: 1000m
           memory: 512Mi
         requests:
           cpu: 500m
@@ -100,7 +103,6 @@ spec:
           rootLogger.level: "INFO"
       resources:
         limits:
-          cpu: 1000m
           memory: 512Mi
         requests:
           cpu: 500m
