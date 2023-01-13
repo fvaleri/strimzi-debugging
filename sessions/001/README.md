@@ -140,10 +140,10 @@ baseOffset: 0 lastOffset: 0 count: 1 baseSequence: 0 lastSequence: 0 producerId:
 Our consumer group should have committed the offsets to the `__consumer_offsets` internal topic.
 The problem is that this topic has 50 partitions by default, so how do I know which partition was used? 
 We can use the same algorithm that Kafka uses to map a `group.id` to a specific offset coordinating partition.
-The `find-cp` function is defined inside the `init.sh` script.
+The `kafka-cp` function is defined inside the `init.sh` script.
 
 ```sh
-$ find-cp my-group
+$ kafka-cp my-group
 12
 ```
 
@@ -234,17 +234,17 @@ Note that we are using a nice function to avoid repeating that for every client 
 You can also use the broker pods for that, but it is always risky to spin up another JVM inside a pod, especially in production.
 
 ```sh
-$ krun kafka-console-producer.sh --bootstrap-server my-cluster-kafka-bootstrap:9092 --topic my-topic
+$ kube-rkc kafka-console-producer.sh --bootstrap-server my-cluster-kafka-bootstrap:9092 --topic my-topic
 >hello
 >world
->^Cpod "krun-1664886431" deleted
+>^Cpod "rkc-1664886431" deleted
 
-$ krun kafka-console-consumer.sh --bootstrap-server my-cluster-kafka-bootstrap:9092 \
+$ kube-rkc kafka-console-consumer.sh --bootstrap-server my-cluster-kafka-bootstrap:9092 \
   --topic my-topic --group my-group --from-beginning
 world
 hello
 ^CProcessed a total of 2 messages
-pod "krun-1664886505" deleted
+pod "rkc-1664886505" deleted
 ```
 
 When debugging issues, we usually need to retrieve various artifacts from the environment and this can be tedious.

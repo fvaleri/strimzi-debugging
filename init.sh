@@ -75,15 +75,15 @@ if [[ $INIT_LOCAL == true ]]; then
   rm -rf /tmp/kafka-logs /tmp/zookeeper
   get-kafka
   echo "Kafka home: $KAFKA_HOME"
+  echo "Localhost OK"
 fi
 
-find-cp() {
-  local id="$1" part="${2-50}"
-  if [[ -n $id && -n $part ]]; then
-    echo 'public void run(String id, int part) { System.out.println(abs(id.hashCode()) % part); }
-      private int abs(int n) { return (n == Integer.MIN_VALUE) ? 0 : Math.abs(n); }
-      run("'"$id"'", '"$part"');' | jshell -
-  fi
+kafka-cp() {
+  local id="${1-}" part="${2-50}"
+  if [[ -z $id ]]; then echo "Missing id parameter" && return; fi
+  echo 'public void run(String id, int part) { System.out.println(abs(id.hashCode()) % part); }
+    private int abs(int n) { return (n == Integer.MIN_VALUE) ? 0 : Math.abs(n); }
+    run("'"$id"'", '"$part"');' | jshell -
 }
 
 oc-login() {
@@ -125,8 +125,7 @@ if [[ $INIT_OCP == true ]]; then
     kubectl config set-context --current --namespace="$INIT_TEST_NS" &>/dev/null
     echo -e "$INIT_SUBS_YAML" | kubectl create -f -
 
-    krun() { kubectl run krun-"$(date +%s)" -itq --rm --restart="Never" --image="$INIT_KAFKA_IMAGE" -- sh -c "bin/$*"; }
+    kube-rkc() { kubectl run rkc-"$(date +%s)" -itq --rm --restart="Never" --image="$INIT_KAFKA_IMAGE" -- sh -c "bin/$*"; }
+    echo "OpenShift OK"
   fi
 fi
-
-echo "READY!"

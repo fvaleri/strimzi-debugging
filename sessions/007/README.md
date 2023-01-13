@@ -52,13 +52,13 @@ The result of this procedure would be a `reassign.json` file describing the desi
 
 ```sh
 $ kubectl run rebalancing -itq --rm --restart="Never" --image="$INIT_STRIMZI_IMAGE" -- bash
-[strimzi@krun-1664115586 kafka]$ bin/kafka-topics.sh --bootstrap-server my-cluster-kafka-bootstrap:9092 --topic my-topic --describe
+[strimzi@rkc-1664115586 kafka]$ bin/kafka-topics.sh --bootstrap-server my-cluster-kafka-bootstrap:9092 --topic my-topic --describe
 Topic: my-topic	TopicId: odTuFAweSkSLsboC-QQ4wg	PartitionCount: 3	ReplicationFactor: 3	Configs: min.insync.replicas=2,message.format.version=3.0-IV1,retention.bytes=1073741824
 	Topic: my-topic	Partition: 0	Leader: 1	Replicas: 1,0,2	Isr: 1,2,0
 	Topic: my-topic	Partition: 1	Leader: 0	Replicas: 0,2,1	Isr: 1,2,0
 	Topic: my-topic	Partition: 2	Leader: 2	Replicas: 2,1,0	Isr: 1,2,0
 
-[strimzi@krun-1664115586 kafka]$ cat <<EOF >/tmp/reassign.json
+[strimzi@rkc-1664115586 kafka]$ cat <<EOF >/tmp/reassign.json
 {
   "version": 1,
   "partitions": [
@@ -69,7 +69,7 @@ Topic: my-topic	TopicId: odTuFAweSkSLsboC-QQ4wg	PartitionCount: 3	ReplicationFac
 }
 EOF
 
-[strimzi@krun-1664115586 kafka]$ bin/kafka-reassign-partitions.sh --bootstrap-server my-cluster-kafka-bootstrap:9092 \
+[strimzi@rkc-1664115586 kafka]$ bin/kafka-reassign-partitions.sh --bootstrap-server my-cluster-kafka-bootstrap:9092 \
   --reassignment-json-file /tmp/reassign.json --throttle 5000000 --execute
 Current partition replica assignment
 
@@ -91,7 +91,7 @@ After the reassignment is started, we use `--verify` option to check the status 
 When the process is done, we can check if the topic configuration changes have been applied.
 
 ```sh
-[strimzi@krun-1664115586 kafka]$ bin/kafka-reassign-partitions.sh --bootstrap-server my-cluster-kafka-bootstrap:9092 \
+[strimzi@rkc-1664115586 kafka]$ bin/kafka-reassign-partitions.sh --bootstrap-server my-cluster-kafka-bootstrap:9092 \
   --reassignment-json-file /tmp/reassign.json --verify
 Status of partition reassignment:
 Reassignment of partition my-topic-0 is complete.
@@ -101,13 +101,13 @@ Reassignment of partition my-topic-2 is complete.
 Clearing broker-level throttles on brokers 0,1,2,3
 Clearing topic-level throttles on topic my-topic
 
-[strimzi@krun-1664115586 kafka]$ bin/kafka-topics.sh --bootstrap-server my-cluster-kafka-bootstrap:9092 --topic my-topic --describe
+[strimzi@rkc-1664115586 kafka]$ bin/kafka-topics.sh --bootstrap-server my-cluster-kafka-bootstrap:9092 --topic my-topic --describe
 Topic: my-topic	TopicId: odTuFAweSkSLsboC-QQ4wg	PartitionCount: 3	ReplicationFactor: 3	Configs: min.insync.replicas=2,message.format.version=3.0-IV1,retention.bytes=1073741824
 	Topic: my-topic	Partition: 0	Leader: 3	Replicas: 3,2,1	Isr: 1,2,3
 	Topic: my-topic	Partition: 1	Leader: 2	Replicas: 2,1,3	Isr: 1,2,3
 	Topic: my-topic	Partition: 2	Leader: 1	Replicas: 1,3,2	Isr: 1,2,3
 
-[strimzi@krun-1664115586 kafka]$ exit
+[strimzi@rkc-1664115586 kafka]$ exit
 exit
 ```
 
@@ -121,7 +121,7 @@ When the cluster is ready, we verify how the topic partitions are distributed be
 Then we add one broker, deploy CC by adding the `.spec.cruiseControl` section to the Kafka CR and create a rebalance CR with `mode: add-brokers`.
 
 ```sh
-$ krun kafka-topics.sh --bootstrap-server my-cluster-kafka-bootstrap:9092 --topic my-topic --describe
+$ kube-rkc kafka-topics.sh --bootstrap-server my-cluster-kafka-bootstrap:9092 --topic my-topic --describe
 Topic: my-topic	TopicId: n1QKre80QFmnEKWIXfrLDw	PartitionCount: 3	ReplicationFactor: 3	Configs: min.insync.replicas=2,message.format.version=3.0-IV1,retention.bytes=1073741824
 	Topic: my-topic	Partition: 0	Leader: 2	Replicas: 2,1,0	Isr: 2,1,0
 	Topic: my-topic	Partition: 1	Leader: 1	Replicas: 1,0,2	Isr: 1,0,2
@@ -185,7 +185,7 @@ NAME          CLUSTER      PENDINGPROPOSAL   PROPOSALREADY   REBALANCING   READY
 add-brokers   my-cluster                                     True
 add-brokers   my-cluster                                                   True
 
-$ krun kafka-topics.sh --bootstrap-server my-cluster-kafka-bootstrap:9092 --topic my-topic --describe
+$ kube-rkc kafka-topics.sh --bootstrap-server my-cluster-kafka-bootstrap:9092 --topic my-topic --describe
 Topic: my-topic	TopicId: n1QKre80QFmnEKWIXfrLDw	PartitionCount: 3	ReplicationFactor: 3	Configs: min.insync.replicas=2,message.format.version=3.0-IV1,retention.bytes=1073741824
 	Topic: my-topic	Partition: 0	Leader: 2	Replicas: 2,1,3	Isr: 2,1,3
 	Topic: my-topic	Partition: 1	Leader: 1	Replicas: 1,3,2	Isr: 2,1,3

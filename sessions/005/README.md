@@ -108,24 +108,24 @@ Note that this is a controlled experiment, but the actual offsets tend to natura
 This is why we have offset mapping metadata.
 
 ```sh
-$ krun kafka-producer-perf-test.sh --topic my-topic --record-size 100 --num-records 1000000 \
+$ kube-rkc kafka-producer-perf-test.sh --topic my-topic --record-size 100 --num-records 1000000 \
   --throughput -1 --producer-props acks=1 bootstrap.servers=my-cluster-kafka-bootstrap:9092
 1000000 records sent, 201531.640468 records/sec (19.22 MB/sec), 255.97 ms avg latency, 715.00 ms max latency, 185 ms 50th, 627 ms 95th, 687 ms 99th, 704 ms 99.9th.
 pod "producer-perf" deleted
 
-$ krun kafka-run-class.sh kafka.tools.GetOffsetShell \
+$ kube-rkc kafka-run-class.sh kafka.tools.GetOffsetShell \
   --broker-list my-cluster-kafka-bootstrap:9092 --topic my-topic --time -1
 my-topic:0:353737
 my-topic:1:358846
 my-topic:2:287417
-pod "krun-1665758761" deleted
+pod "rkc-1665758761" deleted
 
-$ krun kafka-run-class.sh kafka.tools.GetOffsetShell \
+$ kube-rkc kafka-run-class.sh kafka.tools.GetOffsetShell \
   --broker-list my-cluster-tgt-kafka-bootstrap.target.svc:9092 --topic my-topic --time -1
 my-topic:0:353737
 my-topic:1:358846
 my-topic:2:287417
-pod "krun-1665758761" deleted
+pod "rkc-1665758761" deleted
 ```
 
 # Example: tuning for throughput
@@ -141,7 +141,7 @@ By looking at `MirrorSourceConnector` task metrics, we see that we are saturatin
 $ kubectl -n target scale kmm2 my-mm2 --replicas 0
 kafkamirrormaker2.kafka.strimzi.io/my-mm2 scaled
 
-$ krun kafka-producer-perf-test.sh --topic my-topic --record-size 100 --num-records 30000000 \
+$ kube-rkc kafka-producer-perf-test.sh --topic my-topic --record-size 100 --num-records 30000000 \
   --throughput -1 --producer-props acks=1 bootstrap.servers=my-cluster-kafka-bootstrap:9092
 1047156 records sent, 209389.3 records/sec (19.97 MB/sec), 102.5 ms avg latency, 496.0 ms max latency.
 ...
@@ -210,7 +210,7 @@ kafkamirrormaker2.kafka.strimzi.io/my-mm2 patched
 $ kubectl -n target scale kmm2 my-mm2 --replicas 0
 kafkamirrormaker2.kafka.strimzi.io/my-mm2 scaled
 
-$ krun kafka-producer-perf-test.sh --topic my-topic --record-size 100 --num-records 30000000 \
+$ kube-rkc kafka-producer-perf-test.sh --topic my-topic --record-size 100 --num-records 30000000 \
   --throughput -1 --producer-props acks=1 bootstrap.servers=my-cluster-kafka-bootstrap:9092
 253179 records sent, 250585.7 records/sec (23.90 MB/sec), 15.5 ms avg latency, 324.0 ms max latency.
 ...

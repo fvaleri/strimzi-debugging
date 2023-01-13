@@ -40,7 +40,7 @@ pvc-2e3c7665-2b92-4376-bb1d-22b1d23fcc6a   10Gi       RWO            Delete     
 pvc-b1e5e0a3-ab83-487f-9b81-c38e1badfccc   10Gi       RWO            Delete           Bound    test/data-my-cluster-kafka-0       gp2                     4m1s
 pvc-e66030cd-3992-4adc-9d94-d9d4ab164a45   10Gi       RWO            Delete           Bound    test/data-my-cluster-kafka-1       gp2                     4m1s
 
-$ krun kafka-producer-perf-test.sh --topic my-topic --record-size 1000 --num-records 12000000 \
+$ kube-rkc kafka-producer-perf-test.sh --topic my-topic --record-size 1000 --num-records 12000000 \
   --throughput -1 --producer-props acks=1 bootstrap.servers=my-cluster-kafka-bootstrap:9092
 287699 records sent, 57528.3 records/sec (54.86 MB/sec), 144.6 ms avg latency, 455.0 ms max latency.
 309618 records sent, 61923.6 records/sec (59.05 MB/sec), 29.1 ms avg latency, 132.0 ms max latency.
@@ -49,8 +49,7 @@ $ krun kafka-producer-perf-test.sh --topic my-topic --record-size 1000 --num-rec
 [2022-10-14 15:14:26,695] WARN [Producer clientId=perf-producer-client] Connection to node 2 (my-cluster-kafka-2.my-cluster-kafka-brokers.test.svc/10.128.2.32:9092) could not be established. Broker may not be available. (org.apache.kafka.clients.NetworkClient)
 [2022-10-14 15:14:26,885] WARN [Producer clientId=perf-producer-client] Connection to node 0 (my-cluster-kafka-0.my-cluster-kafka-brokers.test.svc/10.129.2.59:9092) could not be established. Broker may not be available. (org.apache.kafka.clients.NetworkClient)
 [2022-10-14 15:14:27,036] WARN [Producer clientId=perf-producer-client] Connection to node 1 (my-cluster-kafka-1.my-cluster-kafka-brokers.test.svc/10.131.0.37:9092) could not be established. Broker may not be available. (org.apache.kafka.clients.NetworkClient)
-^Cpod "krun-1665760296" deleted
-pod test/krun-1665760296 terminated (Error)
+^Cpod "rkc-1665760296" deleted
 
 $ kubectl get po | grep kafka
 my-cluster-kafka-0                            0/1     CrashLoopBackOff   3 (26s ago)   15m
@@ -209,11 +208,11 @@ As expected, all persistent volumes are still there after the namespace deletion
 Note that OpenShift also retains some useful information that is needed when reattaching them (capacity, claim, storage class).
 
 ```sh
-$ krun kafka-console-producer.sh --bootstrap-server my-cluster-kafka-bootstrap:9092 --topic my-topic
+$ kube-rkc kafka-console-producer.sh --bootstrap-server my-cluster-kafka-bootstrap:9092 --topic my-topic
 aaa
 >bbb
 >ccc
->^Cpod test/krun-1666882172 terminated (Error)
+>^C
 
 $ kubectl delete ns test
 namespace "test" deleted
@@ -280,17 +279,17 @@ $ cat sessions/001/resources/000-my-cluster.yaml | yq 'del(.spec.entityOperator.
 kafka.kafka.strimzi.io/my-cluster created
 kafkatopic.kafka.strimzi.io/my-topic created
 
-$ krun kafka-topics.sh --bootstrap-server my-cluster-kafka-bootstrap:9092 --list
+$ kube-rkc kafka-topics.sh --bootstrap-server my-cluster-kafka-bootstrap:9092 --list
 __consumer_offsets
 __strimzi-topic-operator-kstreams-topic-store-changelog
 __strimzi_store_topic
 my-topic
 
 $ for topic in "__strimzi_store_topic" ".*topic-store-changelog"; do
-  krun kafka-topics.sh --bootstrap-server my-cluster-kafka-bootstrap:9092 --topic $topic --delete
+  kube-rkc kafka-topics.sh --bootstrap-server my-cluster-kafka-bootstrap:9092 --topic $topic --delete
 done
   
-$ krun kafka-topics.sh --bootstrap-server my-cluster-kafka-bootstrap:9092 --list
+$ kube-rkc kafka-topics.sh --bootstrap-server my-cluster-kafka-bootstrap:9092 --list
 __consumer_offsets
 my-topic
 ```
@@ -310,11 +309,10 @@ observedGeneration: 1
 topicName: my-topic
 
 # drumroll
-$ krun kafka-console-consumer.sh --bootstrap-server my-cluster-kafka-bootstrap:9092 \
+$ kube-rkc kafka-console-consumer.sh --bootstrap-server my-cluster-kafka-bootstrap:9092 \
   --topic my-topic --from-beginning
 bbb
 aaa
 ccc
 ^CProcessed a total of 3 messages
-pod test/krun-1666883115 terminated (Error)
 ```
