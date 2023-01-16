@@ -29,7 +29,8 @@ Whenever possible, records are buffered and sent in batches (a single request ca
 
 Records are stored in a topic, which is further divided into one or more partitions, distributed evenly across the brokers.
 Each partition is stored on disk as a series of fixed-size commit logs called segments.
-Ordering is only guaranteed at the partition level. Each record within a partition has a unique id called the offset, which is a monotonically increasing number that is never reused.
+Ordering is only guaranteed at the partition level.
+Each record within a partition has a unique id called the offset, which is a monotonically increasing number that is never reused.
 Message ordering is only guaranteed at the partition level.
 If this is a requirement, you can create a single-partition topic or use the same key for sending all related events, so that they always land in the same partition.
 Beware that increasing topic partitions may break ordering.
@@ -52,7 +53,8 @@ Each consumer periodically or manually commits its position (the next offsets to
 
 # Example: deploy a Kafka cluster on localhost
 
-In this example, we deploy a Kafka cluster on a local machine. This is useful for quick tests where a multi node cluster is not required.
+In this example, we deploy a Kafka cluster on a local machine.
+This is useful for quick tests where a multi node cluster is not required.
 We use the latest upstream Kafka release because the downstream release is just a rebuild with few additional and optional plugins.
 
 The `init.sh` script initializes the environment, passing the OpenShift parameters.
@@ -126,7 +128,8 @@ total 12K
 -rw-r--r--. 1 fvaleri fvaleri  43 Sep  8 16:55 partition.metadata
 ```
 
-Partition log files are in binary format, but Kafka includes a dump tool for decoding them. On this partition, we have one batch (`baseOffset`), containing only one record (`| offset`) with key "1" and value "hello".
+Partition log files are in binary format, but Kafka includes a dump tool for decoding them.
+On this partition, we have one batch (`baseOffset`), containing only one record (`| offset`) with key "1" and value "hello".
 
 ```sh
 $ kafka-dump-log.sh --deep-iteration --print-data-log \
