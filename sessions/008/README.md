@@ -138,33 +138,34 @@ baseOffset: 4 lastOffset: 4 count: 1 baseSequence: -1 lastSequence: -1 producerI
 
 # Example: hanging transaction rollback
 
-A hanging transaction is one which has a missing or out of order control record, due to a bug in the transaction handling.
-If a transaction is being left in an open state (no end TX marker), the LSO is stuck, which also means that any `read_committed` consumer is blocked.
-This is the typical error you would see in older Kafka releases.
+A hanging transaction is one which has a missing or out of order control record (commit/abort), due to a bug in the transaction handling (see KIP-890).
+When we have hanging transactions, the last stable offset (LSO) does not update, and `read_committed` consumers get stuck.
+
+This is the typical error you would see on stuck consumers:
 
 ```sh
 [Consumer clientId=my-client, groupId=my-group] The following partitions still have unstable offsets which are not cleared on the broker side: [my-topic-9], 
 this could be either transactional offsets waiting for completion, or normal offsets waiting for replication after appending to local log
 ```
 
-If producers continue to send messages to that partition, you should be able to see a growing CG lag.
-If the stuck partition belongs to a compacted topic, you should also have an unbounded partition growth, which in turn canlead to disk exhaustion and broker crash.
-Log cleaner threads never clean beyond the LSO and they select the partition with the highest dirty ratio (dirtyEntries/totalEntries).
+Moreover, if the topic is compacted (e.g. `__consumer_offsets`), the log can't be cleaned, causing unbounded partition growth.
+The log cleaner threads never clean beyond the LSO and they select the partition with the highest dirty ratio (dirtyEntries/totalEntries).
 In this case the LSO is stuck, so that ratio remains constant and the partition is never cleaned.
 
 ```sh
-$ kafka-consumer-groups.sh --bootstrap-server :9092 --describe --group my-group
+kafka-consumer-groups.sh --bootstrap-server :9092 --describe --group my-group
 GROUP     TOPIC                  PARTITION  CURRENT-OFFSET  LOG-END-OFFSET  LAG   CONSUMER-ID  HOST           CLIENT-ID
 my-group  __consumer_offsets-27  9          913095344       913097449       2115  my-client-0  /10.60.172.97  my-client
 
 # last cleaned offset never changes
-$ grep "my-topic $(kafka-cp my-group)" /opt/kafka/data/kafka-0/cleaner-offset-checkpoint
+grep "my-topic $(kafka-cp my-group)" /opt/kafka/data/kafka-0/cleaner-offset-checkpoint
 my-topic 9 913090100
 ```
 
-To unblock these stuck consumers, we need to identify and rollback the hanging transaction.
-This is not an easy task without some tools and knowledge about how EOS works (see previous example).
+To unblock stuck consumers, we need to identify and rollback the hanging transactions.
+With Kafka 3.0 and newer you can easily rollback them by using `kafka-transactions.sh` (find-hanging/abort commands).
 
+The rollback procedure is more complicated with older brokers.
 First, dump the partition segment that includes the blocked offset and all snapshot files of that partition.
 You can easily determine which segment you need to dump, because every segment name is named after the first offset it contains.
 Note that it is required to run the following commands inside the partition directory containing the row segments.
@@ -176,7 +177,7 @@ $ kafka-dump-log.sh --deep-iteration --files 00000000000912375285.log > 00000000
 $ kafka-dump-log.sh --deep-iteration --files 00000000000933607637.snapshot > 00000000000933607637.snapshot.dump
 ```
 
-Now, you need to install and use a tool called `klog`, which is able to parse segment dumps and identify any open transaction (`open_txn`).
+Now, install and use `klog` to parse segment dumps and identify any open transaction (`open_txn`).
 Note that from `klog segment` output we can get the transaction PID and epoch.
 
 ```sh
