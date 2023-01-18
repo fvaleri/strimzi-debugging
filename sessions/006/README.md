@@ -1,11 +1,18 @@
 # Storage requirements and volume recovery
 
-Kafka requires low latency storage to store both broker commit logs and ZooKeeper data.
-File storage like NFS does not work well (silly rename problem).
+Kafka requires low latency storage for both broker commit logs and ZooKeeper data.
+The block storage type offers greater efficiency and faster performance than file and object storage types, this is why it is often recommended for Kafka.
+That said, Kafka does NOT use raw block devices, but it writes to segment files on a standard file system.
+Segment files are memory mapped for performance reasons (this enables zero-copy optimization when TLS is not configured).
+There is no hard dependency on a specific file system although XFS is recommended, but NFS is known to cause problems when renaming files.
+
+The disk is not involved when producer and consumer are fast enough, but it is when old data need to be read or when the OS needs to flush dirty pages.
+This is were disk speed/latency matters, including tail latencies (p95, p99) if there is an end-to-end message latency requirement.
+The storage system characteristics mainly depends on the use case.
+I would suggests to compare against local storage (e.g. SSD or NVMe) or shared storage environment (NVMe-oF or NVMe/TCP).
+
 Both Kafka and Zookeeper have built-in data replication, so they do not need replicated storage to ensure data availability, which would only add network overhead.
-Streams can also work with network attached block storage, such as iSCSI or Fibre Channel, and with most block storage services such as Amazon EBS.
 You can also use JBOD (just a bunch of disks), that gives good performance when using multiple disk in parallel.
-The recommended file system is XFS.
 An easy optimization is to disable the last access time file attribute (noatime).
 
 Ideally, the retention policy should be set properly when provisioning a new cluster or topic, based on requirements and the expected throughput (MB/s).
