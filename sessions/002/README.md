@@ -1,37 +1,38 @@
 # TLS authentication and custom certificates
 
-The TLS protocol provides communications security over a computer network.
+The TLS encryption protocol provides communications security over a computer network.
 Encryption without proper identification is insecure.
-Hostname verification through common name (CN) or subject alternative name (SAN) protects against man in the middle attacks, so it should never be disabled in production.
+Hostname verification using a common name (CN) or subject alternative name (SAN) in a TLS certificate protects against man-in-the-middle attacks, so it should never be disabled in production.
 
-A certificate contains the public key along with the ownership data and expiration date.
+A TLS certificate contains the public key along with the ownership data and expiration date.
 A self-signed certificate (Issuer == Subject) is secure enough, but only if it is trusted upfront by the application.
-It is also possible to create a wildcard certificate (e.g. `commonName=*.example.com`), that can be used by all application running in a specific subdomain (e.g. an OpenShift cluster).
+It is also possible to create a wildcard certificate (e.g. `commonName=*.example.com`), that can be used by all applications running in a specific subdomain (e.g. an OpenShift cluster).
 Cipher suites contain algorithms for key exchange, encryption and authentication.
 
-A public key infrastructure (PKI) is an arrangement that binds public keys with respective identities (e.g. organizations, people, applications).
+A public key infrastructure (PKI) is an arrangement that binds public keys with respective identities, such as organizations, people, or applications.
 The binding is established through a process of registration and issuance of certificates by a certificate authority (CA).
 
-Within a Kafka cluster, in addition to the client-server communication, you also need to protect the inter-cluster communication and renew certificates when they expire.
-All of this work is done by the Streams CO, which is a great example of how the operator simplifies cluster management.
+Within a Kafka cluster, in addition to the client-server communication, inter-cluster communication must be protected and certificates renewed when they expire.
+All of this work is done by the AMQ Streams Cluster Operator, which is a great example of how the operator simplifies cluster management.
 Two self-signed CAs are automatically generated and used to sign all cluster (cluster CA) and user (clients CA) certificates.
 
-![](images/connections.png)
+**AMQ Streams communication secured by TLS**
+![tls communication](images/connections.png)
 
 The server name indication (SNI) extension allows a client to indicate which hostname it is trying to connect to at the start of the TLS handshake.
 The server can present multiple certificates on the same IP address and port number.
-For example, it is used by OpenShift to route external connections to the right pod when having passthrough routes, which also allows to tunnel the Kafka TCP protocol through the HTTP reverse proxy.
+For example, it is used by OpenShift to route external connections to the right pod when having passthrough routes, and also allows a TCP tunnel through the HTTP reverse proxy.
 
-Kafka clients don't need to trust TLS certificates when they are signed by a well-known CA, which is already included in the system truststore (e.g. `$JAVA_HOME/jre/lib/security/cacerts`).
+Kafka clients don't need to trust TLS certificates when they are signed by a well-known CA that is already included in the system truststore (e.g. `$JAVA_HOME/jre/lib/security/cacerts`).
 When enabling TLS mutual authentication (mTLS), the server should also support the certificate CN mapping to the user identity.
 Before the encryption starts, the peers agree to the protocol version and cipher suite to be used, exchange certificates and share encryption keys (connection overhead).
-Almost all the problems occur within this initial handshake.
+Almost all authentication problems occur within this initial handshake.
 
-# Example: TLS authentication (mTLS)
+# Example: TLS authentication (mTLS) using an external listener
 
-[Deploy Streams operator and Kafka cluster](/sessions/001). 
-Then, apply the configuration changes to enable TLS authentication and wait for the CO to restart all pods one by one (rolling update).
-If the Kafka cluster is operated correctly, it is possible to update the configuration with zero downtime.
+First, [we deploy the AMQ Streams operator and Kafka cluster](/sessions/001). 
+Then, we apply the configuration changes to enable TLS authentication and wait for the Cluster Operator to restart all pods one by one (rolling update).
+If the Kafka cluster is operating correctly, it is possible to update the configuration with zero downtime.
 
 ```sh
 $ kubectl apply -f sessions/002/resources/mtls
@@ -82,7 +83,7 @@ $ kafka-console-producer.sh --producer.config /tmp/client.properties --bootstrap
 
 When dealing with TLS issues, it is useful to look inside the certificate to verify its configuration and expiration.
 For example, let's get the cluster CA certificate which is used to sign all server certificates.
-We can use use `kubectl` to do so, but let's suppose we have a must-gather script output (use the command form the first session to generate a new report from the current cluster).
+We can use use `kubectl` to do so, but let's suppose we have a must-gather script output. Use the command from the first session to generate a new report from the current cluster.
 
 ```sh
 $ unzip -q report-10-09-2022_16-45-32.zip
@@ -118,16 +119,16 @@ Certificate:
 ```
 
 If this is not enough to spot the issue, we can add the `-Djavax.net.debug=ssl:handshake` Java option to the client in order to get more details.
-As additional exercise, try to get the clients CA and user certificates to verify if the first signs the second.
+As an additional exercise, try to get the clients CA and user certificates to verify if the first signs the second.
 
 # Example: custom certificates
 
-Often, security policies don't allow to run a Kafka cluster with self-signed certificates in production.
-The listener certificates functionality can be used to configure a custom certificate signed by an external or well-known CA.
+Often, security policies don't allow you to run a Kafka cluster with self-signed certificates in production.
+Configure the listeners to use a custom certificate signed by an external or well-known CA.
 
-Custom certificates are not managed by the operator, so you will be in charge of the renewal process, which requires to update the listener secret.
+Custom certificates are not managed by the operator, so you will be in charge of the renewal process, which requires an update to the listener secret.
 A rolling update will start automatically in order to make the new certificate available.
-This example only shows TLS encryption, but you can add a custom client certificate for TLS authentication by setting `type: tls-external` in the user CR and create the user secret (subject can only contain `CN=$USER_NAME`).
+This example only shows TLS encryption, but you can add a custom client certificate for TLS authentication by setting `type: tls-external` in the `KafkaUser` custom resource and creating the user secret (subject can only contain `CN=$USER_NAME`).
 
 Typically, the security team will provide a certificate bundle which includes the whole trust chain (i.e. root CA + intermediate CA + listener certificate) and a private key.
 If that's not the case, you can easily create the bundle from individual certificates in PEM format, because you need to trust the whole chain, if any.
@@ -136,8 +137,8 @@ If that's not the case, you can easily create the bundle from individual certifi
 $ cat /tmp/listener.crt /tmp/intermca.crt /tmp/rootca.crt > /tmp/bundle.crt
 ```
 
-It's important to note that the custom certificate must not be a CA and it must includes a SAN for each broker route, plus one for the bootstrap route.
-This is an example of how it should look like.
+It's important to note that the custom server certificate for a listener must not be a CA and it must include a SAN for each broker route, plus one for the bootstrap route.
+This is an example of how it looks.
 
 ```sh
 ...
@@ -178,7 +179,7 @@ $ openssl crl2pkcs7 -nocrl -certfile /tmp/bundle.crt | openssl pkcs7 -print_cert
                 DNS:*.apps.cluster-8z6kz.8z6kz.sandbox425.opentlc.com
 ```
 
-[Deploy Streams operator and Kafka cluster](/sessions/001).
+Now we [deploy the AMQ Streams operator and Kafka cluster](/sessions/001).
 Then, we deploy the secret containing the custom certificate and update the Kafka cluster configuration by adding a reference to that secret.
 
 ```sh
