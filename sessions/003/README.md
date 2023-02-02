@@ -1,6 +1,7 @@
 # Schema registry and why it is useful
 
-It is pretty obvious why schemas are useful for multiple clients collaborating on the same data because they provide shared metadata, including field availability and types. Additionally, data storage and processing are more efficient as schemas do not need to be sent with each message and numbers can be stored in binary form.
+It is pretty obvious why schemas are useful for multiple clients collaborating on the same data because they provide shared metadata, including field availability and types.
+Additionally, data storage and processing are more efficient as schemas do not need to be sent with each message and numbers can be stored in binary form.
 
 It is less obvious why we may need a central schema registry.
 Why would you want to add this complexity to your architecture?
