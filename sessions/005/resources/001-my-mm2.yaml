@@ -41,7 +41,6 @@ spec:
           # disable replication of ACL rules
           sync.topic.acls.enabled: false
           # disable source cluster name prefix on target topic
-          replication.policy.separator: ""
           replication.policy.class: "org.apache.kafka.connect.mirror.IdentityReplicationPolicy"
       checkpointConnector:
         tasksMax: 2
@@ -53,7 +52,6 @@ spec:
           emit.checkpoints.interval.seconds: 30
           refresh.groups.interval.seconds: 30
           # disable source cluster name prefix on target topic
-          replication.policy.separator: ""
           replication.policy.class: "org.apache.kafka.connect.mirror.IdentityReplicationPolicy"
   # enable unprotected JMX on port 9999
   jmxOptions: {}
