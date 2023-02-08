@@ -148,18 +148,18 @@ This is the typical error you would see on stuck consumers:
 this could be either transactional offsets waiting for completion, or normal offsets waiting for replication after appending to local log
 ```
 
-Moreover, if the topic is compacted (e.g. `__consumer_offsets`), the log can't be cleaned, causing unbounded partition growth.
+Additionally, if the topic is compacted (e.g. `__consumer_offsets`), the log can't be cleaned, causing unbounded partition growth.
 The log cleaner threads never clean beyond the LSO and they select the partition with the highest dirty ratio (dirtyEntries/totalEntries).
 In this case the LSO is stuck, so that ratio remains constant and the partition is never cleaned.
 
 ```sh
-kafka-consumer-groups.sh --bootstrap-server :9092 --describe --group my-group
+$ kafka-consumer-groups.sh --bootstrap-server :9092 --describe --group my-group
 GROUP     TOPIC                  PARTITION  CURRENT-OFFSET  LOG-END-OFFSET  LAG   CONSUMER-ID  HOST           CLIENT-ID
-my-group  __consumer_offsets-27  9          913095344       913097449       2115  my-client-0  /10.60.172.97  my-client
+my-group  __consumer_offsets-27  9          913095344       913097449       2105  my-client-0  /10.60.172.97  my-client
 
 # last cleaned offset never changes
-grep "my-topic $(kafka-cp my-group)" /opt/kafka/data/kafka-0/cleaner-offset-checkpoint
-my-topic 9 913090100
+$ grep "__consumer_offsets 27" /opt/kafka/data/kafka-0/cleaner-offset-checkpoint
+__consumer_offsets 27 913090100
 ```
 
 To unblock stuck consumers, we need to identify and rollback the hanging transactions.
