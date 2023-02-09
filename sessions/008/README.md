@@ -182,7 +182,7 @@ Note that from `klog segment` output we can get the transaction PID and epoch.
 
 ```sh
 $ git clone https://github.com/tombentley/klog
-$ cd klog && mvn clean package -DskipTests -Pnative -Dquarkus.native.container-build=true -q
+$ cd klog && mvn clean package -DskipTests -Pnative -Dquarkus.native.container-build=true
 $ cp target/*-runner ~/.local/bin/klog
 
 $ klog segment txn-stat 00000000000912375285.log.dump | grep "open_txn" | head -n1
