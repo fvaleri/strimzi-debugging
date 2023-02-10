@@ -11,7 +11,9 @@ There are two kinds of connectors:
 
 Only a few connectors are officially part of the Kafka solution, but there are many others available on GitHub or on public registries like the Confluent Hub.
 
-Connectors use converters to serialize and deserialize data when communicating with the Kafka cluster. For light modifications, such as filters, mappings, and replacements, transformations (also called Single Message Transformations) can be applied at the record level. However, for complex transformations such as aggregations, joins, and external service calls, it's recommended to use a stream processing library like Kafka Streams.
+Connectors use converters to serialize and deserialize data when communicating with the Kafka cluster.
+For light modifications, such as filters, mappings, and replacements, transformations (also called Single Message Transformations) can be applied at the record level.
+However, for complex transformations such as aggregations, joins, and external service calls, it's recommended to use a stream processing library like Kafka Streams.
 
 ![](images/connect.png)
 
