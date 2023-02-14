@@ -6,36 +6,48 @@ A sequence number is assigned when the record batch is first added to a produce 
 That way, the broker hosting the partition leader can identify and filter out duplicates.
 
 Unfortunately, the idempotent producer does not guarantee atomicity when you need to write to multiple partitions as a single unit of work.
-Duplicates can also arise if you have two or more producer instances.
-In all these cases, the exactly-once semantics (EOS) allows the desired all or nothing behavior when writing to distributed partitions.
-Transactions are are typically used for read-process-write streaming applications where the EOS is required.
-The EOS in only supported inside a single Kafka cluster, excluding external systems (see the Outbox pattern and Spring TM).
+This is usually the case of read-process-write applications, where the exactly-once semantics (EOS) allows atomic writes to multiple partitions.
+The EOS in only supported inside a single Kafka cluster, excluding any external system (see the Outbox pattern and Spring TM for this use case).
 
 ![](images/trans.png)
 
-It is crucial that each application instance has its own static and unique `transactional.id` (TID), which is mapped to PID and epoch for zombie fencing.
-A producer can have only one ongoing transaction (ordering guarantee).
-Consumers with `isolation.level=read_committed` only receive committed messages, ignoring ongoing and discarding aborted transactions.
-The EOS client overhead is minimal and you can tune the `commit.interval.ms` to meet the required latency.
-Enabling EOS with the Streams API is much easier than using the low level transaction API, as we just need to set `processing.guarantee=exactly_once_v2`.
+Each producer instance must have its own static and unique `transactional.id` (TID), which is mapped to a producer id (PID) and epoch (zombie fencing).
+Consumers with `isolation.level=read_committed` only get committed messages, ignoring ongoing and aborted transactions.
 
-The transaction state is stored in a specific `__transaction_state` partition, whose leader is a broker called the transaction coordinator. 
-Each partition also contains `.snapshot` logs that helps in rebuilding the producers state in case of broker crash or restart.
-The offset of the first still-open transaction is called the last stable offset (LSO <= HW).
-The transaction coordinator automatically aborts any ongoing transaction that is not committed or aborted within `transaction.timeout.ms`.
+A given producer can have at most one ongoing transaction (ordering guarantee).
+The transaction state is stored in an internal topic called `__transaction_state`.
+The transaction coordinator automatically aborts any ongoing transaction that is not completed within `transaction.timeout.ms`.
 
-Before Kafka 2.5.0 the TID had to be a static encoding of the input partition (i.e. `my-app.my-group.my-topic.0`), which also means one producer per partiton.
-This was ugely inefficient but required to avoid the partition ownership transfer on CG rebalances, that would invalidate the fencing logic.
-It was fixed by forcing the producer to send the consumer group metadata along with the offsets to commit (see `sendOffsetsToTransaction`).
+A transaction goes through the following states:
 
-# Example: transactional word counter
+1. Ongoing (undecided)
+2. Completed and unreplicated (decided)
+3. Completed and replicated (decided and committed)
+
+The first unstable offset (FUO) is the earliest offset which is part of an ongoing transaction, if any.
+The last stable offset (LSO) is the offset such that all lower offsets have been decided and it is always present.
+Non-transactional batches are considered decided immediately, but transactional batches are only decided when the corresponding commit or abort marker is written.
+This means that the LSO is equal to the FUO if it's lower than the high watermark (HW), otherwise it's the HW.
+
+The LogCleaner does not clean beyond the LSO.
+If there is a hanging transaction on a partition (missing or out of order control record), the FUO can't be updated, which means the LSO is stuck.
+At this point, transactional consumers can't make progress and compaction is blocked if enabled.
+After transaction rollback, the LSO starts to increment again on every completed transaction.
+
+# Example: transactional application
 
 [Deploy a Kafka cluster on localhost](/sessions/001).
-Run the demo application included in this session on a different terminal (there is a new poll/read every 60 seconds).
+Run the word count application included in this session on a different terminal (there is a new poll/read every 60 seconds).
 [Look at the code](/sessions/008/kafka-trans) to see how the low level transaction API is used.
 
 ```sh
-$ mvn clean compile exec:java -f sessions/008/kafka-trans/pom.xml -q
+export BOOTSTRAP_SERVERS="localhost:9092" \
+       GROUP_ID="my-group" \
+       TRANSACTIONAL_ID="kafka-trans-0" \
+       INPUT_TOPIC="word-count-input" \
+       OUTPUT_TOPIC="word-count-output"
+
+mvn clean compile exec:java -f sessions/008/kafka-trans/pom.xml -q
 Starting application instance with TID kafka-trans-0
 Creating admin client
 Topic wc-input created
@@ -53,11 +65,11 @@ Topic wc-output created
 Then, send one sentence to the input topic and check the result from the output topic.
 
 ```sh
-$ kafka-console-producer.sh --bootstrap-server :9092 --topic wc-input
+kafka-console-producer.sh --bootstrap-server :9092 --topic wc-input
 >a long time ago in a galaxy far far away
 >^C
 
-$ kafka-console-consumer.sh --bootstrap-server :9092 --topic wc-output \
+kafka-console-consumer.sh --bootstrap-server :9092 --topic wc-output \
   --from-beginning --property print.key=true --property print.value=true
 a	2
 away	1
@@ -75,10 +87,10 @@ Our output topic has one partition, but what are the `__consumer_offsets` and `_
 We can use the same function that we saw in the first session passing the `group.id` and `transactional.id`.
 
 ```sh
-$ kafka-cp my-group
+kafka-cp my-group
 12
 
-$ kafka-cp kafka-trans-0
+kafka-cp kafka-trans-0
 20
 ```
 
@@ -88,7 +100,7 @@ This batch is followed by a control batch (`isControl`), which contains a single
 In `__consumer_offsets-12`, the CG offset commit batch (`key: offset_commit`) is followed by a similar control batch.
 
 ```sh
-$ kafka-dump-log.sh --deep-iteration --print-data-log --files /tmp/kafka-logs/wc-output-0/00000000000000000000.log
+kafka-dump-log.sh --deep-iteration --print-data-log --files /tmp/kafka-logs/wc-output-0/00000000000000000000.log
 Dumping /tmp/kafka-logs/wc-output-0/00000000000000000000.log
 Starting offset: 0
 baseOffset: 0 lastOffset: 7 count: 8 baseSequence: 0 lastSequence: 7 producerId: 0 producerEpoch: 0 partitionLeaderEpoch: 0 isTransactional: true isControl: false deleteHorizonMs: OptionalLong.empty position: 0 CreateTime: 1665506597828 size: 152 magic: 2 compresscodec: none crc: 3801140420 isvalid: true
@@ -103,7 +115,7 @@ baseOffset: 0 lastOffset: 7 count: 8 baseSequence: 0 lastSequence: 7 producerId:
 baseOffset: 8 lastOffset: 8 count: 1 baseSequence: -1 lastSequence: -1 producerId: 0 producerEpoch: 0 partitionLeaderEpoch: 0 isTransactional: true isControl: true deleteHorizonMs: OptionalLong.empty position: 152 CreateTime: 1665506597998 size: 78 magic: 2 compresscodec: none crc: 3355926470 isvalid: true
 | offset: 8 CreateTime: 1665506597998 keySize: 4 valueSize: 6 sequence: -1 headerKeys: [] endTxnMarker: COMMIT coordinatorEpoch: 0
 
-$ kafka-dump-log.sh --deep-iteration --print-data-log --offsets-decoder --files /tmp/kafka-logs/__consumer_offsets-12/00000000000000000000.log
+kafka-dump-log.sh --deep-iteration --print-data-log --offsets-decoder --files /tmp/kafka-logs/__consumer_offsets-12/00000000000000000000.log
 Dumping /tmp/kafka-logs/__consumer_offsets-12/00000000000000000000.log
 Starting offset: 0
 # ...
@@ -121,7 +133,7 @@ Then, when the commit is called, we have `PrepareCommit` state change, which mea
 This happens in the last batch, where the state is changed to `CompleteCommit`, terminating  the transaction.
 
 ```sh
-$ kafka-dump-log.sh --deep-iteration --print-data-log --transaction-log-decoder --files /tmp/kafka-logs/__transaction_state-20/00000000000000000000.log
+kafka-dump-log.sh --deep-iteration --print-data-log --transaction-log-decoder --files /tmp/kafka-logs/__transaction_state-20/00000000000000000000.log
 Dumping /tmp/kafka-logs/__transaction_state-20/00000000000000000000.log
 Starting offset: 0
 baseOffset: 0 lastOffset: 0 count: 1 baseSequence: -1 lastSequence: -1 producerId: -1 producerEpoch: -1 partitionLeaderEpoch: 0 isTransactional: false isControl: false deleteHorizonMs: OptionalLong.empty position: 0 CreateTime: 1665506545539 size: 130 magic: 2 compresscodec: none crc: 682337358 isvalid: true
@@ -136,66 +148,63 @@ baseOffset: 4 lastOffset: 4 count: 1 baseSequence: -1 lastSequence: -1 producerI
 | offset: 4 CreateTime: 1665506598005 keySize: 24 valueSize: 37 sequence: -1 headerKeys: [] key: transaction_metadata::transactionalId=kafka-trans-0 payload: producerId:0,producerEpoch:0,state=CompleteCommit,partitions=[],txnLastUpdateTimestamp=1665506597989,txnTimeoutMs=60000
 ```
 
-# Example: hanging transaction rollback
+# Example: transaction rollback
 
-A hanging transaction is one which has a missing or out of order control record (commit/abort), due to a bug in the transaction handling (see KIP-890).
-When we have hanging transactions, the last stable offset (LSO) does not update, and `read_committed` consumers get stuck.
-
-This is the typical error you would see on stuck consumers:
+When there is a hanging transaction the LSO is stuck, which means that transactional consumers of this partition can't make any progress (CURRENT-OFFSET==LSO).
 
 ```sh
-[Consumer clientId=my-client, groupId=my-group] The following partitions still have unstable offsets which are not cleared on the broker side: [my-topic-9], 
+# application log
+[Consumer clientId=my-client, groupId=my-group] The following partitions still have unstable offsets which are not cleared on the broker side: [__consumer_offsets-27], 
 this could be either transactional offsets waiting for completion, or normal offsets waiting for replication after appending to local log
-```
 
-Additionally, if the topic is compacted (e.g. `__consumer_offsets`), the log can't be cleaned, causing unbounded partition growth.
-The log cleaner threads never clean beyond the LSO and they select the partition with the highest dirty ratio (dirtyEntries/totalEntries).
-In this case the LSO is stuck, so that ratio remains constant and the partition is never cleaned.
-
-```sh
-$ kafka-consumer-groups.sh --bootstrap-server :9092 --describe --group my-group
+# consumer lag grows
+kafka-consumer-groups.sh --bootstrap-server :9092 --describe --group my-group
 GROUP     TOPIC                  PARTITION  CURRENT-OFFSET  LOG-END-OFFSET  LAG   CONSUMER-ID  HOST           CLIENT-ID
 my-group  __consumer_offsets-27  9          913095344       913097449       2105  my-client-0  /10.60.172.97  my-client
+```
 
+If the partition is part of a compacted topic like `__consumer_offsets`, compaction is also blocked, causing the unbounded partition growth.
+
+```sh
 # last cleaned offset never changes
-$ grep "__consumer_offsets 27" /opt/kafka/data/kafka-0/cleaner-offset-checkpoint
-__consumer_offsets 27 913090100
+grep "__consumer_offsets 27" /opt/kafka/data/kafka-0/cleaner-offset-checkpoint
+__consumer_offsets 27 913095344
 ```
 
-To unblock stuck consumers, we need to identify and rollback the hanging transactions.
-With Kafka 3.0 and newer you can easily rollback them by using `kafka-transactions.sh` (find-hanging/abort commands).
-
-The rollback procedure is more complicated with older brokers.
-First, dump the partition segment that includes the blocked offset and all snapshot files of that partition.
-You can easily determine which segment you need to dump, because every segment name is named after the first offset it contains.
-Note that it is required to run the following commands inside the partition directory containing the row segments.
-
-```sh
-$ tar xzf sessions/008/raw/__consumer_offsets-27.tgz -C ~/Downloads
-$ cd ~/Downloads/__consumer_offsets-27
-$ kafka-dump-log.sh --deep-iteration --files 00000000000912375285.log > 00000000000912375285.log.dump
-$ kafka-dump-log.sh --deep-iteration --files 00000000000933607637.snapshot > 00000000000933607637.snapshot.dump
-```
-
-Now, install and use `klog` to parse segment dumps and identify any open transaction (`open_txn`).
-Note that from `klog segment` output we can get the transaction PID and epoch.
-
-```sh
-$ git clone https://github.com/tombentley/klog
-$ cd klog && mvn clean package -DskipTests -Pnative -Dquarkus.native.container-build=true
-$ cp target/*-runner ~/.local/bin/klog
-
-$ klog segment txn-stat 00000000000912375285.log.dump | grep "open_txn" | head -n1
-open_txn: ProducerSession[producerId=171100, producerEpoch=1]->FirstBatchInTxn[firstBatchInTxn=Batch(baseOffset=913095344, lastOffset=913095344, count=1, baseSequence=0, lastSequence=0, producerId=171100, producerEpoch=1, partitionLeaderEpoch=38, isTransactional=true, isControl=false, position=76752106, createTime=2022-06-06T03:16:47.124Z, size=128, magic=2, compressCodec='none', crc=-2141709867, isValid=true), numDataBatches=1]
-```
-
-If there is no open transaction, then it means that the topic retention kicked in and the records were deleted.
-In this case you can simply delete all `.snapshot` files in the stuck partition's folder and do a cluster rolling restart.
-
-Instead, if there are open transactions, you need to rollback them by using the Kafka command printed by `klog snapshot`.
+In Kafka 3+ there is an official command line tool that you can use to identify and rollback hanging transactions.
 Note that the `CLUSTER_ACTION` operation is required if authorization is enabled.
 
 ```sh
-$ klog snapshot abort-cmd 00000000000933607637.snapshot.dump --pid 171100 --producer-epoch 1
+kafka-transactions.sh --bootstrap-server :9092 find-hanging --broker 0
+Topic                  Partition   ProducerId  ProducerEpoch   StartOffset LastTimestamp               Duration(s)
+__consumer_offsets     27          171100      1               913095344   2022-06-06T03:16:47Z        209793
+
+kafka-transactions.sh --bootstrap-server :9092 abort --topic __consumer_offsets --partition 27 --start-offset 913095344
+```
+
+If you are using an older version and hanging transactions are still in the logs, then the procedure is more complicated.
+First, dump the partition segment that includes the LSO and all snapshot files of that partition.
+
+```sh
+kafka-dump-log.sh --deep-iteration --files 00000000000912375285.log > 00000000000912375285.log.dump
+kafka-dump-log.sh --deep-iteration --files 00000000000933607637.snapshot > 00000000000933607637.snapshot.dump
+```
+
+Then, use `klog segment` to parse the segment dumps and identify the hanging transactions.
+
+```sh
+git clone https://github.com/tombentley/klog
+cd klog && mvn clean package -DskipTests -Pnative -Dquarkus.native.container-build=true
+cp target/*-runner ~/.local/bin/klog
+
+klog segment txn-stat 00000000000912375285.log.dump | grep "open_txn" | head -n1
+open_txn: ProducerSession[producerId=171100, producerEpoch=1]->FirstBatchInTxn[firstBatchInTxn=Batch(baseOffset=913095344, lastOffset=913095344, count=1, baseSequence=0, lastSequence=0, producerId=171100, producerEpoch=1, partitionLeaderEpoch=38, isTransactional=true, isControl=false, position=76752106, createTime=2022-06-06T03:16:47.124Z, size=128, magic=2, compressCodec='none', crc=-2141709867, isValid=true), numDataBatches=1]
+```
+
+If the `open_txn` is the last segment batch, then the it may be closed in the next segment (false positive).
+Otherwise, we can rollback the hanging transaction by running the command printed out by `klog snapshot`.
+
+```sh
+klog snapshot abort-cmd 00000000000933607637.snapshot.dump --pid 171100 --producer-epoch 1
 $KAFKA_HOME/bin/kafka-transactions.sh --bootstrap-server $BOOTSTRAP_URL abort --topic $TOPIC_NAME --partition $PART_NUM --producer-id 171100 --producer-epoch 1 --coordinator-epoch 34
 ```

@@ -61,16 +61,16 @@ The `init.sh` script initializes the environment, passing the OpenShift paramete
 When it returns, two processes are running on the system: one is Kafka and the other is ZooKeeper.
 
 ```sh
-$ source init.sh --skip-ocp
+source init.sh --skip-ocp
 Checking prerequisites
 Getting Kafka from ASF
 Kafka home: /tmp/kafka.9bAqs71
 READY!
 
-$ zookeeper-server-start.sh -daemon $KAFKA_HOME/config/zookeeper.properties \
+zookeeper-server-start.sh -daemon $KAFKA_HOME/config/zookeeper.properties \
   && sleep 5 && kafka-server-start.sh -daemon $KAFKA_HOME/config/server.properties
 
-$ jps -v | grep kafka
+jps -v | grep kafka
 451178 Kafka -Xmx1G -Xms1G -XX:+UseG1GC -XX:MaxGCPauseMillis=20 -XX:InitiatingHeapOccupancyPercent=35 -XX:+ExplicitGCInvokesConcurrent -XX:MaxInlineLevel=15 -Djava.awt.headless=true -Xlog:gc:file=/tmp/kafka-uIdD8ek/bin/.logs/kafkaServer-gc.log:time,tags:filecount=10,filesize=100M -Dcom.sun.management.jmxremote -Dcom.sun.management.jmxremote.authenticate=false -Dcom.sun.management.jmxremote.ssl=false -Dkafka.logs.dir=/tmp/kafka-uIdD8ek/bin/.logs -Dlog4j.configuration=file:/tmp/kafka-uIdD8ek/bin/.config/log4j.properties
 450808 QuorumPeerMain -Xmx512M -Xms512M -XX:+UseG1GC -XX:MaxGCPauseMillis=20 -XX:InitiatingHeapOccupancyPercent=35 -XX:+ExplicitGCInvokesConcurrent -XX:MaxInlineLevel=15 -Djava.awt.headless=true -Xlog:gc:file=/tmp/kafka-uIdD8ek/bin/.logs/zookeeper-gc.log:time,tags:filecount=10,filesize=100M -Dcom.sun.management.jmxremote -Dcom.sun.management.jmxremote.authenticate=false -Dcom.sun.management.jmxremote.ssl=false -Dkafka.logs.dir=/tmp/kafka-uIdD8ek/bin/.logs -Dlog4j.configuration=file:/tmp/kafka-uIdD8ek/bin/.config/log4j.properties
 ```
@@ -80,21 +80,21 @@ When consuming messages, you can print additional data such as the partition num
 Every consumer with the same `group.id` is part of the same consumer group.
 
 ```sh
-$ kafka-topics.sh --bootstrap-server :9092 --topic my-topic --create --partitions 3 --replication-factor 1 
+kafka-topics.sh --bootstrap-server :9092 --topic my-topic --create --partitions 3 --replication-factor 1 
 Created topic my-topic.
 
-$ kafka-topics.sh --bootstrap-server :9092 --topic my-topic --describe
+kafka-topics.sh --bootstrap-server :9092 --topic my-topic --describe
 Topic: my-topic	TopicId: a4Lnw1iQSW6MALg0gvxZNQ	PartitionCount: 3	ReplicationFactor: 1	Configs: segment.bytes=1073741824
 	Topic: my-topic	Partition: 0	Leader: 0	Replicas: 0	Isr: 0
 	Topic: my-topic	Partition: 1	Leader: 0	Replicas: 0	Isr: 0
 	Topic: my-topic	Partition: 2	Leader: 0	Replicas: 0	Isr: 0
 
-$ kafka-console-producer.sh --bootstrap-server :9092 --topic my-topic --property parse.key=true --property key.separator="#"
+kafka-console-producer.sh --bootstrap-server :9092 --topic my-topic --property parse.key=true --property key.separator="#"
 >1#hello
 >2#world
 >^C
 
-$ kafka-console-consumer.sh --bootstrap-server :9092 --topic my-topic --group my-group --from-beginning \
+kafka-console-consumer.sh --bootstrap-server :9092 --topic my-topic --group my-group --from-beginning \
   --property print.partition=true --property print.key=true
 Partition:0	1	hello
 Partition:2	2	world
@@ -105,10 +105,10 @@ It works, but where these messages are being stored? The broker property `log.di
 We have 3 partitions, which corresponds to exactly 3 folders on disk.
 
 ```sh
-$ cat $KAFKA_HOME/config/server.properties | grep log.dirs
+cat $KAFKA_HOME/config/server.properties | grep log.dirs
 log.dirs=/tmp/kafka-logs
 
-$ ls -lh /tmp/kafka-logs/ | grep my-topic
+ls -lh /tmp/kafka-logs/ | grep my-topic
 drwxr-xr-x. 2 fvaleri fvaleri  140 Sep  8 16:55 my-topic-0
 drwxr-xr-x. 2 fvaleri fvaleri  140 Sep  8 16:55 my-topic-1
 drwxr-xr-x. 2 fvaleri fvaleri  140 Sep  8 16:55 my-topic-2
@@ -119,7 +119,7 @@ Looking inside partition 0, we have a `.log` file containing our records (each s
 The other two files contain additional metadata.
 
 ```sh
-$ ls -lh /tmp/kafka-logs/my-topic-0/
+ls -lh /tmp/kafka-logs/my-topic-0/
 total 12K
 -rw-r--r--. 1 fvaleri fvaleri 10M Sep  8 16:55 00000000000000000000.index
 -rw-r--r--. 1 fvaleri fvaleri  74 Sep  8 16:57 00000000000000000000.log
@@ -132,7 +132,7 @@ Partition log files are in binary format, but Kafka includes a dump tool for dec
 On this partition, we have one batch (`baseOffset`), containing only one record (`| offset`) with key "1" and value "hello".
 
 ```sh
-$ kafka-dump-log.sh --deep-iteration --print-data-log \
+kafka-dump-log.sh --deep-iteration --print-data-log \
   --files /tmp/kafka-logs/my-topic-0/00000000000000000000.log
 Dumping /tmp/kafka-logs/my-topic-0/00000000000000000000.log
 Starting offset: 0
@@ -146,7 +146,7 @@ We can use the same algorithm that Kafka uses to map a `group.id` to a specific 
 The `kafka-cp` function is defined inside the `init.sh` script.
 
 ```sh
-$ kafka-cp my-group
+kafka-cp my-group
 12
 ```
 
@@ -158,7 +158,7 @@ We have a batch from our consumer group, which includes 3 records, one for each 
 As expected, the consumer group committed offset1 on partition0 and partition2, plus offset0 on partition1 (we sent 2 messages).
 
 ```sh
-$ kafka-dump-log.sh --deep-iteration --print-data-log --offsets-decoder \
+kafka-dump-log.sh --deep-iteration --print-data-log --offsets-decoder \
   --files /tmp/kafka-logs/__consumer_offsets-12/00000000000000000000.log
 Dumping /tmp/kafka-logs/__consumer_offsets-12/00000000000000000000.log
 Starting offset: 0
@@ -181,7 +181,7 @@ Remember that CRDs are cluster wide resources, so we can't deploy multiple opera
 If you delete the CRDs, every Kafka cluster deployed on that OpenShift cluster is garbage collected.
 
 ```sh
-$ source init.sh
+source init.sh
 Checking prerequisites
 Getting Kafka from /tmp
 Kafka home: /tmp/kafka.9bAqs71
@@ -194,7 +194,7 @@ subscription.operators.coreos.com/my-streams created
 subscription.operators.coreos.com/my-registry created
 READY!
 
-$ kubectl -n openshift-operators get po
+kubectl -n openshift-operators get po
 NAME                                                         READY   STATUS    RESTARTS   AGE
 amq-streams-cluster-operator-v2.2.0-1-58bb4cf646-gbh55       1/1     Running   0          12m
 apicurio-registry-operator-v1.1.0-redhat.1-f5f95b4fd-7l9fq   1/1     Running   0          12m
@@ -208,11 +208,11 @@ In addition to ZooKeeper and Kafka pods, the Entity Operator (EO) pod is also de
 If you want to deploy multiple Kafka clusters on the same namespace, make sure to have only one instance of these operators to avoid race conditions.
 
 ```sh
-$ kubectl create -f sessions/001/resources
+kubectl create -f sessions/001/resources
 kafka.kafka.strimzi.io/my-cluster created
 kafkatopic.kafka.strimzi.io/my-topic created
 
-$ kubectl get k,kt,po
+kubectl get k,kt,po
 NAME                                DESIRED KAFKA REPLICAS   DESIRED ZK REPLICAS   READY   WARNINGS
 kafka.kafka.strimzi.io/my-cluster   3                        3                     True    
 
@@ -237,12 +237,12 @@ Note that we are using a nice function to avoid repeating that for every client 
 You can also use the broker pods for that, but it is always risky to spin up another JVM inside a pod, especially in production.
 
 ```sh
-$ kube-rkc kafka-console-producer.sh --bootstrap-server my-cluster-kafka-bootstrap:9092 --topic my-topic
+kube-rkc kafka-console-producer.sh --bootstrap-server my-cluster-kafka-bootstrap:9092 --topic my-topic
 >hello
 >world
 >^Cpod "rkc-1664886431" deleted
 
-$ kube-rkc kafka-console-consumer.sh --bootstrap-server my-cluster-kafka-bootstrap:9092 \
+kube-rkc kafka-console-consumer.sh --bootstrap-server my-cluster-kafka-bootstrap:9092 \
   --topic my-topic --group my-group --from-beginning
 world
 hello
@@ -255,7 +255,7 @@ Fortunately, Strimzi maintains a backward compatible must-gather script that can
 Add the `--secrets=all` option to also get secret values.
 
 ```sh
-$ curl -sLk "https://raw.githubusercontent.com/strimzi/strimzi-kafka-operator/28b70e1041301d0a0ecc0d2555013629f934718c/tools/report.sh" \
+curl -sLk "https://raw.githubusercontent.com/strimzi/strimzi-kafka-operator/28b70e1041301d0a0ecc0d2555013629f934718c/tools/report.sh" \
   | bash -s -- --namespace=test --cluster=my-cluster --out-dir=~/Downloads
 deployments
     deployment.apps/my-cluster-entity-operator

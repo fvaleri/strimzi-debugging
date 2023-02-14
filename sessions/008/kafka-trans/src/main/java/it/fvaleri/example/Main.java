@@ -27,33 +27,34 @@ import static java.time.Duration.ofSeconds;
 import static java.util.Collections.singleton;
 
 public class Main {
-    private static final String GROUP_ID = "my-group";
-    private static final String INPUT_TOPIC = "wc-input";
-    private static final String OUTPUT_TOPIC = "wc-output";
-
-    private static String bootstrapServers, transactionalId;
+    private static String bootstrapServers, groupId, transactionalId, inputTopic, outputTopic;
     private static boolean closed = false;
 
     static {
         if (System.getenv("BOOTSTRAP_SERVERS") != null) {
             bootstrapServers = System.getenv("BOOTSTRAP_SERVERS");
-        } else {
-            bootstrapServers = "localhost:9092";
+        }
+        if (System.getenv("GROUP_ID") != null) {
+            groupId = System.getenv("GROUP_ID");
         }
         if (System.getenv("TRANSACTIONAL_ID") != null) {
             transactionalId = System.getenv("TRANSACTIONAL_ID");
-        } else {
-            transactionalId = "kafka-trans-0";
+        }
+        if (System.getenv("INPUT_TOPIC") != null) {
+            inputTopic = System.getenv("INPUT_TOPIC");
+        }
+        if (System.getenv("OUTPUT_TOPIC") != null) {
+            outputTopic = System.getenv("OUTPUT_TOPIC");
         }
     }
 
     public static void main(String[] args) {
         System.out.printf("Starting application instance with TID %s%n", transactionalId);
-        createTopic(INPUT_TOPIC);
+        createTopic(inputTopic);
         try (var producer = createKafkaProducer();
              var consumer = createKafkaConsumer()) {
             // transaction APIs are all blocking with a max.block.ms timeout
-            // called once to register the transactional.id, abort any pending TX, and get a new session (pid+epoch)
+            // called once to fence zombies, abort any pending TX, and get a new session (pid+epoch)
             producer.initTransactions();
 
             while (!closed) {
@@ -65,21 +66,20 @@ public class Main {
                         producer.beginTransaction();
 
                         Map<String, Integer> wordCountMap = new HashMap<>();
-                        int numberOfPartitions = producer.partitionsFor(INPUT_TOPIC).size();
+                        int numberOfPartitions = producer.partitionsFor(inputTopic).size();
                         for (int i = 0; i < numberOfPartitions; i++) {
-                            System.out.printf("PROCESS: Computing word counts for %s-%d%n", INPUT_TOPIC, i);
-                            wordCountMap.putAll(consumerRecords.records(new TopicPartition(INPUT_TOPIC, i))
-                                    .stream()
-                                    .flatMap(record -> Stream.of(record.value().split(" ")))
-                                    .map(word -> Tuple.of(word, 1))
-                                    .collect(Collectors.toMap(tuple -> tuple.getKey(), t1 -> t1.getValue(), (v1, v2) -> v1 + v2)));
+                            System.out.printf("PROCESS: Computing word counts for %s-%d%n", inputTopic, i);
+                            wordCountMap.putAll(consumerRecords.records(new TopicPartition(inputTopic, i))
+                                .stream()
+                                .flatMap(record -> Stream.of(record.value().split(" ")))
+                                .map(word -> Tuple.of(word, 1))
+                                .collect(Collectors.toMap(tuple -> tuple.getKey(), t1 -> t1.getValue(), (v1, v2) -> v1 + v2)));
                         }
 
                         System.out.println("WRITE: Sending offsets and counts atomically");
-                        createTopic(OUTPUT_TOPIC);
-                        wordCountMap.forEach((key, value) -> producer.send(new ProducerRecord<>(OUTPUT_TOPIC, key, value.toString())));
+                        createTopic(outputTopic);
+                        wordCountMap.forEach((key, value) -> producer.send(new ProducerRecord<>(outputTopic, key, value.toString())));
                         // notifies the coordinator about consumed offsets, which should be committed at the same time as the transaction
-                        // since 2.5 we also send CG metadata which are used for fencing without requiring a static partitions mapping
                         producer.sendOffsetsToTransaction(getOffsetsToCommit(consumerRecords), consumer.groupMetadata());
                         producer.commitTransaction();
                     }
@@ -117,11 +117,11 @@ public class Main {
         props.put(ProducerConfig.BOOTSTRAP_SERVERS_CONFIG, bootstrapServers);
         props.put(ProducerConfig.KEY_SERIALIZER_CLASS_CONFIG, StringSerializer.class.getName());
         props.put(ProducerConfig.VALUE_SERIALIZER_CLASS_CONFIG, StringSerializer.class.getName());
-        // it is crucial to make sure that each application instance has its own static and unique
-        // transactional.id (TID), that the broker map to PID and epoch for zombie fencing
+        // must be the same between different produce process incarnations
         props.put(ProducerConfig.TRANSACTIONAL_ID_CONFIG, transactionalId);
-        props.put(ProducerConfig.TRANSACTION_TIMEOUT_CONFIG, 60_000);
         props.put(ProducerConfig.ENABLE_IDEMPOTENCE_CONFIG, "true");
+        props.put(ProducerConfig.ACKS_CONFIG, "all");
+        props.put(ProducerConfig.TRANSACTION_TIMEOUT_CONFIG, 60_000);
         KafkaProducer<String, String> producer = new KafkaProducer<>(props);
         return producer;
     }
@@ -133,11 +133,11 @@ public class Main {
         props.put(ConsumerConfig.KEY_DESERIALIZER_CLASS_CONFIG, StringDeserializer.class.getName());
         props.put(ConsumerConfig.VALUE_DESERIALIZER_CLASS_CONFIG, StringDeserializer.class.getName());
         // fetch all but ignore records from ongoing and aborted transactions
+        props.put(ConsumerConfig.GROUP_ID_CONFIG, groupId);
         props.put(ConsumerConfig.ISOLATION_LEVEL_CONFIG, "read_committed");
-        props.put(ConsumerConfig.GROUP_ID_CONFIG, GROUP_ID);
         props.put(ConsumerConfig.ENABLE_AUTO_COMMIT_CONFIG, "false");
         KafkaConsumer<String, String> consumer = new KafkaConsumer<>(props);
-        consumer.subscribe(singleton(INPUT_TOPIC));
+        consumer.subscribe(singleton(inputTopic));
         return consumer;
     }
 

@@ -59,13 +59,13 @@ This component requires credentials for pushing to an external image registry, s
 
 ```sh
 # use your credentials
-$ kubectl create secret docker-registry registry-authn \
+kubectl create secret docker-registry registry-authn \
   --docker-server="quay.io" --docker-username="fvaleri+test" --docker-password="changeit" \
   --dry-run=client -o yaml | kubectl replace --force -f -
 secret/registry-authn replaced
 
 # use your image name
-$ for f in sessions/004/resources/*.yaml; do sed "s#value0#quay.io/fvaleri/my-connect:latest#g" $f | kubectl create -f -; done \
+for f in sessions/004/resources/*.yaml; do sed "s#value0#quay.io/fvaleri/my-connect:latest#g" $f | kubectl create -f -; done \
   && kubectl wait --for="condition=Ready" pod -l app=my-connect-mysql --timeout=300s \
   && kubectl exec my-connect-mysql-0 -- bash -c 'mysql -u root < /tmp/sql/initdb.sql'
 persistentvolumeclaim/my-connect-mysql-data created
@@ -78,7 +78,7 @@ kafkaconnect.kafka.strimzi.io/my-connect created
 kafkaconnector.kafka.strimzi.io/mysql-source created
 pod/my-connect-mysql-0 condition met
 
-$ kubectl get po,kt
+kubectl get po,kt
 NAME                                              READY   STATUS      RESTARTS   AGE
 pod/my-cluster-entity-operator-6b68959588-8mccx   3/3     Running     0          30m
 pod/my-cluster-kafka-0                            1/1     Running     0          32m
@@ -108,7 +108,7 @@ As you may have guessed at this point, we are going to emit MySQL row changes an
 Let's check if the connector and its tasks are running fine by using the `KafkaConnector` resource, which is easier than interacting via REST requests.
 
 ```sh
-$ kubectl get kctr mysql-source -o yaml | yq '.status'
+kubectl get kctr mysql-source -o yaml | yq '.status'
 conditions:
   - lastTransitionTime: "2022-09-15T07:56:48.585862Z"
     status: "True"
@@ -135,7 +135,7 @@ The value of `server_id` must be unique for each server and replication client i
 In this case, the MySQL user must have appropriate permissions on all databases for which the connector captures changes.
 
 ```sh
-$ kubectl get cm my-connect-mysql-cfg -o yaml | yq '.data'
+kubectl get cm my-connect-mysql-cfg -o yaml | yq '.data'
 my.cnf: |
   !include /etc/my.cnf
   [mysqld]
@@ -148,7 +148,7 @@ my.cnf: |
   gtid_mode = ON
   enforce_gtid_consistency = ON
 
-$ kubectl get cm my-connect-mysql-init -o yaml | yq '.data'
+kubectl get cm my-connect-mysql-init -o yaml | yq '.data'
 initdb.sql: |
   use testdb;
     CREATE TABLE customers (
@@ -162,13 +162,13 @@ initdb.sql: |
   GRANT SELECT, RELOAD, SHOW DATABASES, REPLICATION SLAVE, REPLICATION CLIENT ON *.* TO 'debezium'@'%';
   FLUSH PRIVILEGES;
 
-$ kubectl get kc my-connect -o yaml | yq '.spec.build.plugins'
+kubectl get kc my-connect -o yaml | yq '.spec.build.plugins'
 - artifacts:
     - type: zip
       url: https://maven.repository.redhat.com/ga/io/debezium/debezium-connector-mysql/1.9.5.Final-redhat-00001/debezium-connector-mysql-1.9.5.Final-redhat-00001-plugin.zip
   name: debezium-mysql
 
-$ kubectl get kctr mysql-source -o yaml | yq '.spec'
+kubectl get kctr mysql-source -o yaml | yq '.spec'
 class: io.debezium.connector.mysql.MySqlConnector
 config:
   database.allowPublicKeyRetrieval: true
@@ -191,7 +191,7 @@ tasksMax: 1
 Enough with describing the configuration, now let's create some changes using good old SQL.
 
 ```sh
-$ kubectl exec my-connect-mysql-0 -- sh -c 'MYSQL_PWD="changeit" mysql -u admin testdb -e "
+kubectl exec my-connect-mysql-0 -- sh -c 'MYSQL_PWD="changeit" mysql -u admin testdb -e "
   INSERT INTO customers (first_name, last_name, email) VALUES (\"John\", \"Doe\", \"jdoe@example.com\");
   UPDATE customers SET first_name = \"Jane\" WHERE id = 1;
   INSERT INTO customers (first_name, last_name, email) VALUES (\"Dylan\", \"Dog\", \"ddog@example.com\");
@@ -206,7 +206,7 @@ We created 3 changes (insert-update-insert), so we have 3 records in that topic.
 It's interesting to look at some record properties: `op` is the change type (c=create, r=read for snapshot only, u=update, d=delete), `gtid` is the global transaction identifier that is unique in a MySQL cluster, `payload.source.ts_ms` is the timestamp when the change was applied, `payload.ts_ms` is the timestamp when Debezium processed that event. The notification lag is the difference with the source timestamp.
 
 ```sh
-$ kube-rkc kafka-console-consumer.sh --bootstrap-server my-cluster-kafka-bootstrap:9092 \
+kube-rkc kafka-console-consumer.sh --bootstrap-server my-cluster-kafka-bootstrap:9092 \
   --topic my-connect-mysql.testdb.customers --from-beginning --timeout-ms 5000
 Struct{after=Struct{id=2,first_name=Dylan,last_name=Dog,email=ddog@example.com},source=Struct{version=1.9.5.Final-redhat-00001,connector=mysql,name=my-connect-mysql,ts_ms=1663228576000,db=testdb,table=customers,server_id=224466,gtid=1c90a695-34cb-11ed-aba8-0a580a810216:16,file=mysql-bin.000002,pos=2585,row=0,thread=67},op=c,ts_ms=1663228576092}
 Struct{after=Struct{id=1,first_name=John,last_name=Doe,email=jdoe@example.com},source=Struct{version=1.9.5.Final-redhat-00001,connector=mysql,name=my-connect-mysql,ts_ms=1663228576000,db=testdb,table=customers,server_id=224466,gtid=1c90a695-34cb-11ed-aba8-0a580a810216:14,file=mysql-bin.000002,pos=1690,row=0,thread=67},op=c,ts_ms=1663228576088}

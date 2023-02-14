@@ -36,14 +36,14 @@ First, we [deploy the AMQ Streams operator and Kafka cluster](/sessions/001).
 Then, we deploy the Service Registry instance with PostgreSQL as storage system.
 
 ```sh
-$ kubectl create -f sessions/003/resources
+kubectl create -f sessions/003/resources
 persistentvolumeclaim/my-registry-pgsql-data created
 configmap/my-registry-pgsql-env created
 statefulset.apps/my-registry-pgsql created
 service/my-registry-pgsql-svc created
 apicurioregistry.registry.apicur.io/my-registry created
 
-$ kubectl get po
+kubectl get po
 NAME                                              READY   STATUS    RESTARTS   AGE
 pod/my-cluster-entity-operator-6b68959588-698hp   3/3     Running   0          165m
 pod/my-cluster-kafka-0                            1/1     Running   0          166m
@@ -60,13 +60,13 @@ Now, we just need to tell our client application where it can find the Kafka clu
 We also need to provide the truststore location and password because we are connecting externally.
 
 ```sh
-$ export BOOTSTRAP_SERVERS=$(kubectl get routes my-cluster-kafka-bootstrap -o jsonpath="{.status.ingress[0].host}"):443 \
+export BOOTSTRAP_SERVERS=$(kubectl get routes my-cluster-kafka-bootstrap -o jsonpath="{.status.ingress[0].host}"):443 \
   && export REGISTRY_URL=http://$(kubectl get apicurioregistries my-registry -o jsonpath="{.status.info.host}")/apis/registry/v2 \
   && kubectl get secret my-cluster-cluster-ca-cert -o jsonpath="{.data['ca\.p12']}" | base64 -d > /tmp/truststore.p12 \
   && export SSL_TRUSTSTORE_LOCATION="/tmp/truststore.p12" \
   && export SSL_TRUSTSTORE_PASSWORD=$(kubectl get secret my-cluster-cluster-ca-cert -o jsonpath="{.data['ca\.password']}" | base64 -d)
 
-$ mvn clean compile exec:java -f sessions/003/kafka-avro/pom.xml -q
+mvn clean compile exec:java -f sessions/003/kafka-avro/pom.xml -q
 Producing records
 Records produced
 Consuming all records
@@ -82,7 +82,7 @@ The registration happens at build time and the Maven plugin executes the followi
 Note that we are using the "default" group id, but you can specify a custom name.
 
 ```sh
-$ curl -s -X POST -H "Content-Type: application/json" \
+curl -s -X POST -H "Content-Type: application/json" \
   -H "X-Registry-ArtifactId: my-topic-value" -H "X-Registry-ArtifactType: AVRO" \
   -d @sessions/003/kafka-avro/src/main/resources/greeting.avsc \
   "$REGISTRY_URL/groups/default/artifacts?ifExists=RETURN_OR_UPDATE" | jq
@@ -105,7 +105,7 @@ Finally, we use the REST API to confirm that our schema was registered correctly
 We can also look at the schema content and metadata, which may be useful for debugging.
 
 ```sh
-$ curl -s "$REGISTRY_URL/search/artifacts" | jq
+curl -s "$REGISTRY_URL/search/artifacts" | jq
 {
   "artifacts": [
     {
@@ -122,7 +122,7 @@ $ curl -s "$REGISTRY_URL/search/artifacts" | jq
   "count": 1
 }
 
-$ curl -s "$REGISTRY_URL/groups/default/artifacts/my-topic-value" | jq
+curl -s "$REGISTRY_URL/groups/default/artifacts/my-topic-value" | jq
 {
   "type": "record",
   "name": "Greeting",
@@ -138,7 +138,7 @@ $ curl -s "$REGISTRY_URL/groups/default/artifacts/my-topic-value" | jq
   ]
 }
 
-$ curl -s "$REGISTRY_URL/groups/default/artifacts/my-topic-value/meta" | jq
+curl -s "$REGISTRY_URL/groups/default/artifacts/my-topic-value/meta" | jq
 {
   "name": "Greeting",
   "createdBy": "",
