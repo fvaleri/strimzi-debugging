@@ -24,7 +24,7 @@ It would also be good to have virtual hosts or a cluster proxy, so that you can 
 
 ![](images/mm2.png)
 
-It is possible to combine stretch clusters and mirroring using MirrorMaker 2 to create a multi-region or even multi-cloud disaster recovery plan, where the service can survive a cloud outage. (Yes, a region can fail!)
+It is possible to combine stretch clusters and mirroring using MirrorMaker 2 to create a multi-region or even multi-cloud disaster recovery plan, where the service can survive a cloud outage (yes, a region can fail!).
 After the failover phase, you can fail back once the original region is back online, or fail forward selecting another region as the new backup cluster (faster).
 
 > All disaster recovery processes should be documented in detail and carefully tested, simulating all possible scenarios such as partial failures.
@@ -131,7 +131,7 @@ pod "rkc-1665758761" deleted
 
 # Example: tuning for throughput
 
-High-volume message generation, as seen in web activity tracking, can result in a large number of messages. 
+High-volume message generation, as seen in web activity tracking, can result in a large number of messages.
 Additionally, even a source cluster with moderate throughput can create a significant volume of messages when mirroring large amounts of existing data.
 In this case MM2 replication is slow even if you have a fast network, because default producers are not optimized for throughput.
 
