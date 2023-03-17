@@ -1,17 +1,19 @@
 # Transactions and how to rollback
 
-Kafka provides at-least-once semantics by default and duplicates can arise due to either producer retries or consumer restarts after failure.
+Kafka provides at-least-once semantics by default, so duplicates can arise because of producer retries or consumer restarts after failure.
 The idempotent producer configuration (now default) solves the duplicates problem by creating a producer session identified by a producer id (PID) and an epoch.
 A sequence number is assigned when the record batch is first added to a produce request and it is never changed, even if the batch is resent.
 That way, the broker hosting the partition leader can identify and filter out duplicates.
 
 Unfortunately, the idempotent producer does not guarantee atomicity when you need to write to multiple partitions as a single unit of work.
-This is usually the case of read-process-write applications, where the exactly-once semantics (EOS) allows atomic writes to multiple partitions.
-The EOS in only supported inside a single Kafka cluster, excluding any external system (see the Outbox pattern and Spring TM for this use case).
+This is usually the case for read-process-write applications, where the exactly-once semantics (EOS) allow atomic writes to multiple partitions.
+The EOS is only supported inside a single Kafka cluster, excluding any external system.
+
+> Where EOS is required for atomic writes to multiple partitions, the Outbox pattern and Spring Transaction Manager (TM) can be used.
 
 ![](images/trans.png)
 
-Each producer instance must have its own static and unique `transactional.id` (TID), which is mapped to a producer id (PID) and epoch (zombie fencing).
+Each producer instance must have its own static and unique `transactional.id` (TID), which is mapped to a producer id (PID) and epoch (to implement zombie fencing).
 Consumers with `isolation.level=read_committed` only get committed messages, ignoring ongoing and aborted transactions.
 
 A given producer can have at most one ongoing transaction (ordering guarantee).
@@ -24,21 +26,21 @@ A transaction goes through the following states:
 2. Completed and unreplicated (decided)
 3. Completed and replicated (decided and committed)
 
-The first unstable offset (FUO) is the earliest offset which is part of an ongoing transaction, if any.
+The first unstable offset (FUO) is the earliest offset that is part of an ongoing transaction, if any.
 The last stable offset (LSO) is the offset such that all lower offsets have been decided and it is always present.
 Non-transactional batches are considered decided immediately, but transactional batches are only decided when the corresponding commit or abort marker is written.
 This means that the LSO is equal to the FUO if it's lower than the high watermark (HW), otherwise it's the HW.
 
-The LogCleaner does not clean beyond the LSO.
+The `LogCleaner` does not clean beyond the LSO.
 If there is a hanging transaction on a partition (missing or out of order control record), the FUO can't be updated, which means the LSO is stuck.
 At this point, transactional consumers can't make progress and compaction is blocked if enabled.
 After transaction rollback, the LSO starts to increment again on every completed transaction.
 
 # Example: transactional application
 
-[Deploy a Kafka cluster on localhost](/sessions/001).
-Run the word count application included in this session on a different terminal (there is a new poll/read every 60 seconds).
-[Look at the code](/sessions/008/kafka-trans) to see how the low level transaction API is used.
+First, we [deploy the AMQ Streams operator and Kafka cluster](/sessions/001).
+We run the word count application included in this session on a different terminal (there is a new poll/read every 60 seconds).
+[Look at the code](/sessions/008/kafka-trans) to see how the low-level transaction API is used.
 
 ```sh
 export BOOTSTRAP_SERVERS="localhost:9092" \
@@ -62,7 +64,7 @@ WRITE: Sending offsets and counts atomically
 Topic wc-output created
 ```
 
-Then, send one sentence to the input topic and check the result from the output topic.
+Then, we send one sentence to the input topic and check the result from the output topic.
 
 ```sh
 kafka-console-producer.sh --bootstrap-server :9092 --topic wc-input
@@ -82,9 +84,9 @@ long	1
 ^CProcessed a total of 8 messages
 ```
 
-Now we can stop the application (Ctrl+C) and take a look at partitions content.
+Now we can stop the application (Ctrl+C) and take a look at partition content.
 Our output topic has one partition, but what are the `__consumer_offsets` and `__transaction_state` coordinating partitions?
-We can use the same function that we saw in the first session passing the `group.id` and `transactional.id`.
+We can pass the `group.id` and `transactional.id` to find out.
 
 ```sh
 kafka-cp my-group
@@ -94,8 +96,8 @@ kafka-cp kafka-trans-0
 20
 ```
 
-Let's now check what's happening inside all the partitions involved in this transaction.
-In `wc-output-0` we see that the data batch is transactional (`isTransactional`) and contains the PID and epoch.
+We now check what's happening inside all the partitions involved in this transaction.
+In `wc-output-0`, we see that the data batch is transactional (`isTransactional`) and contains the PID and epoch.
 This batch is followed by a control batch (`isControl`), which contains a single end transaction marker record (`endTxnMarker`).
 In `__consumer_offsets-12`, the CG offset commit batch (`key: offset_commit`) is followed by a similar control batch.
 
@@ -126,10 +128,10 @@ baseOffset: 2 lastOffset: 2 count: 1 baseSequence: -1 lastSequence: -1 producerI
 # ...
 ```
 
-That was straightforward, but how the transaction state is managed by the coordinator? 
-In `__transaction_state-20` record payloads we can see all transaction state changes keyed by TID `kafka-trans-0` (we also have PID+epoch).
+That was straightforward, but how is the transaction state managed by the coordinator? 
+In `__transaction_state-20` record payloads, we can see all transaction state changes keyed by TID `kafka-trans-0` (we also have PID+epoch).
 The transaction starts in the `Empty` state, then we have two `Ongoing` state changes (one for each partition registration).
-Then, when the commit is called, we have `PrepareCommit` state change, which means the broker is now doomed to commit.
+Then, when the commit is called, we have `PrepareCommit` state change, which means the broker is now committed to the transaction.
 This happens in the last batch, where the state is changed to `CompleteCommit`, terminating  the transaction.
 
 ```sh
@@ -163,7 +165,7 @@ GROUP     TOPIC                  PARTITION  CURRENT-OFFSET  LOG-END-OFFSET  LAG 
 my-group  __consumer_offsets-27  9          913095344       913097449       2105  my-client-0  /10.60.172.97  my-client
 ```
 
-If the partition is part of a compacted topic like `__consumer_offsets`, compaction is also blocked, causing the unbounded partition growth.
+If the partition is part of a compacted topic like `__consumer_offsets`, compaction is also blocked, causing unbounded partition growth.
 
 ```sh
 # last cleaned offset never changes
@@ -201,7 +203,7 @@ klog segment txn-stat 00000000000912375285.log.dump | grep "open_txn" | head -n1
 open_txn: ProducerSession[producerId=171100, producerEpoch=1]->FirstBatchInTxn[firstBatchInTxn=Batch(baseOffset=913095344, lastOffset=913095344, count=1, baseSequence=0, lastSequence=0, producerId=171100, producerEpoch=1, partitionLeaderEpoch=38, isTransactional=true, isControl=false, position=76752106, createTime=2022-06-06T03:16:47.124Z, size=128, magic=2, compressCodec='none', crc=-2141709867, isValid=true), numDataBatches=1]
 ```
 
-If the `open_txn` is the last segment batch, then the it may be closed in the next segment (false positive).
+If the `open_txn` is the last segment batch, then it may be closed in the next segment (false positive).
 Otherwise, we can rollback the hanging transaction by running the command printed out by `klog snapshot`.
 
 ```sh
