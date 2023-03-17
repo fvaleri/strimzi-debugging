@@ -1,32 +1,34 @@
 # Storage requirements and volume recovery
 
 Kafka requires low latency storage for both broker commit logs and ZooKeeper data.
-The block storage type offers greater efficiency and faster performance than file and object storage types, this is why it is often recommended for Kafka.
-That said, Kafka does NOT use raw block devices, but it writes to segment files on a standard file system.
-Segment files are memory mapped for performance reasons (this enables zero-copy optimization when TLS is not configured).
-There is no hard dependency on a specific file system although XFS is recommended, but NFS is known to cause problems when renaming files.
+The block storage type offers greater efficiency and faster performance than file and object storage types, which is why it is often recommended for Kafka.
+That said, Kafka does NOT directly use raw block devices, but instead writes to segment files that are stored on a standard file system.
+These segment files are memory mapped for improved performance, which enables zero-copy optimization when TLS is not configured.
+There is no hard dependency on a specific file system, although XFS is recommended.
+NFS is known to cause problems when renaming files.
 
-The disk is not involved when producer and consumer are fast enough, but it is when old data need to be read or when the OS needs to flush dirty pages.
-This is were disk speed/latency matters, including tail latencies (p95, p99) if there is an end-to-end message latency requirement.
-The storage system characteristics mainly depends on the use case.
-I would suggests to compare against local storage (e.g. SSD or NVMe) or shared storage environment (NVMe-oF or NVMe/TCP).
+When the producer and consumer are fast enough, disk usage is not necessary, but it is required when old data needs to be read or when the operating system needs to flush dirty pages. 
+In these scenarios, disk speed and latency are important factors, including tail latencies (such as p95 and p99) if there are end-to-end message latency requirements.
+The specific characteristics of the storage system depend on the particular use case. 
+It may be helpful to compare against local storage options such as SSD or NVMe, or to consider a shared storage environment such as NVMe-oF or NVMe/TCP.
 
 Both Kafka and Zookeeper have built-in data replication, so they do not need replicated storage to ensure data availability, which would only add network overhead.
-You can also use JBOD (just a bunch of disks), that gives good performance when using multiple disk in parallel.
-An easy optimization is to disable the last access time file attribute (noatime).
+You can also use JBOD (just a bunch of disks), which gives good performance when using multiple disks in parallel.
+An easy optimization to improve performance is to disable the last access time file attribute (`noatime`).
+By disabling `noatime`, the system can avoid unnecessary disk I/O operations and reduce the overall overhead of file system access.
 
-Ideally, the retention policy should be set properly when provisioning a new cluster or topic, based on requirements and the expected throughput (MB/s).
-A non active segment can be deleted based on `segment.ms` or `segment.bytes`.
-Even if one record is not yet eligible for deletion based on `retention.ms` or `retention.bytes`, the broker will keep the entire segment file.
+Ideally, when provisioning a new Kafka cluster or topic, the retention policy should be set properly based on requirements and expected throughput (measured in MB/s). 
+Inactive segments can be deleted based on specific retention policies, such as `segment.ms` or `segment.bytes`.
+Even if one record is not yet eligible for deletion based on `retention.ms` or `retention.bytes`, the broker retains the entire segment file.
 Deletion timing also depends on the cluster load and how many `background.threads` are available for normal topics, and `log.cleaner.threads` for compacted topics.
 The required storage capacity can be calculated based on the message retention.
-When the topic combines both time and size based retention policies, the size based policy defines the upper cap.
+When the topic combines both time and size-based retention policies, the size-based policy defines the upper cap.
 
 ```sh
-# time based retention
+# time-based retention
 storage_capacity (MB) = retention_sec * topic_write_rate (MB/s) * replication_factor
 
-# size based retention
+# size-based retention
 storage_capacity (MB) = retention_mb * replication_factor * part_number
 ```
 
@@ -38,8 +40,8 @@ Volumes with either `persistentVolumeReclaimPolicy: Retain`, or using a storage 
 
 # Example: no space left on device
 
-[Deploy Streams operator and Kafka cluster](/sessions/001). 
-When the cluster is ready, we purposely break it by sending 11 GiB of data to a topic with RF=3 (33 GiB in total), which exceeds the combined cluster disk capacity of 30 GiB.
+First, we [deploy the AMQ Streams operator and Kafka cluster](/sessions/001).
+When the cluster is ready, we purposely break it by sending 11 GiB of data to a topic with a replication factor of 3 (33 GiB in total), which exceeds the combined cluster disk capacity of 30 GiB.
 
 ```sh
 kubectl get pv | grep kafka
@@ -67,7 +69,8 @@ kubectl logs my-cluster-kafka-0 | grep "No space left on device" | tail -n1
 java.io.IOException: No space left on device
 ```
 
-If volume expansion is supported, you can simply edit the Kafka CR increasing the disk size and the operator will do the rest (this may take some time).
+If volume expansion is supported, you can simply edit the Kafka Custom Resource (CR) to specify the desired disk size increase, and the operator will handle the rest of the process. 
+However, it's important to note that the expansion process may take some time to complete, depending on the size of the volume and the available resources in the cluster.
 We didn't specify any storage class, so we have been assigned the default one.
 
 ```sh
@@ -98,9 +101,9 @@ my-cluster-kafka-2                            1/1     Running   0             4m
 ```
 
 If volume expansion is not supported, the only alternative is to mount the volume and manually delete old segments.
-This a risky procedure and should only be applied by experts as a last resort and having a recent cluster backup.
-I'm only showing how to do it on broker-0, but this should be done for every broker.
-Once you are done with all partitions, you can scale up again and unpause the cluster operator.
+This a risky procedure and should only be applied by experts as a last resort following a recent cluster backup.
+We are showing how to do it on broker-0, but this should be done for every broker.
+When you are done with all partitions, you can scale up again and unpause the Cluster Operator.
 
 A similar technique can also be used to copy data to your local disk and from there to new and bigger volumes.
 
@@ -166,14 +169,15 @@ my-cluster-kafka-2                            1/1     Running   0          18m
 
 # Example: unintentional cluster deletion with retained volumes
 
-The Streams examples have `.spec.kafka.storage.deleteClaim: false`, which is also the default value. 
-This means that the PVC are not deleted when the cluster is undeployed, but the user may have changed that.
-In this case, they lose all data by garbage collection if someone deletes the CRDs or the namespace by mistake.
-That said, if the PV reclaim policy is set to retain, there is still hope to recover them.
+By default, the AMQ Streams examples have the `.spec.kafka.storage.deleteClaim` property set to `false`, which means that Persistent Volume Claims (PVCs) associated with the Kafka cluster will not be deleted when the cluster is undeployed.
+However, this default value can be changed by the user. 
+If the value is changed and the PVCs are deleted, any data stored in the PVCs are lost permanently through garbage collection, unless `persistentVolumeReclaimPolicy` is set to `retain`. 
+In this case, there is a chance to recover the data.
+This example shows how this can be achieved.
 
-[Deploy Streams operator and Kafka cluster](/sessions/001).
+First, we [deploy the AMQ Streams operator and Kafka cluster](/sessions/001).
 When the cluster is ready, we change the reclaim policy at the persistent volume level.
-Also note that the status is "Bound".
+Also note that the status is `Bound`.
 
 ```sh
 kubectl get pv
@@ -211,7 +215,7 @@ pvc-f5b75d58-b621-4cf9-8c5c-2e9215b268e0   5Gi        RWO            Retain     
 ```
 
 Now we send some data and then delete the entire namespace by mistake.
-As expected, all persistent volumes are still there after the namespace deletion, and their status changed to "Released".
+As expected, all persistent volumes are still there after the namespace deletion, and their status changed to `Released`.
 Note that OpenShift also retains some useful information that is needed when reattaching them (capacity, claim, storage class).
 
 ```sh
@@ -234,9 +238,9 @@ pvc-c2cb8453-b953-4bb1-83b5-f4e4c76fbf91   10Gi       RWO            Retain     
 pvc-f5b75d58-b621-4cf9-8c5c-2e9215b268e0   5Gi        RWO            Retain           Released   test/data-my-cluster-zookeeper-0   gp2                     5m48s
 ```
 
-We need to create the conditions so that the old volumes can be reattached by the new Streams cluster.
+We need to create the conditions so that the old volumes can be reattached by the new AMQ Streams cluster.
 We use a simple script to collect all required data from the retained PVs, remove the old `claimRef` metadata and create the new PVCs.
-Volumes are "Bound" again, and they should be reattached if we deploy a new Kafka cluster with the same configuration.
+Volumes are `Bound` again, and they should be reattached if we deploy a new Kafka cluster with the same configuration.
 
 ```sh
 kubectl create ns test
@@ -274,12 +278,13 @@ pvc-c2cb8453-b953-4bb1-83b5-f4e4c76fbf91   10Gi       RWO            Retain     
 pvc-f5b75d58-b621-4cf9-8c5c-2e9215b268e0   5Gi        RWO            Retain           Bound    test/data-my-cluster-zookeeper-0   gp2                     6m37s
 ```
 
-Now we can deploy the new Stream cluster.
+Now we can deploy the new AMQ Streams cluster.
 Note that this is actually the same Kafka cluster, because retained volumes maintain the same Kafka cluster ID.
 
-Important: before deploying the TO, we must delete its internal topics so that it can safely reinitialize from Kafka on startup.
-If you don't do this, there is a high change that the TO will delete all topics with your data.
-Topic deletion happens asinchronously, so always make sure to confirm that it is actually deleted.
+  
+   > Before deploying the TO, we must delete its internal topics so that it can safely reinitialize from Kafka on startup. 
+   If you don't do this, there is a high change that the Topic Operator deletes all topics with your data.
+   Topic deletion happens asynchronously, so always make sure to confirm that it is actually deleted.
 
 ```sh
 cat sessions/001/resources/000-my-cluster.yaml | yq 'del(.spec.entityOperator.topicOperator)' | kubectl create -f -
@@ -301,7 +306,7 @@ __consumer_offsets
 my-topic
 ```
 
-When these topics are deleted, we can safely deploy the TO and try to consume our messages from the restored cluster.
+When these topics are deleted, we can safely deploy the Topic Operator and try to consume our messages from the restored cluster.
 
 ```sh
 kubectl apply -f sessions/001/resources/000-my-cluster.yaml
