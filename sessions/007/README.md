@@ -177,7 +177,7 @@ sessionId: f0605d40-37be-43b9-be1f-83167633f37c
 When the proposal is ready, we can approve it by using another annotation and wait for Cruise Control to move partitions and replica roles around.
 When the rebalance is ready, we can look at the result and see if the new broker has picked some of the existing partitions.
 
-> To enable auto-approval, you add `strimzi.io/rebalance-auto-approval: "true"` as an annotation to the `KafkaRebalance` custom resource before you generate the proposal.
+> From AMQ Streams 2.3, you can enable auto-approval by adding `strimzi.io/rebalance-auto-approval: "true"` as an annotation to the `KafkaRebalance` custom resource before you generate the proposal.
 
 ```sh
 kubectl annotate kr add-brokers strimzi.io/rebalance=approve
