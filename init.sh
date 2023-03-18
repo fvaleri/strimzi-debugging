@@ -1,9 +1,9 @@
 #!/usr/bin/env bash
-# Source this file to initialize the bash environment.
-# You can skip local or OCP initialization by using --skip-local or --skip-ocp options.
+# Source this file to configure your bash environment.
+# Use --skip-local or --skip-ocp if you only need one configuration.
 
 INIT_KAFKA_VERSION="3.2.3"
-INIT_KAFKA_IMAGE="registry.redhat.io/amq7/amq-streams-kafka-32-rhel8:2.2.0"
+INIT_KAFKA_IMAGE="registry.redhat.io/amq7/amq-streams-kafka-32-rhel8:2.2.1"
 INIT_OPERATOR_NS="openshift-operators"
 INIT_TEST_NS="test"
 INIT_SUBS_YAML="
@@ -68,10 +68,10 @@ get-kafka() {
     | tar xz -C "$KAFKA_HOME" --strip-components 1
 }
 
-if [[ $INIT_LOCAL == true ]]; then
+if $INIT_LOCAL; then
   echo "Configuring Kafka on localhost"
-  pkill -f "kafka.Kafka" ||true
-  pkill -f "quorum.QuorumPeerMain" ||true
+  pkill -9 -f "kafka.Kafka" ||true
+  pkill -9 -f "quorum.QuorumPeerMain" ||true
   rm -rf /tmp/kafka-logs /tmp/zookeeper
   get-kafka
   echo "Kafka home: $KAFKA_HOME"
@@ -110,7 +110,7 @@ oc-login() {
   fi
 }
 
-if [[ $INIT_OCP == true ]]; then
+if $INIT_OCP; then
   echo "Configuring Kafka on OpenShift"
   if oc-login; then
     kubectl delete ns "$INIT_TEST_NS" target --wait &>/dev/null
@@ -125,7 +125,7 @@ if [[ $INIT_OCP == true ]]; then
     kubectl config set-context --current --namespace="$INIT_TEST_NS" &>/dev/null
     echo -e "$INIT_SUBS_YAML" | kubectl create -f -
 
-    kube-rkc() { kubectl run rkc-"$(date +%s)" -itq --rm --restart="Never" --image="$INIT_KAFKA_IMAGE" -- sh -c "bin/$*"; }
+    krun() { kubectl run krun-"$(date +%s)" -itq --rm --restart="Never" --image="$INIT_KAFKA_IMAGE" -- sh -c "bin/$*"; }
     echo "OpenShift OK"
   fi
 fi

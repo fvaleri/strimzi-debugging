@@ -237,12 +237,12 @@ Note that we are using a nice function to avoid repeating that for every client 
 You can also use the broker pods for that, but it is always risky to spin up another JVM inside a pod, especially in production.
 
 ```sh
-kube-rkc kafka-console-producer.sh --bootstrap-server my-cluster-kafka-bootstrap:9092 --topic my-topic
+krun kafka-console-producer.sh --bootstrap-server my-cluster-kafka-bootstrap:9092 --topic my-topic
 >hello
 >world
 >^Cpod "rkc-1664886431" deleted
 
-kube-rkc kafka-console-consumer.sh --bootstrap-server my-cluster-kafka-bootstrap:9092 \
+krun kafka-console-consumer.sh --bootstrap-server my-cluster-kafka-bootstrap:9092 \
   --topic my-topic --group my-group --from-beginning
 world
 hello
@@ -255,7 +255,7 @@ Fortunately, Strimzi maintains a backward compatible must-gather script that can
 Add the `--secrets=all` option to also get secret values.
 
 ```sh
-curl -sLk "https://raw.githubusercontent.com/strimzi/strimzi-kafka-operator/28b70e1041301d0a0ecc0d2555013629f934718c/tools/report.sh" \
+curl -sLk "https://raw.githubusercontent.com/strimzi/strimzi-kafka-operator/9573cf0c3ff97280b170ca3abc6f0633e33fe97f/tools/report.sh" \
   | bash -s -- --namespace=test --cluster=my-cluster --out-dir=~/Downloads
 deployments
     deployment.apps/my-cluster-entity-operator
