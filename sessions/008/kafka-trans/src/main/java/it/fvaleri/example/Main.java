@@ -1,9 +1,13 @@
 package it.fvaleri.example;
 
+import org.apache.kafka.clients.admin.Admin;
 import org.apache.kafka.clients.admin.AdminClientConfig;
-import org.apache.kafka.clients.admin.KafkaAdminClient;
 import org.apache.kafka.clients.admin.NewTopic;
-import org.apache.kafka.clients.consumer.*;
+import org.apache.kafka.clients.consumer.ConsumerConfig;
+import org.apache.kafka.clients.consumer.ConsumerRecord;
+import org.apache.kafka.clients.consumer.ConsumerRecords;
+import org.apache.kafka.clients.consumer.KafkaConsumer;
+import org.apache.kafka.clients.consumer.OffsetAndMetadata;
 import org.apache.kafka.clients.producer.KafkaProducer;
 import org.apache.kafka.clients.producer.ProducerConfig;
 import org.apache.kafka.clients.producer.ProducerRecord;
@@ -27,8 +31,8 @@ import static java.time.Duration.ofSeconds;
 import static java.util.Collections.singleton;
 
 public class Main {
-    private static String bootstrapServers, groupId, transactionalId, inputTopic, outputTopic;
-    private static boolean closed = false;
+    private static String bootstrapServers, groupId, instanceId, inputTopic, outputTopic;
+    private static volatile boolean closed = false;
 
     static {
         if (System.getenv("BOOTSTRAP_SERVERS") != null) {
@@ -37,8 +41,8 @@ public class Main {
         if (System.getenv("GROUP_ID") != null) {
             groupId = System.getenv("GROUP_ID");
         }
-        if (System.getenv("TRANSACTIONAL_ID") != null) {
-            transactionalId = System.getenv("TRANSACTIONAL_ID");
+        if (System.getenv("INSTANCE_ID") != null) {
+            instanceId = System.getenv("INSTANCE_ID");
         }
         if (System.getenv("INPUT_TOPIC") != null) {
             inputTopic = System.getenv("INPUT_TOPIC");
@@ -49,10 +53,11 @@ public class Main {
     }
 
     public static void main(String[] args) {
-        System.out.printf("Starting application instance with TID %s%n", transactionalId);
+        System.out.printf("Starting application instance with TID %s%n", instanceId);
         createTopic(inputTopic);
         try (var producer = createKafkaProducer();
              var consumer = createKafkaConsumer()) {
+            consumer.subscribe(singleton(inputTopic));
             // transaction APIs are all blocking with a max.block.ms timeout
             // called once to fence zombies, abort any pending TX, and get a new session (pid+epoch)
             producer.initTransactions();
@@ -79,6 +84,7 @@ public class Main {
                         System.out.println("WRITE: Sending offsets and counts atomically");
                         createTopic(outputTopic);
                         wordCountMap.forEach((key, value) -> producer.send(new ProducerRecord<>(outputTopic, key, value.toString())));
+                        
                         // notifies the coordinator about consumed offsets, which should be committed at the same time as the transaction
                         producer.sendOffsetsToTransaction(getOffsetsToCommit(consumerRecords), consumer.groupMetadata());
                         producer.commitTransaction();
@@ -100,7 +106,7 @@ public class Main {
     private static void createTopic(String topicName) {
         Properties props = new Properties();
         props.put(AdminClientConfig.BOOTSTRAP_SERVERS_CONFIG, bootstrapServers);
-        try (var admin = KafkaAdminClient.create(props)) {
+        try (var admin = Admin.create(props)) {
             admin.createTopics(List.of(new NewTopic(topicName, -1, (short) -1))).all().get();
             System.out.printf("Topic %s created%n", topicName);
         } catch (Throwable e) {
@@ -112,33 +118,30 @@ public class Main {
     }
 
     private static KafkaProducer<String, String> createKafkaProducer() {
-        System.out.println("Creating transactional producer");
         Properties props = new Properties();
         props.put(ProducerConfig.BOOTSTRAP_SERVERS_CONFIG, bootstrapServers);
-        props.put(ProducerConfig.KEY_SERIALIZER_CLASS_CONFIG, StringSerializer.class.getName());
-        props.put(ProducerConfig.VALUE_SERIALIZER_CLASS_CONFIG, StringSerializer.class.getName());
-        // must be the same between different produce process incarnations
-        props.put(ProducerConfig.TRANSACTIONAL_ID_CONFIG, transactionalId);
+        props.put(ProducerConfig.KEY_SERIALIZER_CLASS_CONFIG, StringSerializer.class);
+        props.put(ProducerConfig.VALUE_SERIALIZER_CLASS_CONFIG, StringSerializer.class);
         props.put(ProducerConfig.ENABLE_IDEMPOTENCE_CONFIG, "true");
         props.put(ProducerConfig.ACKS_CONFIG, "all");
+        // transactionalId must be the same between different produce process incarnations
+        props.put(ProducerConfig.TRANSACTIONAL_ID_CONFIG, instanceId);
         props.put(ProducerConfig.TRANSACTION_TIMEOUT_CONFIG, 60_000);
-        KafkaProducer<String, String> producer = new KafkaProducer<>(props);
-        return producer;
+        return new KafkaProducer<>(props);
     }
 
     private static KafkaConsumer<String, String> createKafkaConsumer() {
-        System.out.println("Creating transactional consumer");
         Properties props = new Properties();
         props.put(ConsumerConfig.BOOTSTRAP_SERVERS_CONFIG, bootstrapServers);
-        props.put(ConsumerConfig.KEY_DESERIALIZER_CLASS_CONFIG, StringDeserializer.class.getName());
-        props.put(ConsumerConfig.VALUE_DESERIALIZER_CLASS_CONFIG, StringDeserializer.class.getName());
-        // fetch all but ignore records from ongoing and aborted transactions
-        props.put(ConsumerConfig.GROUP_ID_CONFIG, groupId);
-        props.put(ConsumerConfig.ISOLATION_LEVEL_CONFIG, "read_committed");
+        props.put(ConsumerConfig.KEY_DESERIALIZER_CLASS_CONFIG, StringDeserializer.class);
+        props.put(ConsumerConfig.VALUE_DESERIALIZER_CLASS_CONFIG, StringDeserializer.class);
         props.put(ConsumerConfig.ENABLE_AUTO_COMMIT_CONFIG, "false");
-        KafkaConsumer<String, String> consumer = new KafkaConsumer<>(props);
-        consumer.subscribe(singleton(inputTopic));
-        return consumer;
+        props.put(ConsumerConfig.GROUP_ID_CONFIG, groupId);
+        // consumer can set groupInstanceId to avoid unnecessary rebalances
+        props.put(ConsumerConfig.GROUP_INSTANCE_ID_CONFIG, instanceId);
+        // all records are fetched with read_committed but ongoing and aborted transactions are ignored
+        props.put(ConsumerConfig.ISOLATION_LEVEL_CONFIG, "read_committed");
+        return new KafkaConsumer<>(props);
     }
 
     private static Map<TopicPartition, OffsetAndMetadata> getOffsetsToCommit(ConsumerRecords<String, String> consumerRecords) {

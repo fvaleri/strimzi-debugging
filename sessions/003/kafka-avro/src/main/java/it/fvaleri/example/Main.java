@@ -26,8 +26,9 @@ import java.io.IOException;
 import java.io.InputStream;
 import java.nio.charset.StandardCharsets;
 import java.time.Duration;
-import java.util.Collections;
 import java.util.Properties;
+
+import static java.util.Collections.singleton;
 
 public class Main {
     private static final String TOPIC_NAME = "my-topic";
@@ -55,8 +56,8 @@ public class Main {
     }
 
     public static void main(String[] args) {
-        try (var producer = new KafkaProducer<String, GenericRecord>(producerConfig());
-             var consumer = new KafkaConsumer<String, GenericRecord>(consumerConfig())) {
+        try (var producer = createKafkaProducer();
+             var consumer = createKafkaConsumer()) {
 
             // get the schema by group and id
             RegistryClient client = RegistryClientFactory.create(registryUrl);
@@ -81,7 +82,7 @@ public class Main {
             System.out.println("Records produced");
 
             System.out.println("Consuming all records");
-            consumer.subscribe(Collections.singletonList(TOPIC_NAME));
+            consumer.subscribe(singleton(TOPIC_NAME));
             while (true) {
                 // the globalId is sent with the payload and used to lookup the schema
                 ConsumerRecords<String, GenericRecord> records = consumer.poll(Duration.ofSeconds(5));
@@ -99,48 +100,40 @@ public class Main {
         }
     }
 
-    private static Properties producerConfig() {
+    private static KafkaProducer<String, GenericRecord> createKafkaProducer() {
         Properties props = new Properties();
-
         props.put(ProducerConfig.BOOTSTRAP_SERVERS_CONFIG, bootstrapServers);
         props.put(ProducerConfig.CLIENT_ID_CONFIG, "producer-" + System.currentTimeMillis());
         props.put(ProducerConfig.KEY_SERIALIZER_CLASS_CONFIG, StringSerializer.class.getName());
-
         // use Avro Serializer
         props.put(ProducerConfig.VALUE_SERIALIZER_CLASS_CONFIG, AvroKafkaSerializer.class.getName());
-
         // set registry URL
         props.put(SerdeConfig.REGISTRY_URL, registryUrl);
         // set cache eviction period
         props.putIfAbsent(SerdeConfig.CHECK_PERIOD_MS, 30_000);
         // set the artifactId lookup strategy (map the topic name to the artifactId in the registry)
         props.putIfAbsent(SerdeConfig.ARTIFACT_RESOLVER_STRATEGY, TopicIdStrategy.class.getName());
-
         addSharedConfig(props);
-        return props;
+        return new KafkaProducer<String, GenericRecord>(props);
     }
 
-    private static Properties consumerConfig() {
+    private static KafkaConsumer<String, GenericRecord> createKafkaConsumer() {
         Properties props = new Properties();
-
         props.put(ConsumerConfig.BOOTSTRAP_SERVERS_CONFIG, bootstrapServers);
         props.put(ConsumerConfig.CLIENT_ID_CONFIG, "consumer-" + System.currentTimeMillis());
         props.put(ConsumerConfig.GROUP_ID_CONFIG, "my-group");
         props.put(ConsumerConfig.AUTO_OFFSET_RESET_CONFIG, "earliest");
         props.put(ConsumerConfig.KEY_DESERIALIZER_CLASS_CONFIG, StringDeserializer.class.getName());
-
         // use Avro Deserializer
         props.put(ConsumerConfig.VALUE_DESERIALIZER_CLASS_CONFIG, AvroKafkaDeserializer.class.getName());
-
         // set registry URL
         props.put(SerdeConfig.REGISTRY_URL, registryUrl);
         // set cache eviction period
         props.putIfAbsent(SerdeConfig.CHECK_PERIOD_MS, 30_000);
         // set the artifactId lookup strategy (map the topic name to the artifactId in the registry)
         props.putIfAbsent(SerdeConfig.ARTIFACT_RESOLVER_STRATEGY, TopicIdStrategy.class.getName());
-
         addSharedConfig(props);
-        return props;
+        return new KafkaConsumer<String, GenericRecord>(props);
     }
 
     private static void addSharedConfig(Properties props) {

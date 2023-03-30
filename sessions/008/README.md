@@ -45,16 +45,13 @@ We run the word count application included in this session on a different termin
 ```sh
 export BOOTSTRAP_SERVERS="localhost:9092" \
        GROUP_ID="my-group" \
-       TRANSACTIONAL_ID="kafka-trans-0" \
-       INPUT_TOPIC="word-count-input" \
-       OUTPUT_TOPIC="word-count-output"
+       INSTANCE_ID="kafka-trans-0" \
+       INPUT_TOPIC="wc-input" \
+       OUTPUT_TOPIC="wc-output"
 
 mvn clean compile exec:java -f sessions/008/kafka-trans/pom.xml -q
 Starting application instance with TID kafka-trans-0
-Creating admin client
 Topic wc-input created
-Creating transactional producer
-Creating transactional consumer
 READ: Waiting for new user sentence
 READ: Waiting for new user sentence
 # ...
