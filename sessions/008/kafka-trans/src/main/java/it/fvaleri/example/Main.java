@@ -14,6 +14,7 @@ import org.apache.kafka.clients.producer.ProducerRecord;
 import org.apache.kafka.common.KafkaException;
 import org.apache.kafka.common.TopicPartition;
 import org.apache.kafka.common.errors.AuthorizationException;
+import org.apache.kafka.common.errors.FencedInstanceIdException;
 import org.apache.kafka.common.errors.OutOfOrderSequenceException;
 import org.apache.kafka.common.errors.ProducerFencedException;
 import org.apache.kafka.common.errors.TopicExistsException;
@@ -57,24 +58,25 @@ public class Main {
         createTopic(inputTopic);
         try (var producer = createKafkaProducer();
              var consumer = createKafkaConsumer()) {
-            consumer.subscribe(singleton(inputTopic));
-            // transaction APIs are all blocking with a max.block.ms timeout
-            // called once to fence zombies, abort any pending TX, and get a new session (pid+epoch)
+            // called first and once to fence zombies and abort any pending transaction
             producer.initTransactions();
+            consumer.subscribe(singleton(inputTopic));
 
             while (!closed) {
                 try {
                     System.out.println("READ: Waiting for new user sentence");
-                    ConsumerRecords<String, String> consumerRecords = consumer.poll(ofSeconds(60));
+                    ConsumerRecords<String, String> records = consumer.poll(ofSeconds(60));
 
-                    if (!consumerRecords.isEmpty()) {
+                    if (!records.isEmpty()) {
+                        // begin a new transaction session
                         producer.beginTransaction();
 
                         Map<String, Integer> wordCountMap = new HashMap<>();
                         int numberOfPartitions = producer.partitionsFor(inputTopic).size();
                         for (int i = 0; i < numberOfPartitions; i++) {
+                            // process the record and send downstream
                             System.out.printf("PROCESS: Computing word counts for %s-%d%n", inputTopic, i);
-                            wordCountMap.putAll(consumerRecords.records(new TopicPartition(inputTopic, i))
+                            wordCountMap.putAll(records.records(new TopicPartition(inputTopic, i))
                                 .stream()
                                 .flatMap(record -> Stream.of(record.value().split(" ")))
                                 .map(word -> Tuple.of(word, 1))
@@ -84,16 +86,20 @@ public class Main {
                         System.out.println("WRITE: Sending offsets and counts atomically");
                         createTopic(outputTopic);
                         wordCountMap.forEach((key, value) -> producer.send(new ProducerRecord<>(outputTopic, key, value.toString())));
-                        
-                        // notifies the coordinator about consumed offsets, which should be committed at the same time as the transaction
-                        producer.sendOffsetsToTransaction(getOffsetsToCommit(consumerRecords), consumer.groupMetadata());
+
+                        // checkpoint the progress by sending offsets to group coordinator broker
+                        // note that this API is only available for broker >= 2.5
+                        producer.sendOffsetsToTransaction(getOffsetsToCommit(consumer), consumer.groupMetadata());
+
+                        // commit the transaction (all sent records should be visible for consumption)
                         producer.commitTransaction();
                     }
-                } catch (ProducerFencedException | OutOfOrderSequenceException | AuthorizationException e) {
+                } catch (ProducerFencedException | FencedInstanceIdException | OutOfOrderSequenceException e) {
                     // we can't recover from these exceptions
+                    e.printStackTrace();
                     closed = true;
                 } catch (KafkaException e) {
-                    // abort the transaction and try again
+                    // abort the transaction and try to continue
                     System.err.printf("Aborting transaction: %s%n", e);
                     producer.abortTransaction();
                 }
@@ -144,15 +150,12 @@ public class Main {
         return new KafkaConsumer<>(props);
     }
 
-    private static Map<TopicPartition, OffsetAndMetadata> getOffsetsToCommit(ConsumerRecords<String, String> consumerRecords) {
-        Map<TopicPartition, OffsetAndMetadata> offsetsToCommit = new HashMap<>();
-        for (TopicPartition partition : consumerRecords.partitions()) {
-            List<ConsumerRecord<String, String>> partitionedRecords = consumerRecords.records(partition);
-            long offset = partitionedRecords.get(partitionedRecords.size() - 1).offset();
-            // we need to commit the next offset to consume
-            offsetsToCommit.put(partition, new OffsetAndMetadata(offset + 1));
+    private static Map<TopicPartition, OffsetAndMetadata> getOffsetsToCommit(KafkaConsumer<String, String> consumer) {
+        Map<TopicPartition, OffsetAndMetadata> offsets = new HashMap<>();
+        for (TopicPartition topicPartition : consumer.assignment()) {
+            offsets.put(topicPartition, new OffsetAndMetadata(consumer.position(topicPartition), null));
         }
-        return offsetsToCommit;
+        return offsets;
     }
 
     public static class Tuple {
