@@ -60,11 +60,11 @@ Now, we just need to tell our client application where it can find the Kafka clu
 We also need to provide the truststore location and password because we are connecting externally.
 
 ```sh
-export BOOTSTRAP_SERVERS=$(kubectl get routes my-cluster-kafka-bootstrap -o jsonpath="{.status.ingress[0].host}"):443 \
-  && export REGISTRY_URL=http://$(kubectl get apicurioregistries my-registry -o jsonpath="{.status.info.host}")/apis/registry/v2 \
-  && kubectl get secret my-cluster-cluster-ca-cert -o jsonpath="{.data['ca\.p12']}" | base64 -d > /tmp/truststore.p12 \
-  && export SSL_TRUSTSTORE_LOCATION="/tmp/truststore.p12" \
-  && export SSL_TRUSTSTORE_PASSWORD=$(kubectl get secret my-cluster-cluster-ca-cert -o jsonpath="{.data['ca\.password']}" | base64 -d)
+kubectl get secret my-cluster-cluster-ca-cert -o jsonpath="{.data['ca\.p12']}" | base64 -d > /tmp/truststore.p12 \
+  && export BOOTSTRAP_SERVERS=$(kubectl get routes my-cluster-kafka-bootstrap -o jsonpath="{.status.ingress[0].host}"):443 \
+  REGISTRY_URL=http://$(kubectl get apicurioregistries my-registry -o jsonpath="{.status.info.host}")/apis/registry/v2 \
+  TOPIC_NAME="my-topic" ARTIFACT_GROUP="default" SSL_TRUSTSTORE_LOCATION="/tmp/truststore.p12" \
+  SSL_TRUSTSTORE_PASSWORD=$(kubectl get secret my-cluster-cluster-ca-cert -o jsonpath="{.data['ca\.password']}" | base64 -d)
 
 mvn clean compile exec:java -f sessions/003/kafka-avro/pom.xml -q
 Producing records

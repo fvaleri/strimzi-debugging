@@ -65,7 +65,7 @@ BOOTSTRAP_SERVERS=$(kubectl get routes my-cluster-kafka-bootstrap -o jsonpath="{
   KEYSTORE_LOCATION="/tmp/keystore.p12" KEYSTORE_PASSWORD=$(kubectl get secret my-user -o jsonpath="{.data['user\.password']}" | base64 -d) \
   TRUSTSTORE_LOCATION="/tmp/truststore.p12" TRUSTSTORE_PASSWORD=$(kubectl get secret my-cluster-cluster-ca-cert -o jsonpath="{.data['ca\.password']}" | base64 -d) \
   ; kubectl get secret my-user -o jsonpath="{.data['user\.p12']}" | base64 -d > $KEYSTORE_LOCATION \
-    && kubectl get secret my-cluster-cluster-ca-cert -o jsonpath="{.data['ca\.p12']}" | base64 -d > $TRUSTSTORE_LOCATION
+  && kubectl get secret my-cluster-cluster-ca-cert -o jsonpath="{.data['ca\.p12']}" | base64 -d > $TRUSTSTORE_LOCATION
   
 cat <<EOF >/tmp/client.properties
 security.protocol = SSL

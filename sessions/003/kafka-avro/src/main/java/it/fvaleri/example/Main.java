@@ -11,6 +11,9 @@ import org.apache.avro.Schema;
 import org.apache.avro.generic.GenericData;
 import org.apache.avro.generic.GenericRecord;
 import org.apache.kafka.clients.CommonClientConfigs;
+import org.apache.kafka.clients.admin.Admin;
+import org.apache.kafka.clients.admin.AdminClientConfig;
+import org.apache.kafka.clients.admin.NewTopic;
 import org.apache.kafka.clients.consumer.ConsumerConfig;
 import org.apache.kafka.clients.consumer.ConsumerRecords;
 import org.apache.kafka.clients.consumer.KafkaConsumer;
@@ -18,6 +21,7 @@ import org.apache.kafka.clients.producer.KafkaProducer;
 import org.apache.kafka.clients.producer.ProducerConfig;
 import org.apache.kafka.clients.producer.ProducerRecord;
 import org.apache.kafka.common.config.SslConfigs;
+import org.apache.kafka.common.errors.TopicExistsException;
 import org.apache.kafka.common.serialization.StringDeserializer;
 import org.apache.kafka.common.serialization.StringSerializer;
 
@@ -26,17 +30,21 @@ import java.io.IOException;
 import java.io.InputStream;
 import java.nio.charset.StandardCharsets;
 import java.time.Duration;
+import java.util.Arrays;
+import java.util.List;
 import java.util.Properties;
+import java.util.UUID;
+import java.util.concurrent.ExecutionException;
+import java.util.stream.Collectors;
 
+import static java.lang.String.format;
 import static java.util.Collections.singleton;
 
 public class Main {
-    private static final String TOPIC_NAME = "my-topic";
-    private static final String ARTIFACT_GROUP = "default";
-    private static final String ARTIFACT_ID = TOPIC_NAME + "-value";
-
     private static String bootstrapServers;
     private static String registryUrl;
+    private static String topicName;
+    private static String artifactGroup;
     private static String sslTruststoreLocation;
     private static String sslTruststorePassword;
 
@@ -46,6 +54,12 @@ public class Main {
         }
         if (System.getenv("REGISTRY_URL") != null) {
             registryUrl = System.getenv("REGISTRY_URL");
+        }
+        if (System.getenv("TOPIC_NAME") != null) {
+            topicName = System.getenv("TOPIC_NAME");
+        }
+        if (System.getenv("ARTIFACT_GROUP") != null) {
+            artifactGroup = System.getenv("ARTIFACT_GROUP");
         }
         if (System.getenv("SSL_TRUSTSTORE_LOCATION") != null) {
             sslTruststoreLocation = System.getenv("SSL_TRUSTSTORE_LOCATION");
@@ -58,11 +72,11 @@ public class Main {
     public static void main(String[] args) {
         try (var producer = createKafkaProducer();
              var consumer = createKafkaConsumer()) {
-
+            createTopics(topicName);
             // get the schema by group and id
             RegistryClient client = RegistryClientFactory.create(registryUrl);
             String schemaData = null;
-            try (InputStream latestArtifact = client.getLatestArtifact(ARTIFACT_GROUP, ARTIFACT_ID)) {
+            try (InputStream latestArtifact = client.getLatestArtifact(artifactGroup, format("%s-value", topicName))) {
                 schemaData = toString(latestArtifact);
             } catch (NotFoundException e) {
                 System.err.println("Schema not registered");
@@ -76,13 +90,13 @@ public class Main {
                 GenericRecord record = new GenericData.Record(schema);
                 record.put("Message", "Hello");
                 record.put("Time", System.currentTimeMillis());
-                ProducerRecord<String, GenericRecord> producedRecord = new ProducerRecord<>(TOPIC_NAME, null, record);
+                ProducerRecord<String, GenericRecord> producedRecord = new ProducerRecord<>(topicName, null, record);
                 producer.send(producedRecord);
             }
             System.out.println("Records produced");
 
             System.out.println("Consuming all records");
-            consumer.subscribe(singleton(TOPIC_NAME));
+            consumer.subscribe(singleton(topicName));
             while (true) {
                 // the globalId is sent with the payload and used to lookup the schema
                 ConsumerRecords<String, GenericRecord> records = consumer.poll(Duration.ofSeconds(5));
@@ -103,37 +117,33 @@ public class Main {
     private static KafkaProducer<String, GenericRecord> createKafkaProducer() {
         Properties props = new Properties();
         props.put(ProducerConfig.BOOTSTRAP_SERVERS_CONFIG, bootstrapServers);
-        props.put(ProducerConfig.CLIENT_ID_CONFIG, "producer-" + System.currentTimeMillis());
+        props.put(ProducerConfig.CLIENT_ID_CONFIG, "client-" + UUID.randomUUID());
         props.put(ProducerConfig.KEY_SERIALIZER_CLASS_CONFIG, StringSerializer.class.getName());
-        // use Avro Serializer
         props.put(ProducerConfig.VALUE_SERIALIZER_CLASS_CONFIG, AvroKafkaSerializer.class.getName());
-        // set registry URL
         props.put(SerdeConfig.REGISTRY_URL, registryUrl);
-        // set cache eviction period
+        // this configures the cache eviction period
         props.putIfAbsent(SerdeConfig.CHECK_PERIOD_MS, 30_000);
         // set the artifactId lookup strategy (map the topic name to the artifactId in the registry)
         props.putIfAbsent(SerdeConfig.ARTIFACT_RESOLVER_STRATEGY, TopicIdStrategy.class.getName());
         addSharedConfig(props);
-        return new KafkaProducer<String, GenericRecord>(props);
+        return new KafkaProducer<>(props);
     }
 
     private static KafkaConsumer<String, GenericRecord> createKafkaConsumer() {
         Properties props = new Properties();
         props.put(ConsumerConfig.BOOTSTRAP_SERVERS_CONFIG, bootstrapServers);
-        props.put(ConsumerConfig.CLIENT_ID_CONFIG, "consumer-" + System.currentTimeMillis());
+        props.put(ConsumerConfig.CLIENT_ID_CONFIG, "client-" + UUID.randomUUID());
         props.put(ConsumerConfig.GROUP_ID_CONFIG, "my-group");
         props.put(ConsumerConfig.AUTO_OFFSET_RESET_CONFIG, "earliest");
         props.put(ConsumerConfig.KEY_DESERIALIZER_CLASS_CONFIG, StringDeserializer.class.getName());
-        // use Avro Deserializer
         props.put(ConsumerConfig.VALUE_DESERIALIZER_CLASS_CONFIG, AvroKafkaDeserializer.class.getName());
-        // set registry URL
         props.put(SerdeConfig.REGISTRY_URL, registryUrl);
-        // set cache eviction period
+        // this configures the cache eviction period
         props.putIfAbsent(SerdeConfig.CHECK_PERIOD_MS, 30_000);
         // set the artifactId lookup strategy (map the topic name to the artifactId in the registry)
         props.putIfAbsent(SerdeConfig.ARTIFACT_RESOLVER_STRATEGY, TopicIdStrategy.class.getName());
         addSharedConfig(props);
-        return new KafkaConsumer<String, GenericRecord>(props);
+        return new KafkaConsumer<>(props);
     }
 
     private static void addSharedConfig(Properties props) {
@@ -142,6 +152,29 @@ public class Main {
             props.put(SslConfigs.SSL_TRUSTSTORE_LOCATION_CONFIG, sslTruststoreLocation);
             props.put(SslConfigs.SSL_TRUSTSTORE_PASSWORD_CONFIG, sslTruststorePassword);
             props.put(SslConfigs.SSL_TRUSTSTORE_TYPE_CONFIG, "PKCS12");
+        }
+    }
+
+    private static void createTopics(String... topicNames) {
+        Properties props = new Properties();
+        props.put(AdminClientConfig.BOOTSTRAP_SERVERS_CONFIG, bootstrapServers);
+        props.put(AdminClientConfig.CLIENT_ID_CONFIG, "client" + UUID.randomUUID());
+        try (Admin admin = Admin.create(props)) {
+            // use default RF to avoid NOT_ENOUGH_REPLICAS error with minISR>1
+            short replicationFactor = -1;
+            List<NewTopic> newTopics = Arrays.stream(topicNames)
+                .map(name -> new NewTopic(name, -1, replicationFactor))
+                .collect(Collectors.toList());
+            try {
+                admin.createTopics(newTopics).all().get();
+                System.out.printf("Created topics: %s%n", Arrays.toString(topicNames));
+            } catch (ExecutionException e) {
+                if (!(e.getCause() instanceof TopicExistsException)) {
+                    throw e;
+                }
+            }
+        } catch (Throwable e) {
+            throw new RuntimeException("Topics creation error", e);
         }
     }
 
