@@ -105,12 +105,11 @@ public class Main {
                     System.out.printf("Record: %s-%d%n", value.get("Message"), value.get("Time"));
                 });
                 if (records.count() > 0) {
-                    System.exit(0);
+                    break;
                 }
             }
-        } catch (Throwable t) {
-            System.err.printf("%s%n", t);
-            System.exit(1);
+        } catch (Throwable e) {
+            e.printStackTrace();
         }
     }
 
