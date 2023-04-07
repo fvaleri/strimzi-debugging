@@ -33,6 +33,9 @@ spec:
       loggers:
         kafka.root.logger.level: "INFO"
     resources:
+      # pod scheduling is only made based on requests
+      # we set memory requests==limits to avoid being evicted when the node is under pressure
+      # in production you can also set CPU requests==limits to have Guaranteed pod QoS
       limits:
         memory: 2Gi
       requests:
