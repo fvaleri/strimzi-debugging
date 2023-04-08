@@ -37,6 +37,7 @@ spec:
       # we set memory requests==limits to avoid being evicted when the node is under pressure
       # in production you can also set CPU requests==limits to have Guaranteed pod QoS
       limits:
+        cpu: 2000m
         memory: 2Gi
       requests:
         cpu: 1000m
