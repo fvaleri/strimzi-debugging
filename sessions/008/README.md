@@ -7,9 +7,8 @@ That way, the broker hosting the partition leader can identify and filter out du
 
 Unfortunately, the idempotent producer does not guarantee atomicity when you need to write to multiple partitions as a single unit of work.
 This is usually the case for read-process-write applications, where the exactly-once semantics (EOS) allow atomic writes to multiple partitions.
-The EOS is only supported inside a single Kafka cluster, excluding any external system.
-
-> Where EOS is required for atomic writes to multiple partitions, the Outbox pattern and Spring Transaction Manager (TM) can be used.
+Transactions are only supported inside a single Kafka cluster, excluding any external system. 
+If this is the requirement, you would need to use an additional component such as the Spring Transaction Manager.
 
 ![](images/trans.png)
 
