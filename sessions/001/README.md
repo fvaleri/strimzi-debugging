@@ -53,7 +53,7 @@ Each consumer periodically or manually commits its position (the next offsets to
 
 # Example: deploy a Kafka cluster on localhost
 
-In this example, we deploy a Kafka cluster on a local machine.
+In this example, we deploy a Kafka cluster on localhost.
 This is useful for quick tests where a multi node cluster is not required.
 We use the latest upstream Kafka release because the downstream release is just a rebuild with few additional and optional plugins.
 
@@ -171,7 +171,7 @@ baseOffset: 15 lastOffset: 17 count: 3 baseSequence: 0 lastSequence: 2 producerI
 
 # Example: deploy a Kafka cluster on OpenShift
 
-In this example, we deploy AMQ Streams with a 3-node cluster on OpenShift using the built-in OperatorHub (OLM) component, which is the preferred mode because you can use the web console and you get the additional benefit of automatic updates.
+In this example, we deploy the AMQ Streams operator and a 3-node cluster on OpenShift using the built-in OperatorHub (OLM) component, which is integrated with the web console and provides updates.
 
 We use the `init.sh` script to initialize the environment by passing OpenShift parameters.
 You can reuse it whenever you want to reinitialize your environment.

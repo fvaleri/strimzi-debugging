@@ -38,8 +38,8 @@ After transaction rollback, the LSO starts to increment again on every completed
 
 # Example: transactional application
 
-First, we [deploy the AMQ Streams operator and Kafka cluster](/sessions/001).
-We run the word count application included in this session on a different terminal (there is a new poll/read every 60 seconds).
+First, we [deploy a Kafka cluster on localhost](/sessions/001).
+We run the transactional application included in this example on a different terminal (there is a new poll/read every 60 seconds).
 [Look at the code](/sessions/008/kafka-trans) to see how the low-level transaction API is used.
 
 ```sh
