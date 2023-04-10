@@ -77,7 +77,7 @@ Record: Hello-1663594982041
 Record: Hello-1663594982042
 ```
 
-[Look at the code](/sessions/003/kafka-avro) to see how the schema is registered and used.
+[Look at the code](/sessions/003/kafka-avro/src/main/java/it/fvaleri/example/Main.java) to see how the schema is registered and used.
 The registration happens at build time and the Maven plugin executes the following API request for every configured schema artifact.
 Note that we are using the "default" group id, but you can specify a custom name.
 
