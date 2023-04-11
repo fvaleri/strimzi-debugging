@@ -13,7 +13,7 @@ If this is the requirement, you would need to use an additional component such a
 ![](images/trans.png)
 
 Each producer instance must have its own static and unique `transactional.id` (TID), which is mapped to a producer id (PID) and epoch (to implement zombie fencing).
-Consumers with `isolation.level=read_committed` only get committed messages, ignoring ongoing and aborted transactions.
+Consumers with `isolation.level=read_committed` only get committed messages, ignoring aborted transactions.
 
 A given producer can have at most one ongoing transaction (ordering guarantee).
 The transaction state is stored in an internal topic called `__transaction_state`.
@@ -110,7 +110,7 @@ That was straightforward, but how is the transaction state managed by the coordi
 In `__transaction_state-20` record payloads, we can see all transaction state changes keyed by TID `kafka-trans-0` (we also have PID+epoch).
 The transaction starts in the `Empty` state, then we have two `Ongoing` state changes (one for each partition registration).
 Then, when the commit is called, we have `PrepareCommit` state change, which means the broker is now committed to the transaction.
-This happens in the last batch, where the state is changed to `CompleteCommit`, terminating  the transaction.
+This happens in the last batch, where the state is changed to `CompleteCommit`, terminating the transaction.
 
 ```sh
 kafka-dump-log.sh --deep-iteration --print-data-log --transaction-log-decoder --files /tmp/kafka-logs/__transaction_state-20/00000000000000000000.log
