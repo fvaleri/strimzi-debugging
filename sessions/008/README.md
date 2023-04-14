@@ -19,16 +19,17 @@ A given producer can have at most one ongoing transaction (ordering guarantee).
 The transaction state is stored in an internal topic called `__transaction_state`.
 The transaction coordinator automatically aborts any ongoing transaction that is not completed within `transaction.timeout.ms`.
 
-A transaction goes through the following states:
+A transaction goes through the following stages:
 
-1. Ongoing (undecided)
-2. Completed and unreplicated (decided)
-3. Completed and replicated (decided and committed)
+1. Undecided (ongoing)
+2. Decided and unreplicated
+3. Decided and replicated
 
-The first unstable offset (FUO) is the earliest offset that is part of an ongoing transaction, if any.
+Non-transactional batches are considered decided immediately, but transactional batches are only decided when the corresponding commit or abort marker is written (control record).
+The high watermark (HW) is the offset of the last message that was successfully committed (replicated to all in-sync replicas).
+The first unstable offset (FUO) is the earliest offset that is part of the ongoing transaction, if present.
 The last stable offset (LSO) is the offset such that all lower offsets have been decided and it is always present.
-Non-transactional batches are considered decided immediately, but transactional batches are only decided when the corresponding commit or abort marker is written.
-This means that the LSO is equal to the FUO if it's lower than the high watermark (HW), otherwise it's the HW (LSO <= HW <= LEO).
+The LSO is equal to the FUO if it's lower than the HW, otherwise it's the HW (LSO <= HW <= LEO).
 
 The `LogCleaner` does not clean beyond the LSO.
 If there is a hanging transaction on a partition (missing or out of order control record), the FUO can't be updated, which means the LSO is stuck.
