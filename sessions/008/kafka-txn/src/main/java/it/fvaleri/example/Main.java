@@ -13,10 +13,13 @@ import org.apache.kafka.clients.producer.ProducerConfig;
 import org.apache.kafka.clients.producer.ProducerRecord;
 import org.apache.kafka.common.KafkaException;
 import org.apache.kafka.common.TopicPartition;
+import org.apache.kafka.common.errors.AuthorizationException;
 import org.apache.kafka.common.errors.FencedInstanceIdException;
 import org.apache.kafka.common.errors.OutOfOrderSequenceException;
 import org.apache.kafka.common.errors.ProducerFencedException;
 import org.apache.kafka.common.errors.TopicExistsException;
+import org.apache.kafka.common.errors.UnsupportedVersionException;
+import org.apache.kafka.common.errors.WakeupException;
 import org.apache.kafka.common.serialization.StringDeserializer;
 import org.apache.kafka.common.serialization.StringSerializer;
 
@@ -87,12 +90,13 @@ public class Main {
                         // commit the transaction including offsets
                         producer.commitTransaction();
                     }
-                } catch (ProducerFencedException | FencedInstanceIdException | OutOfOrderSequenceException e) {
+                } catch (AuthorizationException | UnsupportedVersionException | WakeupException
+                         | ProducerFencedException | FencedInstanceIdException | OutOfOrderSequenceException e) {
                     // we can't recover from these exceptions
                     e.printStackTrace();
                     closed = true;
                 } catch (KafkaException e) {
-                    // abort the transaction and try to continue
+                    // abort the transaction and retry
                     System.err.printf("Aborting transaction: %s%n", e);
                     producer.abortTransaction();
                 }
@@ -157,7 +161,7 @@ public class Main {
                     throw e;
                 }
             }
-        } catch (Throwable e) {
+        } catch (Exception e) {
             throw new RuntimeException("Topics creation error", e);
         }
     }
