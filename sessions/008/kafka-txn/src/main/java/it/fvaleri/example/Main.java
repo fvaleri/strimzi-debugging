@@ -90,8 +90,8 @@ public class Main {
                         // commit the transaction including offsets
                         producer.commitTransaction();
                     }
-                } catch (AuthorizationException | UnsupportedVersionException | WakeupException
-                         | ProducerFencedException | FencedInstanceIdException | OutOfOrderSequenceException e) {
+                } catch (AuthorizationException | UnsupportedVersionException | ProducerFencedException
+                         | FencedInstanceIdException | OutOfOrderSequenceException e) {
                     // we can't recover from these exceptions
                     e.printStackTrace();
                     closed = true;
