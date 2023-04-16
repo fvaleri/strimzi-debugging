@@ -17,9 +17,9 @@ import org.apache.kafka.common.errors.AuthorizationException;
 import org.apache.kafka.common.errors.FencedInstanceIdException;
 import org.apache.kafka.common.errors.OutOfOrderSequenceException;
 import org.apache.kafka.common.errors.ProducerFencedException;
+import org.apache.kafka.common.errors.SerializationException;
 import org.apache.kafka.common.errors.TopicExistsException;
 import org.apache.kafka.common.errors.UnsupportedVersionException;
-import org.apache.kafka.common.errors.WakeupException;
 import org.apache.kafka.common.serialization.StringDeserializer;
 import org.apache.kafka.common.serialization.StringSerializer;
 
@@ -91,7 +91,7 @@ public class Main {
                         producer.commitTransaction();
                     }
                 } catch (AuthorizationException | UnsupportedVersionException | ProducerFencedException
-                         | FencedInstanceIdException | OutOfOrderSequenceException e) {
+                         | FencedInstanceIdException | OutOfOrderSequenceException | SerializationException e) {
                     // we can't recover from these exceptions
                     e.printStackTrace();
                     closed = true;
