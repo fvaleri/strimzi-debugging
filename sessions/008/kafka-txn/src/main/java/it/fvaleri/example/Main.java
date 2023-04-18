@@ -58,7 +58,7 @@ public class Main {
     }
 
     public static void main(String[] args) {
-        System.out.printf("Starting instance with TID %s%n", instanceId);
+        System.out.printf("Starting instance %s%n", instanceId);
         try (var producer = createKafkaProducer();
              var consumer = createKafkaConsumer()) {
             createTopics(inputTopic, outputTopic);

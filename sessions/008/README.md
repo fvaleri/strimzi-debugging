@@ -47,7 +47,7 @@ export BOOTSTRAP_SERVERS="localhost:9092" INSTANCE_ID="kafka-txn-0" \
   GROUP_ID="my-group" INPUT_TOPIC="input-topic" OUTPUT_TOPIC="output-topic"
 
 mvn clean compile exec:java -f sessions/008/kafka-txn/pom.xml -q
-Starting instance with TID kafka-txn-0
+Starting instance kafka-txn-0
 Created topics: input-topic
 Waiting for new data
 Waiting for new data
