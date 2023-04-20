@@ -64,15 +64,15 @@ When it returns, two processes are running on the system: one is Kafka and the o
 source init.sh --skip-ocp
 Checking prerequisites
 Getting Kafka from ASF
-Kafka home: /tmp/kafka.9bAqs71
-READY!
+Kafka home: /tmp/kafka.yidQitI
+Localhost OK
 
-zookeeper-server-start.sh -daemon $KAFKA_HOME/config/zookeeper.properties \
-  && sleep 5 && kafka-server-start.sh -daemon $KAFKA_HOME/config/server.properties
+$KAFKA_HOME/bin/zookeeper-server-start.sh -daemon $KAFKA_HOME/config/zookeeper.properties \
+  && sleep 5 && $KAFKA_HOME/bin/kafka-server-start.sh -daemon $KAFKA_HOME/config/server.properties
 
-jps -v | grep kafka
-451178 Kafka -Xmx1G -Xms1G -XX:+UseG1GC -XX:MaxGCPauseMillis=20 -XX:InitiatingHeapOccupancyPercent=35 -XX:+ExplicitGCInvokesConcurrent -XX:MaxInlineLevel=15 -Djava.awt.headless=true -Xlog:gc:file=/tmp/kafka-uIdD8ek/bin/.logs/kafkaServer-gc.log:time,tags:filecount=10,filesize=100M -Dcom.sun.management.jmxremote -Dcom.sun.management.jmxremote.authenticate=false -Dcom.sun.management.jmxremote.ssl=false -Dkafka.logs.dir=/tmp/kafka-uIdD8ek/bin/.logs -Dlog4j.configuration=file:/tmp/kafka-uIdD8ek/bin/.config/log4j.properties
-450808 QuorumPeerMain -Xmx512M -Xms512M -XX:+UseG1GC -XX:MaxGCPauseMillis=20 -XX:InitiatingHeapOccupancyPercent=35 -XX:+ExplicitGCInvokesConcurrent -XX:MaxInlineLevel=15 -Djava.awt.headless=true -Xlog:gc:file=/tmp/kafka-uIdD8ek/bin/.logs/zookeeper-gc.log:time,tags:filecount=10,filesize=100M -Dcom.sun.management.jmxremote -Dcom.sun.management.jmxremote.authenticate=false -Dcom.sun.management.jmxremote.ssl=false -Dkafka.logs.dir=/tmp/kafka-uIdD8ek/bin/.logs -Dlog4j.configuration=file:/tmp/kafka-uIdD8ek/bin/.config/log4j.properties
+jcmd | grep kafka
+831273 org.apache.zookeeper.server.quorum.QuorumPeerMain /tmp/kafka.yidQitI/config/zookeeper.properties
+831635 kafka.Kafka /tmp/kafka.yidQitI/config/server.properties
 ```
 
 We create a new topic with 3 partitions, then produce and consume some messages.
@@ -80,21 +80,21 @@ When consuming messages, you can print additional data such as the partition num
 Every consumer with the same `group.id` is part of the same consumer group.
 
 ```sh
-kafka-topics.sh --bootstrap-server :9092 --topic my-topic --create --partitions 3 --replication-factor 1 
+$KAFKA_HOME/bin/kafka-topics.sh --bootstrap-server :9092 --topic my-topic --create --partitions 3 --replication-factor 1 
 Created topic my-topic.
 
-kafka-topics.sh --bootstrap-server :9092 --topic my-topic --describe
+$KAFKA_HOME/bin/kafka-topics.sh --bootstrap-server :9092 --topic my-topic --describe
 Topic: my-topic	TopicId: a4Lnw1iQSW6MALg0gvxZNQ	PartitionCount: 3	ReplicationFactor: 1	Configs: segment.bytes=1073741824
 	Topic: my-topic	Partition: 0	Leader: 0	Replicas: 0	Isr: 0
 	Topic: my-topic	Partition: 1	Leader: 0	Replicas: 0	Isr: 0
 	Topic: my-topic	Partition: 2	Leader: 0	Replicas: 0	Isr: 0
 
-kafka-console-producer.sh --bootstrap-server :9092 --topic my-topic --property parse.key=true --property key.separator="#"
+$KAFKA_HOME/bin/kafka-console-producer.sh --bootstrap-server :9092 --topic my-topic --property parse.key=true --property key.separator="#"
 >1#hello
 >2#world
 >^C
 
-kafka-console-consumer.sh --bootstrap-server :9092 --topic my-topic --group my-group --from-beginning \
+$KAFKA_HOME/bin/kafka-console-consumer.sh --bootstrap-server :9092 --topic my-topic --group my-group --from-beginning \
   --property print.partition=true --property print.key=true
 Partition:0	1	hello
 Partition:2	2	world
@@ -132,7 +132,7 @@ Partition log files are in binary format, but Kafka includes a dump tool for dec
 On this partition, we have one batch (`baseOffset`), containing only one record (`| offset`) with key "1" and value "hello".
 
 ```sh
-kafka-dump-log.sh --deep-iteration --print-data-log \
+$KAFKA_HOME/bin/kafka-dump-log.sh --deep-iteration --print-data-log \
   --files /tmp/kafka-logs/my-topic-0/00000000000000000000.log
 Dumping /tmp/kafka-logs/my-topic-0/00000000000000000000.log
 Starting offset: 0
@@ -158,7 +158,7 @@ We have a batch from our consumer group, which includes 3 records, one for each 
 As expected, the consumer group committed offset1 on partition0 and partition2, plus offset0 on partition1 (we sent 2 messages).
 
 ```sh
-kafka-dump-log.sh --deep-iteration --print-data-log --offsets-decoder \
+$KAFKA_HOME/bin/kafka-dump-log.sh --deep-iteration --print-data-log --offsets-decoder \
   --files /tmp/kafka-logs/__consumer_offsets-12/00000000000000000000.log
 Dumping /tmp/kafka-logs/__consumer_offsets-12/00000000000000000000.log
 Starting offset: 0
@@ -184,7 +184,8 @@ If you delete the CRDs, every Kafka cluster deployed on that OpenShift cluster i
 source init.sh
 Checking prerequisites
 Getting Kafka from /tmp
-Kafka home: /tmp/kafka.9bAqs71
+Kafka home: /tmp/kafka.yidQitI
+Localhost OK
 Configuring OpenShift
 API URL: https://api.openshift.example.com:6443
 Username: my-user
@@ -192,7 +193,7 @@ Password:
 namespace/test created
 subscription.operators.coreos.com/my-streams created
 subscription.operators.coreos.com/my-registry created
-READY!
+OpenShift OK
 
 kubectl -n openshift-operators get po
 NAME                                                         READY   STATUS    RESTARTS   AGE

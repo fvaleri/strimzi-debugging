@@ -75,7 +75,7 @@ ssl.truststore.location = $TRUSTSTORE_LOCATION
 ssl.truststore.password = $TRUSTSTORE_PASSWORD
 EOF
 
-kafka-console-producer.sh --producer.config /tmp/client.properties --bootstrap-server $BOOTSTRAP_SERVERS --topic my-topic
+$KAFKA_HOME/bin/kafka-console-producer.sh --producer.config /tmp/client.properties --bootstrap-server $BOOTSTRAP_SERVERS --topic my-topic
 >hello
 >tls
 >^C 
@@ -220,7 +220,7 @@ ssl.truststore.location = $TRUSTSTORE_LOCATION
 ssl.truststore.password = $TRUSTSTORE_PASSWORD
 EOF
 
-kafka-console-producer.sh --producer.config /tmp/client.properties --bootstrap-server $BOOTSTRAP_SERVERS --topic my-topic
+$KAFKA_HOME/bin/kafka-console-producer.sh --producer.config /tmp/client.properties --bootstrap-server $BOOTSTRAP_SERVERS --topic my-topic
 >hello
 >custom
 >tls
