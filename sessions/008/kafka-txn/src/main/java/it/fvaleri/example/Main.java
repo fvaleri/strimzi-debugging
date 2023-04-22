@@ -7,7 +7,9 @@ import org.apache.kafka.clients.consumer.ConsumerConfig;
 import org.apache.kafka.clients.consumer.ConsumerRecord;
 import org.apache.kafka.clients.consumer.ConsumerRecords;
 import org.apache.kafka.clients.consumer.KafkaConsumer;
+import org.apache.kafka.clients.consumer.NoOffsetForPartitionException;
 import org.apache.kafka.clients.consumer.OffsetAndMetadata;
+import org.apache.kafka.clients.consumer.OffsetOutOfRangeException;
 import org.apache.kafka.clients.producer.KafkaProducer;
 import org.apache.kafka.clients.producer.ProducerConfig;
 import org.apache.kafka.clients.producer.ProducerRecord;
@@ -33,6 +35,7 @@ import java.util.concurrent.ExecutionException;
 import java.util.stream.Collectors;
 
 import static java.time.Duration.ofSeconds;
+import static java.util.Collections.emptyList;
 import static java.util.Collections.singleton;
 
 public class Main {
@@ -69,8 +72,7 @@ public class Main {
             while (!closed) {
                 try {
                     System.out.println("Waiting for new data");
-                    ConsumerRecords<String, String> records = consumer.poll(ofSeconds(60));
-
+                    ConsumerRecords<String, String> records = consumer.poll(ofSeconds(30));
                     if (!records.isEmpty()) {
                         // begin a new transaction session
                         producer.beginTransaction();
@@ -95,6 +97,11 @@ public class Main {
                     // we can't recover from these exceptions
                     e.printStackTrace();
                     closed = true;
+                } catch (OffsetOutOfRangeException | NoOffsetForPartitionException e) {
+                    // invalid or no offset found without auto.reset.policy
+                    System.out.println("Invalid or no offset found, using latest");
+                    consumer.seekToEnd(emptyList());
+                    consumer.commitSync();
                 } catch (KafkaException e) {
                     // abort the transaction and retry
                     System.err.printf("Aborting transaction: %s%n", e);
