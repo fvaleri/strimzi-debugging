@@ -100,7 +100,7 @@ public class Main {
                 } catch (OffsetOutOfRangeException | NoOffsetForPartitionException e) {
                     // invalid or no offset found without auto.reset.policy
                     System.out.println("Invalid or no offset found, using latest");
-                    consumer.seekToEnd(emptyList());
+                    consumer.seekToEnd(e.partitions());
                     consumer.commitSync();
                 } catch (KafkaException e) {
                     // abort the transaction and retry
@@ -169,7 +169,7 @@ public class Main {
                 }
             }
         } catch (Exception e) {
-            throw new RuntimeException("Topics creation error", e);
+            throw new RuntimeException(e.getMessage());
         }
     }
 }

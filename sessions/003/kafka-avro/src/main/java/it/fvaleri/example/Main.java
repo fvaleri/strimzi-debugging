@@ -173,7 +173,7 @@ public class Main {
                 }
             }
         } catch (Exception e) {
-            throw new RuntimeException("Topics creation error", e);
+            throw new RuntimeException(e.getMessage());
         }
     }
 
