@@ -27,9 +27,8 @@ Key and value are just byte arrays, which gives you the flexibility to encode th
 The timestamp is always present, but it can be set by the application when it sends (default), or by the Kafka runtime when it receives.
 Whenever possible, records are buffered and sent in batches (a single request can include multiple batches, one for each partition).
 
-Records are stored in a topic, which is further divided into one or more partitions, distributed evenly across the brokers.
+Messages are stored in a topic, which is further divided into one or more partitions, distributed evenly across the brokers.
 Each partition is stored on disk as a series of fixed-size commit logs called segments.
-Ordering is only guaranteed at the partition level.
 Each record within a partition has a unique id called the offset, which is a monotonically increasing number that is never reused.
 Message ordering is only guaranteed at the partition level.
 If this is a requirement, you can create a single-partition topic or use the same key for sending all related events, so that they always land in the same partition.
