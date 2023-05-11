@@ -33,26 +33,31 @@ spec:
       topicsPattern: ".*"
       groupsPattern: ".*"
       sourceConnector:
-        tasksMax: 2
+        tasksMax: 10
         config:
           replication.factor: -1
           offset-syncs.topic.replication.factor: -1
-          refresh.topics.interval.seconds: 30
-          # disable replication of ACL rules
-          sync.topic.acls.enabled: false
+          offset-syncs.topic.location: "target"
+          key.converter: "org.apache.kafka.connect.converters.ByteArrayConverter"
+          value.converter: "org.apache.kafka.connect.converters.ByteArrayConverter"
           # disable source cluster name prefix on target topic
           replication.policy.class: "org.apache.kafka.connect.mirror.IdentityReplicationPolicy"
+          refresh.topics.interval.seconds: 20
+          sync.topic.configs.enabled: true
+          sync.topic.acls.enabled: false
       checkpointConnector:
-        tasksMax: 2
+        tasksMax: 10
         config:
           checkpoints.topic.replication.factor: -1
-          # enable consumer offsets sync
-          sync.group.offsets.enabled: true
-          sync.group.offsets.interval.seconds: 30
-          emit.checkpoints.interval.seconds: 30
-          refresh.groups.interval.seconds: 30
+          key.converter: "org.apache.kafka.connect.converters.ByteArrayConverter"
+          value.converter: "org.apache.kafka.connect.converters.ByteArrayConverter"
           # disable source cluster name prefix on target topic
           replication.policy.class: "org.apache.kafka.connect.mirror.IdentityReplicationPolicy"
+          sync.group.offsets.enabled: true
+          sync.group.offsets.interval.seconds: 20
+          emit.checkpoints.enabled: true
+          emit.checkpoints.interval.seconds: 20
+          refresh.groups.interval.seconds: 20
   # enable unprotected JMX on port 9999
   jmxOptions: {}
   logging:
