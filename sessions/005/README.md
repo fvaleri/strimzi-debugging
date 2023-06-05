@@ -9,7 +9,7 @@ A data corruption due to a human error or a bug would also be replicated In Mirr
 One strategy here is to backup the full cluster configuration, while also taking disk/volume snapshots.
 
 Assuming you have set up your replication configuration correctly, the only way to have zero RPO is to setup a stretch Kafka cluster, which is one that evenly spans multiple data centers (DCs) with synchronous replication.
-In order to do that, you would need at least three DCs with guaranteed latency which is under 50ms.
+In order to do that, you would need at least three DCs with guaranteed low latency.
 OpenShift supports stretch/multi-site clusters, so you can simply deploy AMQ Streams on top of that, using affinities rules to achieve the desired topology.
 Then, you set rack awareness to ensure that replicas are distributed evenly across DCs and deploy Cruise Control with rack awareness goals to make sure that replicas remain distributed across different racks.
 
