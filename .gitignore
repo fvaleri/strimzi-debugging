@@ -6,3 +6,4 @@ target/
 .classpath
 .factorypath
 .DS_Store
+*.iml
