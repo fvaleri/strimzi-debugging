@@ -9,15 +9,15 @@
     <version>0.0.1-SNAPSHOT</version>
 
     <properties>
-        <maven.compiler.source>11</maven.compiler.source>
-        <maven.compiler.target>11</maven.compiler.target>
         <project.build.sourceEncoding>UTF-8</project.build.sourceEncoding>
         <project.reporting.outputEncoding>UTF-8</project.reporting.outputEncoding>
+
         <kafka.version>3.2.3.redhat-00007</kafka.version>
-        <jackson-databind.version>2.12.3</jackson-databind.version>
+        <jackson.databind.version>2.12.3</jackson.databind.version>
         <slf4j.version>1.7.36</slf4j.version>
-        <exec-plugin.version>1.6.0</exec-plugin.version>
-        <shade-plugin.version>3.2.4</shade-plugin.version>
+
+        <plugin.compiler.version>3.10.1</plugin.compiler.version>
+        <plugin.exec.version>3.1.0</plugin.exec.version>
     </properties>
 
     <dependencies>
@@ -29,7 +29,7 @@
         <dependency>
             <groupId>com.fasterxml.jackson.core</groupId>
             <artifactId>jackson-databind</artifactId>
-            <version>${jackson-databind.version}</version>
+            <version>${jackson.databind.version}</version>
         </dependency>
         <dependency>
             <groupId>org.slf4j</groupId>
@@ -41,9 +41,17 @@
     <build>
         <plugins>
             <plugin>
+                <artifactId>maven-compiler-plugin</artifactId>
+                <version>${plugin.compiler.version}</version>
+                <configuration>
+                    <source>11</source>
+                    <target>11</target>
+                </configuration>
+            </plugin>
+            <plugin>
                 <groupId>org.codehaus.mojo</groupId>
                 <artifactId>exec-maven-plugin</artifactId>
-                <version>${exec-plugin.version}</version>
+                <version>${plugin.exec.version}</version>
                 <configuration>
                     <mainClass>it.fvaleri.example.Main</mainClass>
                 </configuration>
