@@ -8,7 +8,7 @@ A background thread moves the leader role to the preferred replica when it is in
 This may not be enough, and we may end up with uneven distribution of load across brokers as a consequence of broker failures, addition of new brokers or simply because some partitions are used more than others.
 
 The `kafka.server:type=KafkaRequestHandlerPool,name=RequestHandlerAvgIdlePercent` metric is a good overall load metric for Kafka scaling and rebalancing decisions.
-Below 70% (i.e. the request handler threads are busy 30% of the time) performance start to degrade, below 50% you start getting into trouble (scaling or rebalancing at this point adds even more load), and if you hit 30% it's barely usable for users.
+Below 0.7 (i.e. the request handler threads are busy 30% of the time) performance start to degrade, below 0.5 you start getting into trouble (scaling or rebalancing at this point adds even more load), and if you hit 0.3 it's barely usable for users.
 
 Rebalancing means moving partitions between brokers (inter-broker rebalancing), between broker disks (intra-broker reblancing), and simply changing partition leaders to restore cluster balance.
 We can apply partition and leadership movements using the `kafka-reassign-partitions.sh` tool, but the user has to determine the rebalance proposal, which can be tricky and time-consuming.
