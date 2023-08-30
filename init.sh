@@ -39,7 +39,6 @@ spec:
 [[ $1 == "--skip-local" ]] && INIT_LOCAL=false || INIT_LOCAL=true
 [[ $1 == "--skip-ocp" ]] && INIT_OCP=false || INIT_OCP=true
 
-echo "Checking prerequisites"
 for x in curl oc kubectl openssl keytool unzip yq jq git java javac jshell mvn; do
   if ! command -v "$x" &>/dev/null; then
     echo "Missing required utility: $x" && return 1
