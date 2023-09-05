@@ -4,9 +4,4 @@ metadata:
   name: my-registry
 spec:
   configuration:
-    persistence: sql
-    sql:
-      dataSource:
-        url: "jdbc:postgresql://my-registry-pgsql-svc:5432/registry"
-        userName: "admin"
-        password: "changeit"
+    persistence: mem

@@ -158,6 +158,7 @@ public class Main {
         Properties props = new Properties();
         props.put(AdminClientConfig.BOOTSTRAP_SERVERS_CONFIG, bootstrapServers);
         props.put(AdminClientConfig.CLIENT_ID_CONFIG, "client" + UUID.randomUUID());
+        addSharedConfig(props);
         try (Admin admin = Admin.create(props)) {
             // use default RF to avoid NOT_ENOUGH_REPLICAS error with minISR>1
             short replicationFactor = -1;

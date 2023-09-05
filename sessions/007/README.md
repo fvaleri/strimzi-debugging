@@ -21,25 +21,23 @@ If two equivalent changes are possible, the one with the lower cost is selected 
 
 ![](images/cc.png)
 
-> From AMQ Streams 2.3, Cruise Control can be configured to automatically generate and approve a rebalance proposal.
-
 In order to have accurate rebalance proposals when using CPU goals, we can set CPU requests equal to CPU limits in `.spec.kafka.resources`.
 That way, all CPU resources are reserved upfront (Guaranteed QoS) and Cruise Control can properly evaluate CPU utilization when generating the rebalance proposals.
 
 # Example: scaling up the cluster
 
-First, we [deploy the AMQ Streams operator and Kafka cluster](/sessions/001).
+First, we [deploy the Strimzi Cluster Operator and Kafka cluster](/sessions/001).
 When the cluster is ready, we want to scale it up and put some load on the new broker, which otherwise will sit idle waiting for new topic creation.
 Thanks to the Cluster Operator, we can scale the cluster up by simply raising the number of broker replicas in the Kafka custom resource (CR).
 
 ```sh
-kubectl patch k my-cluster --type merge -p '
+$ kubectl patch k my-cluster --type merge -p '
     spec:
       kafka:
         replicas: 4'
 kafka.kafka.strimzi.io/my-cluster patched
 
-kubectl get po -l app.kubernetes.io/name=kafka
+$ kubectl get po -l app.kubernetes.io/name=kafka
 NAME                 READY   STATUS    RESTARTS   AGE
 my-cluster-kafka-0   1/1     Running   0          3m41s
 my-cluster-kafka-1   1/1     Running   0          6m17s
@@ -53,7 +51,7 @@ You would need a custom procedure to figure out which replica changes can be don
 The result of this procedure would be a `reassign.json` file describing the desired partition state for each topic that we can pass to the tool.
 
 ```sh
-kubectl run rebalancing -itq --rm --restart="Never" --image="$INIT_STRIMZI_IMAGE" -- bash
+$ kubectl run rebalancing -itq --rm --restart="Never" --image="$INIT_STRIMZI_IMAGE" -- bash
 [strimzi@rkc-1664115586 kafka]$ bin/kafka-topics.sh --bootstrap-server my-cluster-kafka-bootstrap:9092 --topic my-topic --describe
 Topic: my-topic	TopicId: odTuFAweSkSLsboC-QQ4wg	PartitionCount: 3	ReplicationFactor: 3	Configs: min.insync.replicas=2,message.format.version=3.0-IV1,retention.bytes=1073741824
 	Topic: my-topic	Partition: 0	Leader: 1	Replicas: 1,0,2	Isr: 1,2,0
@@ -117,22 +115,26 @@ exit
 Let's repeat the cluster scale up example, but this time using Cruise Control to see how it helps with the planning phase.
 Cruise Control can figure out by itself the required changes, given a set of high-level goals (sensible defaults are provided).
 
-First, we [deploy the AMQ Streams operator and Kafka cluster](/sessions/001).
+First, we [deploy the Strimzi Cluster Operator and Kafka cluster](/sessions/001).
 When the cluster is ready, we verify how the topic partitions are distributed between the available brokers.
 Then we add one broker, deploy Cruise Control by adding the `.spec.cruiseControl` section to the Kafka CR and create a rebalance CR with `mode: add-brokers`.
 
 ```sh
-krun kafka-topics.sh --bootstrap-server my-cluster-kafka-bootstrap:9092 --topic my-topic --describe
+$ krun kafka-topics.sh --bootstrap-server my-cluster-kafka-bootstrap:9092 --topic my-topic --describe
 Topic: my-topic	TopicId: n1QKre80QFmnEKWIXfrLDw	PartitionCount: 3	ReplicationFactor: 3	Configs: min.insync.replicas=2,message.format.version=3.0-IV1,retention.bytes=1073741824
 	Topic: my-topic	Partition: 0	Leader: 2	Replicas: 2,1,0	Isr: 2,1,0
 	Topic: my-topic	Partition: 1	Leader: 1	Replicas: 1,0,2	Isr: 1,0,2
 	Topic: my-topic	Partition: 2	Leader: 0	Replicas: 0,2,1	Isr: 0,2,1
-	
-kubectl apply -f sessions/007/resources
-kafka.kafka.strimzi.io/my-cluster configured
-kafkarebalance.kafka.strimzi.io/my-rebalance created
 
-kubectl get po -l app.kubernetes.io/name=kafka
+$ kubectl create -f sessions/007/resources \
+  && kubectl patch k my-cluster --type merge -p '
+    spec:
+      kafka:
+        replicas: 4'
+kafkarebalance.kafka.strimzi.io/my-rebalance created       
+kafka.kafka.strimzi.io/my-cluster patched
+
+$ kubectl get po -l app.kubernetes.io/name=kafka
 NAME                 READY   STATUS    RESTARTS   AGE
 my-cluster-kafka-0   1/1     Running   0          3m41s
 my-cluster-kafka-1   1/1     Running   0          6m17s
@@ -144,12 +146,12 @@ The first rebalance proposal generation takes some time because the workload mod
 Before moving on, wait for the proposal to become ready.
 
 ```sh
-kubectl get kr add-brokers -o wide -w
+$ kubectl get kr add-brokers -o wide -w
 NAME          CLUSTER      PENDINGPROPOSAL   PROPOSALREADY   REBALANCING   READY   NOTREADY
 add-brokers   my-cluster   True                                                    
 add-brokers   my-cluster                     True                                  
 
-kubectl get kr add-brokers -o yaml | yq '.status'
+$ kubectl get kr add-brokers -o yaml | yq '.status'
 conditions:
   - lastTransitionTime: "2022-10-29T09:55:40.352012Z"
     status: "True"
@@ -177,18 +179,18 @@ sessionId: f0605d40-37be-43b9-be1f-83167633f37c
 When the proposal is ready, we can approve it by using another annotation and wait for Cruise Control to move partitions and replica roles around.
 When the rebalance is ready, we can look at the result and see if the new broker has picked some of the existing partitions.
 
-> From AMQ Streams 2.3, you can enable auto-approval by adding `strimzi.io/rebalance-auto-approval: "true"` as an annotation to the `KafkaRebalance` custom resource before you generate the proposal.
+**From Strimzi 0.32, you can enable auto-approval by adding `strimzi.io/rebalance-auto-approval: "true"` as an annotation to the `KafkaRebalance` custom resource before you generate the proposal.**
 
 ```sh
-kubectl annotate kr add-brokers strimzi.io/rebalance=approve
+$ kubectl annotate kr add-brokers strimzi.io/rebalance=approve
 kafkarebalance.kafka.strimzi.io/add-brokers annotated
 
-kubectl get kr add-brokers -o wide -w
+$ kubectl get kr add-brokers -o wide -w
 NAME          CLUSTER      PENDINGPROPOSAL   PROPOSALREADY   REBALANCING   READY   NOTREADY
 add-brokers   my-cluster                                     True
 add-brokers   my-cluster                                                   True
 
-krun kafka-topics.sh --bootstrap-server my-cluster-kafka-bootstrap:9092 --topic my-topic --describe
+$ krun kafka-topics.sh --bootstrap-server my-cluster-kafka-bootstrap:9092 --topic my-topic --describe
 Topic: my-topic	TopicId: n1QKre80QFmnEKWIXfrLDw	PartitionCount: 3	ReplicationFactor: 3	Configs: min.insync.replicas=2,message.format.version=3.0-IV1,retention.bytes=1073741824
 	Topic: my-topic	Partition: 0	Leader: 2	Replicas: 2,1,3	Isr: 2,1,3
 	Topic: my-topic	Partition: 1	Leader: 1	Replicas: 1,3,2	Isr: 2,1,3

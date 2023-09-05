@@ -13,11 +13,10 @@ A public key infrastructure (PKI) is an arrangement that binds public keys with 
 The binding is established through a process of registration and issuance of certificates by a certificate authority (CA).
 
 Within a Kafka cluster, in addition to the client-server communication, inter-cluster communication must be protected and certificates renewed when they expire.
-All of this work is done by the AMQ Streams Cluster Operator, which is a great example of how the operator simplifies cluster management.
+All of this work is done by the Strimzi Cluster Operator, which is a great example of how the operator pattern simplifies cluster management.
 Two self-signed CAs are automatically generated and used to sign all cluster (cluster CA) and user (clients CA) certificates.
 
-**AMQ Streams communication secured by TLS**
-![tls communication](images/connections.png)
+![](images/connections.png)
 
 The server name indication (SNI) extension allows a client to indicate which hostname it is trying to connect to at the start of the TLS handshake.
 The server can present multiple certificates on the same IP address and port number.
@@ -30,21 +29,35 @@ Almost all authentication problems occur within this initial handshake.
 
 # Example: TLS authentication (mTLS) using an external listener
 
-First, we [deploy the AMQ Streams operator and Kafka cluster](/sessions/001).
+First, we [deploy the Strimzi Cluster Operator and Kafka cluster](/sessions/001), and set the external listener (we run on OpenShift here, but you need to use `type: ingress` on Kubernetes).
 Then, we apply the configuration changes to enable TLS authentication and wait for the Cluster Operator to restart all pods one by one (rolling update).
 If the Kafka cluster is operating correctly, it is possible to update the configuration with zero downtime.
 
 ```sh
-kubectl apply -f sessions/002/resources/mtls
+$ kubectl apply -f sessions/002/resources/mtls
 kafka.kafka.strimzi.io/my-cluster configured
 kafkauser.kafka.strimzi.io/my-user created
+
+$ kubectl create -f sessions/002/resources \
+  && kubectl patch k my-cluster --type merge -p '
+    spec:
+      kafka:
+        listeners:
+          - name: external
+            port: 9094
+            type: route
+            tls: true
+            authentication:
+              type: tls'
+kafkauser.kafka.strimzi.io/my-user created            
+kafka.kafka.strimzi.io/my-cluster patched
 ```
 
 The previous command adds a new authentication element to the external listener, which is the endpoint used by clients connecting from outside OpenShift using TLS.
 It also creates a Kafka user resource with a matching configuration.
 
 ```sh
-kubectl get k my-cluster -o yaml | yq '.spec.kafka.listeners[2]'
+$ kubectl get k my-cluster -o yaml | yq '.spec.kafka.listeners[0]'
 authentication:
   type: tls
 name: external
@@ -52,7 +65,7 @@ port: 9094
 tls: true
 type: route
 
-kubectl get ku my-user -o yaml | yq '.spec'
+$ kubectl get ku my-user -o yaml | yq '.spec'
 authentication:
   type: tls
 ```
@@ -61,13 +74,13 @@ The external clients have to retrieve the bootstrap URL from the passthrough rou
 Then, we can try to send some messages in a secure way.
 
 ```sh
-BOOTSTRAP_SERVERS=$(kubectl get routes my-cluster-kafka-bootstrap -o jsonpath="{.status.ingress[0].host}"):443 \
+$ BOOTSTRAP_SERVERS=$(kubectl get routes my-cluster-kafka-bootstrap -o jsonpath="{.status.ingress[0].host}"):443 \
   KEYSTORE_LOCATION="/tmp/keystore.p12" KEYSTORE_PASSWORD=$(kubectl get secret my-user -o jsonpath="{.data['user\.password']}" | base64 -d) \
   TRUSTSTORE_LOCATION="/tmp/truststore.p12" TRUSTSTORE_PASSWORD=$(kubectl get secret my-cluster-cluster-ca-cert -o jsonpath="{.data['ca\.password']}" | base64 -d) \
   ; kubectl get secret my-user -o jsonpath="{.data['user\.p12']}" | base64 -d > $KEYSTORE_LOCATION \
   && kubectl get secret my-cluster-cluster-ca-cert -o jsonpath="{.data['ca\.p12']}" | base64 -d > $TRUSTSTORE_LOCATION
   
-cat <<EOF >/tmp/client.properties
+$ cat <<EOF >/tmp/client.properties
 security.protocol = SSL
 ssl.keystore.location = $KEYSTORE_LOCATION
 ssl.keystore.password = $KEYSTORE_PASSWORD
@@ -75,7 +88,7 @@ ssl.truststore.location = $TRUSTSTORE_LOCATION
 ssl.truststore.password = $TRUSTSTORE_PASSWORD
 EOF
 
-$KAFKA_HOME/bin/kafka-console-producer.sh --producer.config /tmp/client.properties --bootstrap-server $BOOTSTRAP_SERVERS --topic my-topic
+$ $KAFKA_HOME/bin/kafka-console-producer.sh --producer.config /tmp/client.properties --bootstrap-server $BOOTSTRAP_SERVERS --topic my-topic
 >hello
 >tls
 >^C 
@@ -87,8 +100,8 @@ We can use use `kubectl` to do so, but let's suppose we have a must-gather scrip
 Use the command from the first session to generate a new report from the current cluster.
 
 ```sh
-unzip -q report-10-09-2022_16-45-32.zip
-cat reports/secrets/my-cluster-cluster-ca-cert.yaml | yq '.data."ca.crt"' | base64 -d > /tmp/ca.crt
+$ unzip -q report-10-09-2022_16-45-32.zip
+$ cat reports/secrets/my-cluster-cluster-ca-cert.yaml | yq '.data."ca.crt"' | base64 -d > /tmp/ca.crt
 openssl crl2pkcs7 -nocrl -certfile /tmp/ca.crt | openssl pkcs7 -print_certs -text -noout
 Certificate:
     Data:
@@ -135,7 +148,7 @@ Typically, the security team will provide a certificate bundle which includes th
 If that's not the case, you can easily create the bundle from individual certificates in PEM format, because you need to trust the whole chain, if any.
 
 ```sh
-cat /tmp/listener.crt /tmp/intermca.crt /tmp/rootca.crt > /tmp/bundle.crt
+$ cat /tmp/listener.crt /tmp/intermca.crt /tmp/rootca.crt > /tmp/bundle.crt
 ```
 
 It's important to note that the custom server certificate for a listener must not be a CA and it must include a SAN for each broker route, plus one for the bootstrap route.
@@ -158,7 +171,7 @@ Just for convenience, we generate our own certificate bundle with only one self-
 We use a wildcard certificate so that we don't need to specify all broker SANs.
 
 ```sh
-CONFIG="
+$ CONFIG="
 [req]
 prompt=no
 distinguished_name=dn
@@ -172,26 +185,37 @@ commonName=my-cluster
 subjectAltName=@san
 [san]
 DNS.1=$(kubectl get route my-cluster-kafka-bootstrap -o yaml | yq '.status.ingress.[0].routerCanonicalHostname' | sed "s#router-default#*#")
-"
-openssl genrsa -out /tmp/listener.key 2048
-openssl req -new -x509 -days 3650 -key /tmp/listener.key -out /tmp/bundle.crt -config <(echo "$CONFIG")
+" && openssl genrsa -out /tmp/listener.key 2048 && openssl req -new -x509 -days 3650 -key /tmp/listener.key -out /tmp/bundle.crt -config <(echo "$CONFIG")
 
-openssl crl2pkcs7 -nocrl -certfile /tmp/bundle.crt | openssl pkcs7 -print_certs -text -noout | grep DNS
+$ openssl crl2pkcs7 -nocrl -certfile /tmp/bundle.crt | openssl pkcs7 -print_certs -text -noout | grep DNS
                 DNS:*.apps.cluster-8z6kz.8z6kz.sandbox425.opentlc.com
 ```
 
-Now we [deploy the AMQ Streams operator and Kafka cluster](/sessions/001).
+Now we [deploy the Strimzi Cluster Operator and Kafka cluster](/sessions/001), and set the external listener.
 Then, we deploy the secret containing the custom certificate and update the Kafka cluster configuration by adding a reference to that secret.
 
 ```sh
-kubectl create secret generic ext-listener-crt \
+$ kubectl create secret generic ext-listener-crt \
   --from-file=/tmp/bundle.crt --from-file=/tmp/listener.key \
   --dry-run=client -o yaml | kubectl replace --force -f -
+secret/ext-listener-crt replaced
   
-kubectl apply -f sessions/002/resources/ccrt
-kafka.kafka.strimzi.io/my-cluster configured
+$ kubectl patch k my-cluster --type merge -p '
+  spec:
+    kafka:
+      listeners:
+        - name: external
+          port: 9094
+          type: route
+          tls: true
+          configuration:
+            brokerCertChainAndKey:
+              secretName: ext-listener-crt
+              certificate: bundle.crt
+              key: listener.key'
+kafka.kafka.strimzi.io/my-cluster patched
 
-kubectl get k my-cluster -o yaml | yq '.spec.kafka.listeners[2]'
+$ kubectl get k my-cluster -o yaml | yq '.spec.kafka.listeners[0]'
 configuration:
   brokerCertChainAndKey:
     certificate: bundle.crt
@@ -207,20 +231,20 @@ When the cluster is ready (rolling update is complete), clients just need to tru
 In our case, we don't have a CA, so we just need to trust the self-signed certificate.
 
 ```sh
-BOOTSTRAP_SERVERS=$(kubectl get routes my-cluster-kafka-bootstrap -o jsonpath="{.status.ingress[0].host}"):443 \
+$ BOOTSTRAP_SERVERS=$(kubectl get ingress my-cluster-kafka-bootstrap -o jsonpath="{.status.ingress[0].host}"):443 \
   CERT_LOCATION="/tmp/bundle.crt" TRUSTSTORE_LOCATION="/tmp/truststore.p12" TRUSTSTORE_PASSWORD="changeit"
   
-rm -rf $TRUSTSTORE_LOCATION && keytool -keystore $TRUSTSTORE_LOCATION -storetype PKCS12 -alias my-cluster \
+$ rm -rf $TRUSTSTORE_LOCATION && keytool -keystore $TRUSTSTORE_LOCATION -storetype PKCS12 -alias my-cluster \
   -storepass $TRUSTSTORE_PASSWORD -keypass $TRUSTSTORE_PASSWORD -import -file $CERT_LOCATION -noprompt
 Certificate was added to keystore
 
-cat <<EOF >/tmp/client.properties
+$ cat <<EOF >/tmp/client.properties
 security.protocol = SSL
 ssl.truststore.location = $TRUSTSTORE_LOCATION
 ssl.truststore.password = $TRUSTSTORE_PASSWORD
 EOF
 
-$KAFKA_HOME/bin/kafka-console-producer.sh --producer.config /tmp/client.properties --bootstrap-server $BOOTSTRAP_SERVERS --topic my-topic
+$ $KAFKA_HOME/bin/kafka-console-producer.sh --producer.config /tmp/client.properties --bootstrap-server $BOOTSTRAP_SERVERS --topic my-topic
 >hello
 >custom
 >tls

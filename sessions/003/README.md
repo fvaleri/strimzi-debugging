@@ -32,41 +32,61 @@ Setting the `apicurio.registry.check-period-ms` client property, we can determin
 
 # Example: schema registry in action
 
-First, we [deploy the AMQ Streams operator and Kafka cluster](/sessions/001).
-Then, we deploy the Service Registry instance with PostgreSQL as storage system.
+First, we [deploy the Strimzi Cluster Operator and Kafka cluster](/sessions/001), and set the external listener.
+Then, we deploy the Service Registry instance with the in-memory storage system.
 
 ```sh
-kubectl create -f sessions/003/resources
-persistentvolumeclaim/my-registry-pgsql-data created
-configmap/my-registry-pgsql-env created
-statefulset.apps/my-registry-pgsql created
-service/my-registry-pgsql-svc created
-apicurioregistry.registry.apicur.io/my-registry created
+$ kubectl patch k my-cluster --type merge -p '
+  spec:
+    kafka:
+      listeners:
+        - name: external
+          port: 9094
+          type: route
+          tls: true'
+kafka.kafka.strimzi.io/my-cluster patched
 
-kubectl get po
-NAME                                              READY   STATUS    RESTARTS   AGE
-pod/my-cluster-entity-operator-6b68959588-698hp   3/3     Running   0          165m
-pod/my-cluster-kafka-0                            1/1     Running   0          166m
-pod/my-cluster-kafka-1                            1/1     Running   0          166m
-pod/my-cluster-kafka-2                            1/1     Running   0          166m
-pod/my-cluster-zookeeper-0                        1/1     Running   0          168m
-pod/my-cluster-zookeeper-1                        1/1     Running   0          168m
-pod/my-cluster-zookeeper-2                        1/1     Running   0          168m
-pod/my-registry-deployment-5f5fb7c786-7tj75       1/1     Running   0          53s
-pod/my-registry-pgsql-0                           1/1     Running   0          8m36s
+$ for f in sessions/003/resources/*.yaml; do sed "s/namespace: .*/namespace: $INIT_NAMESPACE/g" $f \
+  | kubectl create -f - --dry-run=client -o yaml | kubectl replace --force -f -; done
+clusterrole.rbac.authorization.k8s.io "apicurioregistry-editor-role" deleted
+clusterrole.rbac.authorization.k8s.io "apicurioregistry-viewer-role" deleted
+clusterrole.rbac.authorization.k8s.io "apicurio-registry-operator-role" deleted
+clusterrolebinding.rbac.authorization.k8s.io "apicurio-registry-operator-rolebinding" deleted
+serviceaccount/apicurio-registry-operator replaced
+clusterrole.rbac.authorization.k8s.io/apicurioregistry-editor-role replaced
+clusterrole.rbac.authorization.k8s.io/apicurioregistry-viewer-role replaced
+clusterrole.rbac.authorization.k8s.io/apicurio-registry-operator-role replaced
+role.rbac.authorization.k8s.io/apicurio-registry-operator-leader-election-role replaced
+clusterrolebinding.rbac.authorization.k8s.io/apicurio-registry-operator-rolebinding replaced
+rolebinding.rbac.authorization.k8s.io/apicurio-registry-operator-leader-election-rolebinding replaced
+deployment.apps/apicurio-registry-operator replaced
+apicurioregistry.registry.apicur.io/my-registry replaced
+
+$ kubectl get po
+NAME                                          READY   STATUS    RESTARTS   AGE
+apicurio-registry-operator-767ff9ffff-bq5l8   1/1     Running   0          5m31s
+my-cluster-entity-operator-6d4d7b6fff-d2x7z   3/3     Running   0          83s
+my-cluster-kafka-0                            1/1     Running   0          2m45s
+my-cluster-kafka-1                            1/1     Running   0          2m45s
+my-cluster-kafka-2                            1/1     Running   0          2m45s
+my-cluster-zookeeper-0                        1/1     Running   0          4m7s
+my-cluster-zookeeper-1                        1/1     Running   0          4m7s
+my-cluster-zookeeper-2                        1/1     Running   0          4m7s
+my-registry-deployment-6fd6645b7d-k9v26       1/1     Running   0          5m22s
+strimzi-cluster-operator-7b6bfcc96c-srsdt     1/1     Running   0          8m5s
 ```
 
 Now, we just need to tell our client application where it can find the Kafka cluster by setting the bootstrap URL and the schema registry REST endpoint.
 We also need to provide the truststore location and password because we are connecting externally.
 
 ```sh
-kubectl get secret my-cluster-cluster-ca-cert -o jsonpath="{.data['ca\.p12']}" | base64 -d > /tmp/truststore.p12 \
+$ kubectl get secret my-cluster-cluster-ca-cert -o jsonpath="{.data['ca\.p12']}" | base64 -d > /tmp/truststore.p12 \
   && export BOOTSTRAP_SERVERS=$(kubectl get routes my-cluster-kafka-bootstrap -o jsonpath="{.status.ingress[0].host}"):443 \
   REGISTRY_URL=http://$(kubectl get apicurioregistries my-registry -o jsonpath="{.status.info.host}")/apis/registry/v2 \
   TOPIC_NAME="my-topic" ARTIFACT_GROUP="default" SSL_TRUSTSTORE_LOCATION="/tmp/truststore.p12" \
   SSL_TRUSTSTORE_PASSWORD=$(kubectl get secret my-cluster-cluster-ca-cert -o jsonpath="{.data['ca\.password']}" | base64 -d)
 
-mvn clean compile exec:java -f sessions/003/kafka-avro/pom.xml -q
+$ mvn clean compile exec:java -f sessions/003/kafka-avro/pom.xml -q
 Producing records
 Records produced
 Consuming all records
@@ -82,7 +102,7 @@ The registration happens at build time and the Maven plugin executes the followi
 Note that we are using the "default" group id, but you can specify a custom name.
 
 ```sh
-curl -s -X POST -H "Content-Type: application/json" \
+$ curl -s -X POST -H "Content-Type: application/json" \
   -H "X-Registry-ArtifactId: my-topic-value" -H "X-Registry-ArtifactType: AVRO" \
   -d @sessions/003/kafka-avro/src/main/resources/greeting.avsc \
   "$REGISTRY_URL/groups/default/artifacts?ifExists=RETURN_OR_UPDATE" | jq
@@ -105,7 +125,7 @@ Finally, we use the REST API to confirm that our schema was registered correctly
 We can also look at the schema content and metadata, which may be useful for debugging.
 
 ```sh
-curl -s "$REGISTRY_URL/search/artifacts" | jq
+$ curl -s "$REGISTRY_URL/search/artifacts" | jq
 {
   "artifacts": [
     {
@@ -122,7 +142,7 @@ curl -s "$REGISTRY_URL/search/artifacts" | jq
   "count": 1
 }
 
-curl -s "$REGISTRY_URL/groups/default/artifacts/my-topic-value" | jq
+$ curl -s "$REGISTRY_URL/groups/default/artifacts/my-topic-value" | jq
 {
   "type": "record",
   "name": "Greeting",
@@ -138,7 +158,7 @@ curl -s "$REGISTRY_URL/groups/default/artifacts/my-topic-value" | jq
   ]
 }
 
-curl -s "$REGISTRY_URL/groups/default/artifacts/my-topic-value/meta" | jq
+$ curl -s "$REGISTRY_URL/groups/default/artifacts/my-topic-value/meta" | jq
 {
   "name": "Greeting",
   "createdBy": "",

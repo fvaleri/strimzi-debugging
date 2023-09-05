@@ -43,10 +43,10 @@ We run the transactional application included in this example on a different ter
 [Look at the code](/sessions/008/kafka-txn/src/main/java/it/fvaleri/example/Main.java) to see how the low-level transaction API is used.
 
 ```sh
-export BOOTSTRAP_SERVERS="localhost:9092" INSTANCE_ID="kafka-txn-0" \
+$ export BOOTSTRAP_SERVERS="localhost:9092" INSTANCE_ID="kafka-txn-0" \
   GROUP_ID="my-group" INPUT_TOPIC="input-topic" OUTPUT_TOPIC="output-topic"
 
-mvn clean compile exec:java -f sessions/008/kafka-txn/pom.xml -q
+$ mvn clean compile exec:java -f sessions/008/kafka-txn/pom.xml -q
 Starting instance kafka-txn-0
 Created topics: input-topic
 Waiting for new data
@@ -58,11 +58,11 @@ Waiting for new data
 Then, we send one sentence to the input topic and check the result from the output topic.
 
 ```sh
-$KAFKA_HOME/bin/kafka-console-producer.sh --bootstrap-server :9092 --topic input-topic
+$ $KAFKA_HOME/bin/kafka-console-producer.sh --bootstrap-server :9092 --topic input-topic
 >this is a test
 >^C
 
-$KAFKA_HOME/bin/kafka-console-consumer.sh --bootstrap-server :9092 --topic output-topic --from-beginning
+$ $KAFKA_HOME/bin/kafka-console-consumer.sh --bootstrap-server :9092 --topic output-topic --from-beginning
 tset a si siht
 ^CProcessed a total of 1 messages
 ```
@@ -72,10 +72,10 @@ Our output topic has one partition, but what are the `__consumer_offsets` and `_
 We can pass the `group.id` and `transactional.id` to find out.
 
 ```sh
-kafka-cp my-group
+$ kafka-cp my-group
 12
 
-kafka-cp kafka-txn-0
+$ kafka-cp kafka-txn-0
 30
 ```
 
@@ -85,7 +85,7 @@ This batch is followed by a control batch (`isControl`), which contains a single
 In `__consumer_offsets-12`, the CG offset commit batch (`key: offset_commit`) is followed by a similar control batch.
 
 ```sh
-$KAFKA_HOME/bin/kafka-dump-log.sh --deep-iteration --print-data-log --files /tmp/kafka-logs/output-topic-0/00000000000000000000.log
+$ $KAFKA_HOME/bin/kafka-dump-log.sh --deep-iteration --print-data-log --files /tmp/kafka-logs/output-topic-0/00000000000000000000.log
 Dumping /tmp/kafka-logs/output-topic-0/00000000000000000000.log
 Log starting offset: 0
 baseOffset: 0 lastOffset: 0 count: 1 baseSequence: 0 lastSequence: 0 producerId: 0 producerEpoch: 0 partitionLeaderEpoch: 0 isTransactional: true isControl: false deleteHorizonMs: OptionalLong.empty position: 0 CreateTime: 1680383687941 size: 82 magic: 2 compresscodec: none crc: 2785707995 isvalid: true
@@ -93,7 +93,7 @@ baseOffset: 0 lastOffset: 0 count: 1 baseSequence: 0 lastSequence: 0 producerId:
 baseOffset: 1 lastOffset: 1 count: 1 baseSequence: -1 lastSequence: -1 producerId: 0 producerEpoch: 0 partitionLeaderEpoch: 0 isTransactional: true isControl: true deleteHorizonMs: OptionalLong.empty position: 82 CreateTime: 1680383688163 size: 78 magic: 2 compresscodec: none crc: 3360473936 isvalid: true
 | offset: 1 CreateTime: 1680383688163 keySize: 4 valueSize: 6 sequence: -1 headerKeys: [] endTxnMarker: COMMIT coordinatorEpoch: 0
 
-$KAFKA_HOME/bin/kafka-dump-log.sh --deep-iteration --print-data-log --offsets-decoder --files /tmp/kafka-logs/__consumer_offsets-12/00000000000000000000.log
+$ $KAFKA_HOME/bin/kafka-dump-log.sh --deep-iteration --print-data-log --offsets-decoder --files /tmp/kafka-logs/__consumer_offsets-12/00000000000000000000.log
 Dumping /tmp/kafka-logs/__consumer_offsets-12/00000000000000000000.log
 Starting offset: 0
 # ...
@@ -111,7 +111,7 @@ Then, when the commit is called, we have `PrepareCommit` state change, which mea
 This happens in the last batch, where the state is changed to `CompleteCommit`, terminating the transaction.
 
 ```sh
-$KAFKA_HOME/bin/kafka-dump-log.sh --deep-iteration --print-data-log --transaction-log-decoder --files /tmp/kafka-logs/__transaction_state-30/00000000000000000000.log
+$ $KAFKA_HOME/bin/kafka-dump-log.sh --deep-iteration --print-data-log --transaction-log-decoder --files /tmp/kafka-logs/__transaction_state-30/00000000000000000000.log
 Dumping /tmp/kafka-logs/__transaction_state-20/00000000000000000000.log
 Log starting offset: 0
 baseOffset: 0 lastOffset: 0 count: 1 baseSequence: -1 lastSequence: -1 producerId: -1 producerEpoch: -1 partitionLeaderEpoch: 0 isTransactional: false isControl: false deleteHorizonMs: OptionalLong.empty position: 0 CreateTime: 1680383478420 size: 122 magic: 2 compresscodec: none crc: 2867569944 isvalid: true
@@ -136,7 +136,7 @@ When there is a hanging transaction the LSO is stuck, which means that transacti
 this could be either transactional offsets waiting for completion, or normal offsets waiting for replication after appending to local log
 
 # consumer lag grows
-$KAFKA_HOME/bin/kafka-consumer-groups.sh --bootstrap-server :9092 --describe --group my-group
+$ $KAFKA_HOME/bin/kafka-consumer-groups.sh --bootstrap-server :9092 --describe --group my-group
 GROUP     TOPIC                  PARTITION  CURRENT-OFFSET  LOG-END-OFFSET  LAG   CONSUMER-ID  HOST           CLIENT-ID
 my-group  __consumer_offsets-27  9          913095344       913097449       2105  my-client-0  /10.60.172.97  my-client
 ```
@@ -145,7 +145,7 @@ If the partition is part of a compacted topic like `__consumer_offsets`, compact
 
 ```sh
 # last cleaned offset never changes
-grep "__consumer_offsets 27" /opt/kafka/data/kafka-0/cleaner-offset-checkpoint
+$ grep "__consumer_offsets 27" /opt/kafka/data/kafka-0/cleaner-offset-checkpoint
 __consumer_offsets 27 913095344
 ```
 
@@ -153,36 +153,9 @@ In Kafka 3+ there is an official command line tool that you can use to identify 
 Note that the `CLUSTER_ACTION` operation is required if authorization is enabled.
 
 ```sh
-$KAFKA_HOME/bin/kafka-transactions.sh --bootstrap-server :9092 find-hanging --broker 0
+$ $KAFKA_HOME/bin/kafka-transactions.sh --bootstrap-server :9092 find-hanging --broker 0
 Topic                  Partition   ProducerId  ProducerEpoch   StartOffset LastTimestamp               Duration(s)
 __consumer_offsets     27          171100      1               913095344   2022-06-06T03:16:47Z        209793
 
 $KAFKA_HOME/bin/kafka-transactions.sh --bootstrap-server :9092 abort --topic __consumer_offsets --partition 27 --start-offset 913095344
-```
-
-If you are using an older version and hanging transactions are still in the logs, then the procedure is more complicated.
-First, dump the partition segment that includes the LSO and all snapshot files of that partition.
-
-```sh
-$KAFKA_HOME/bin/kafka-dump-log.sh --deep-iteration --files 00000000000912375285.log > 00000000000912375285.log.dump
-$KAFKA_HOME/bin/kafka-dump-log.sh --deep-iteration --files 00000000000933607637.snapshot > 00000000000933607637.snapshot.dump
-```
-
-Then, use `klog segment` to parse the segment dumps and identify the hanging transactions.
-
-```sh
-git clone https://github.com/tombentley/klog
-cd klog && mvn clean package -DskipTests -Pnative -Dquarkus.native.container-build=true
-cp target/*-runner ~/.local/bin/klog
-
-klog segment txn-stat 00000000000912375285.log.dump | grep "open_txn" | head -n1
-open_txn: ProducerSession[producerId=171100, producerEpoch=1]->FirstBatchInTxn[firstBatchInTxn=Batch(baseOffset=913095344, lastOffset=913095344, count=1, baseSequence=0, lastSequence=0, producerId=171100, producerEpoch=1, partitionLeaderEpoch=38, isTransactional=true, isControl=false, position=76752106, createTime=2022-06-06T03:16:47.124Z, size=128, magic=2, compressCodec='none', crc=-2141709867, isValid=true), numDataBatches=1]
-```
-
-If the `open_txn` is the last segment batch, then it may be closed in the next segment (false positive).
-Otherwise, we can rollback the hanging transaction by running the command printed out by `klog snapshot`.
-
-```sh
-klog snapshot abort-cmd 00000000000933607637.snapshot.dump --pid 171100 --producer-epoch 1
-$KAFKA_HOME/bin/kafka-transactions.sh --bootstrap-server $BOOTSTRAP_URL abort --topic $TOPIC_NAME --partition $PART_NUM --producer-id 171100 --producer-epoch 1 --coordinator-epoch 34
 ```

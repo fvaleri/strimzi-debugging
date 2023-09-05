@@ -12,11 +12,11 @@
         <project.build.sourceEncoding>UTF-8</project.build.sourceEncoding>
         <project.reporting.outputEncoding>UTF-8</project.reporting.outputEncoding>
 
-        <kafka.version>3.2.3.redhat-00007</kafka.version>
-        <jackson.databind.version>2.12.3</jackson.databind.version>
+        <kafka.version>${env.INIT_KAFKA_VERSION}</kafka.version>
+        <jackson.databind.version>2.15.2</jackson.databind.version>
         <slf4j.version>1.7.36</slf4j.version>
 
-        <plugin.compiler.version>3.10.1</plugin.compiler.version>
+        <plugin.compiler.version>3.11.0</plugin.compiler.version>
         <plugin.exec.version>3.1.0</plugin.exec.version>
     </properties>
 
@@ -58,31 +58,4 @@
             </plugin>
         </plugins>
     </build>
-
-    <repositories>
-        <repository>
-            <id>rhga</id>
-            <url>https://maven.repository.redhat.com/ga</url>
-            <releases>
-                <enabled>true</enabled>
-                <updatePolicy>never</updatePolicy>
-            </releases>
-            <snapshots>
-                <enabled>false</enabled>
-            </snapshots>
-        </repository>
-    </repositories>
-    <pluginRepositories>
-        <pluginRepository>
-            <id>rhga</id>
-            <url>https://maven.repository.redhat.com/ga</url>
-            <releases>
-                <enabled>true</enabled>
-                <updatePolicy>never</updatePolicy>
-            </releases>
-            <snapshots>
-                <enabled>false</enabled>
-            </snapshots>
-        </pluginRepository>
-    </pluginRepositories>
 </project>

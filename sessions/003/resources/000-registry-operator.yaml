@@ -1,0 +1,265 @@
+apiVersion: v1
+kind: ServiceAccount
+metadata:
+  name: apicurio-registry-operator
+---
+# permissions for end users to edit apicurioregistries.
+apiVersion: rbac.authorization.k8s.io/v1
+kind: ClusterRole
+metadata:
+  name: apicurioregistry-editor-role
+rules:
+  - apiGroups:
+      - registry.apicur.io
+    resources:
+      - apicurioregistries
+    verbs:
+      - create
+      - delete
+      - get
+      - list
+      - patch
+      - update
+      - watch
+  - apiGroups:
+      - registry.apicur.io
+    resources:
+      - apicurioregistries/status
+    verbs:
+      - get
+---
+# permissions for end users to view apicurioregistries.
+apiVersion: rbac.authorization.k8s.io/v1
+kind: ClusterRole
+metadata:
+  name: apicurioregistry-viewer-role
+rules:
+  - apiGroups:
+      - registry.apicur.io
+    resources:
+      - apicurioregistries
+    verbs:
+      - get
+      - list
+      - watch
+  - apiGroups:
+      - registry.apicur.io
+    resources:
+      - apicurioregistries/status
+    verbs:
+      - get
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: ClusterRole
+metadata:
+  creationTimestamp: null
+  name: apicurio-registry-operator-role
+rules:
+  - apiGroups:
+      - apps
+    resources:
+      - daemonsets
+      - deployments
+      - replicasets
+      - statefulsets
+    verbs:
+      - '*'
+  - apiGroups:
+      - apps.openshift.io
+    resources:
+      - deploymentconfigs
+    verbs:
+      - '*'
+  - apiGroups:
+      - config.openshift.io
+    resources:
+      - clusterversions
+    verbs:
+      - get
+  - apiGroups:
+      - ""
+    resources:
+      - configmaps
+      - endpoints
+      - persistentvolumeclaims
+      - pods
+      - secrets
+      - services
+      - services/finalizers
+    verbs:
+      - '*'
+  - apiGroups:
+      - events
+    resources:
+      - events
+    verbs:
+      - '*'
+  - apiGroups:
+      - monitoring.coreos.com
+    resources:
+      - servicemonitors
+    verbs:
+      - '*'
+  - apiGroups:
+      - networking.k8s.io
+    resources:
+      - ingresses
+    verbs:
+      - '*'
+  - apiGroups:
+      - policy
+    resources:
+      - poddisruptionbudgets
+    verbs:
+      - '*'
+  - apiGroups:
+      - registry.apicur.io
+    resources:
+      - apicurioregistries
+    verbs:
+      - '*'
+  - apiGroups:
+      - registry.apicur.io
+    resources:
+      - apicurioregistries/finalizers
+    verbs:
+      - update
+  - apiGroups:
+      - registry.apicur.io
+    resources:
+      - apicurioregistries/status
+    verbs:
+      - get
+      - patch
+      - update
+  - apiGroups:
+      - route.openshift.io
+    resources:
+      - routes
+      - routes/custom-host
+    verbs:
+      - '*'
+---
+# permissions to do leader election.
+apiVersion: rbac.authorization.k8s.io/v1
+kind: Role
+metadata:
+  name: apicurio-registry-operator-leader-election-role
+rules:
+  - apiGroups:
+      - ""
+      - coordination.k8s.io
+    resources:
+      - configmaps
+      - leases
+    verbs:
+      - get
+      - list
+      - watch
+      - create
+      - update
+      - patch
+      - delete
+  - apiGroups:
+      - ""
+    resources:
+      - events
+    verbs:
+      - create
+      - patch
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: ClusterRoleBinding
+metadata:
+  name: apicurio-registry-operator-rolebinding
+roleRef:
+  apiGroup: rbac.authorization.k8s.io
+  kind: ClusterRole
+  name: apicurio-registry-operator-role
+subjects:
+  - kind: ServiceAccount
+    name: apicurio-registry-operator
+    namespace: changeit
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: RoleBinding
+metadata:
+  name: apicurio-registry-operator-leader-election-rolebinding
+roleRef:
+  apiGroup: rbac.authorization.k8s.io
+  kind: Role
+  name: apicurio-registry-operator-leader-election-role
+subjects:
+  - kind: ServiceAccount
+    name: apicurio-registry-operator
+    namespace: changeit
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: apicurio-registry-operator
+  labels:
+    name: apicurio-registry-operator
+spec:
+  selector:
+    matchLabels:
+      name: apicurio-registry-operator
+  replicas: 1
+  template:
+    metadata:
+      labels:
+        name: apicurio-registry-operator
+    spec:
+      serviceAccountName: apicurio-registry-operator
+      containers:
+        - command:
+            - /manager
+          args:
+            - --leader-elect
+          name: apicurio-registry-operator
+          image: "quay.io/apicurio/apicurio-registry-operator:1.1.0-dev"
+          imagePullPolicy: Always
+          env:
+            - name: REGISTRY_VERSION
+              value: "2.4.5.Final"
+            - name: REGISTRY_IMAGE_MEM
+              value: "quay.io/apicurio/apicurio-registry-mem:2.4.5.Final"
+            - name: REGISTRY_IMAGE_KAFKASQL
+              value: "quay.io/apicurio/apicurio-registry-kafkasql:2.4.5.Final"
+            - name: REGISTRY_IMAGE_SQL
+              value: "quay.io/apicurio/apicurio-registry-sql:2.4.5.Final"
+            - name: WATCH_NAMESPACE
+              valueFrom:
+                fieldRef:
+                  fieldPath: metadata.namespace
+            - name: POD_NAME
+              valueFrom:
+                fieldRef:
+                  fieldPath: metadata.name
+            - name: POD_NAMESPACE
+              valueFrom:
+                fieldRef:
+                  fieldPath: metadata.namespace
+            - name: OPERATOR_NAME
+              value: apicurio-registry-operator
+          livenessProbe:
+            httpGet:
+              path: /healthz
+              port: 8081
+            initialDelaySeconds: 15
+            periodSeconds: 20
+          readinessProbe:
+            httpGet:
+              path: /readyz
+              port: 8081
+            initialDelaySeconds: 5
+            periodSeconds: 10
+          resources:
+            limits:
+              cpu: 100m
+              memory: 100Mi
+            requests:
+              cpu: 100m
+              memory: 50Mi
+      terminationGracePeriodSeconds: 10
+---

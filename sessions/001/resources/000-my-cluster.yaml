@@ -5,10 +5,11 @@ metadata:
 spec:
   kafka:
     replicas: 3
-    version: 3.2.3
+    # set the kafka version
+    #version: 3.5.1
     config:
-      # lowest protocol version (downgrade is not supported)
-      inter.broker.protocol.version: "3.2"
+      # set lowest protocol version (downgrade is not supported)
+      #inter.broker.protocol.version: "3.5"
       num.partitions: 3
       default.replication.factor: 3
       min.insync.replicas: 2
@@ -23,10 +24,6 @@ spec:
       - name: tls
         port: 9093
         type: internal
-        tls: true
-      - name: external
-        port: 9094
-        type: route
         tls: true
     logging:
       type: inline

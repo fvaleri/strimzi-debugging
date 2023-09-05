@@ -10,7 +10,7 @@ One strategy here is to backup the full cluster configuration, while also taking
 
 Assuming you have set up your replication configuration correctly, the only way to have zero RPO is to setup a stretch Kafka cluster, which is one that evenly spans multiple data centers (DCs) with synchronous replication.
 In order to do that, you would need at least three DCs with guaranteed low latency.
-OpenShift supports stretch/multi-site clusters, so you can simply deploy AMQ Streams on top of that, using affinities rules to achieve the desired topology.
+OpenShift supports stretch/multi-site clusters, so you can simply deploy Strimzi on top of that, using affinities rules to achieve the desired topology.
 Then, you set rack awareness to ensure that replicas are distributed evenly across DCs and deploy Cruise Control with rack awareness goals to make sure that replicas remain distributed across different racks.
 
 ![](images/stretch.png)
@@ -27,11 +27,11 @@ It would also be good to have virtual hosts or a cluster proxy, so that you can 
 It is possible to combine stretch clusters and mirroring using MirrorMaker 2 to create a multi-region or even multi-cloud disaster recovery plan, where the service can survive a cloud outage (yes, a region can fail!).
 After the failover phase, you can fail back once the original region is back online, or fail forward selecting another region as the new backup cluster (faster).
 
-> All disaster recovery processes should be documented in detail and carefully tested, simulating all possible scenarios such as partial failures.
+**All disaster recovery processes should be documented in detail and carefully tested, simulating all possible scenarios such as partial failures.**
 
 # Example: active-passive mirroring
 
-First, we [deploy the AMQ Streams operator and Kafka cluster](/sessions/001).
+First, we [deploy the Strimzi Cluster Operator and Kafka cluster](/sessions/001).
 Then, we create the target namespace for the backup cluster.
 For convenience, we run the two Kafka clusters in different namespaces on the same OpenShift cluster.
 
@@ -40,14 +40,12 @@ At this point, we can deploy the target cluster and an MM2 instance.
 The recommended way of deploying the MM2 is near the target Kafka cluster (same subnet or zone), because the producer overhead is greater than the consumer overhead.
 
 ```sh
-kubectl create ns target
-namespace/target created
-
-EXP="del(.metadata.namespace, .metadata.resourceVersion, .metadata.selfLink, .metadata.uid, .metadata.ownerReferences, .status)" \
-  && kubectl get secret "my-cluster-cluster-ca-cert" -o yaml | yq "$EXP" | kubectl -n target create -f -
+$ EXP="del(.metadata.namespace, .metadata.resourceVersion, .metadata.selfLink, .metadata.uid, .metadata.ownerReferences, .status)" \
+  && kubectl get secret "my-cluster-cluster-ca-cert" -o yaml | yq "$EXP" | kubectl -n "$INIT_NAMESPACE"-tgt create -f -
 secret/my-cluster-cluster-ca-cert created
 
-kubectl -n target create -f sessions/005/resources
+$ for f in sessions/005/resources/*.yaml; do sed "s/SED_SOURCE/$INIT_NAMESPACE/g; s/SED_TARGET/$INIT_NAMESPACE-tgt/g" $f \
+  | kubectl -n "$INIT_NAMESPACE"-tgt create -f -; done
 kafka.kafka.strimzi.io/my-cluster-tgt created
 kafkamirrormaker2.kafka.strimzi.io/my-mm2 created
 configmap/mm2-metrics created
@@ -59,10 +57,10 @@ The `MirrorSourceConnector` replicates remote topics, ACLs, and configurations o
 The `MirrorCheckpointConnector` emits consumer group offsets checkpoints to enable failover points.
 
 ```sh
-kubectl -n target scale kmm2 my-mm2 --replicas 1
+$ kubectl -n "$INIT_NAMESPACE"-tgt scale kmm2 my-mm2 --replicas 1
 kafkamirrormaker2.kafka.strimzi.io/my-mm2 scaled
 
-kubectl -n target get po
+$ kubectl -n "$INIT_NAMESPACE"-tgt get po
 NAME                                              READY   STATUS    RESTARTS   AGE
 my-cluster-tgt-entity-operator-7647f48d79-9xrbc   3/3     Running   0          11m
 my-cluster-tgt-kafka-0                            1/1     Running   0          12m
@@ -73,7 +71,7 @@ my-cluster-tgt-zookeeper-1                        1/1     Running   0          1
 my-cluster-tgt-zookeeper-2                        1/1     Running   0          13m
 my-mm2-mirrormaker2-7c87647dcd-vdftr              1/1     Running   0          2m19s
 
-kubectl -n target get kmm2 my-mm2 -o yaml | yq '.status'
+$ kubectl -n "$INIT_NAMESPACE"-tgt get kmm2 my-mm2 -o yaml | yq '.status'
 conditions:
   - lastTransitionTime: "2022-09-15T15:42:39.600109Z"
     status: "True"
@@ -109,24 +107,21 @@ Note that this is a controlled experiment, but the actual offsets tend to natura
 This is why we have offset mapping metadata.
 
 ```sh
-krun kafka-producer-perf-test.sh --topic my-topic --record-size 100 --num-records 1000000 \
+$ krun kafka-producer-perf-test.sh --topic my-topic --record-size 100 --num-records 1000000 \
   --throughput -1 --producer-props acks=1 bootstrap.servers=my-cluster-kafka-bootstrap:9092
 1000000 records sent, 201531.640468 records/sec (19.22 MB/sec), 255.97 ms avg latency, 715.00 ms max latency, 185 ms 50th, 627 ms 95th, 687 ms 99th, 704 ms 99.9th.
-pod "producer-perf" deleted
 
-krun kafka-run-class.sh kafka.tools.GetOffsetShell \
+$ krun kafka-run-class.sh kafka.tools.GetOffsetShell \
   --broker-list my-cluster-kafka-bootstrap:9092 --topic my-topic --time -1
 my-topic:0:353737
 my-topic:1:358846
 my-topic:2:287417
-pod "rkc-1665758761" deleted
 
-krun kafka-run-class.sh kafka.tools.GetOffsetShell \
-  --broker-list my-cluster-tgt-kafka-bootstrap.target.svc:9092 --topic my-topic --time -1
+$ krun kafka-run-class.sh kafka.tools.GetOffsetShell \
+  --broker-list my-cluster-tgt-kafka-bootstrap."$INIT_NAMESPACE"-tgt.svc:9092 --topic my-topic --time -1
 my-topic:0:353737
 my-topic:1:358846
 my-topic:2:287417
-pod "rkc-1665758761" deleted
 ```
 
 # Example: tuning for throughput
@@ -139,21 +134,21 @@ Let's run a load test and see how fast we can replicate data with default settin
 By looking at `MirrorSourceConnector` task metrics, we see that we are saturating the producer buffer (default: 16384 bytes) and creating a bottleneck.
 
 ```sh
-kubectl -n target scale kmm2 my-mm2 --replicas 0
+$ kubectl -n "$INIT_NAMESPACE"-tgt scale kmm2 my-mm2 --replicas 0
 kafkamirrormaker2.kafka.strimzi.io/my-mm2 scaled
 
-krun kafka-producer-perf-test.sh --topic my-topic --record-size 100 --num-records 30000000 \
+$ krun kafka-producer-perf-test.sh --topic my-topic --record-size 100 --num-records 30000000 \
   --throughput -1 --producer-props acks=1 bootstrap.servers=my-cluster-kafka-bootstrap:9092
 1047156 records sent, 209389.3 records/sec (19.97 MB/sec), 102.5 ms avg latency, 496.0 ms max latency.
 ...
 30000000 records sent, 239285.970664 records/sec (22.82 MB/sec), 15.98 ms avg latency, 496.00 ms max latency, 3 ms 50th, 60 ms 95th, 115 ms 99th, 428 ms 99.9th.
 pod "producer-perf" deleted
 
-kubectl -n target scale kmm2 my-mm2 --replicas 1
+$ kubectl -n "$INIT_NAMESPACE"-tgt scale kmm2 my-mm2 --replicas 1
 kafkamirrormaker2.kafka.strimzi.io/my-mm2 scaled
 
 # took about 3 minutes
-kubectl -n target exec -it $(kubectl -n target get po | grep my-mm2 | awk '{print $1}') -- bash -c '\
+$ kubectl -n "$INIT_NAMESPACE"-tgt exec -it $(kubectl -n "$INIT_NAMESPACE"-tgt get po | grep my-mm2 | awk '{print $1}') -- bash -c '\
   for i in {1..100}; do /opt/kafka/bin/kafka-run-class.sh kafka.tools.JmxTool --jmx-url service:jmx:rmi:///jndi/rmi://:9999/jmxrmi \
     --object-name kafka.producer:type=producer-metrics,client-id=\""connector-producer-my-cluster->my-cluster-tgt.MirrorSourceConnector-0\"" \
     --attributes batch-size-avg,request-latency-avg --date-format yyyy-MM-dd_HH:mm:ss --one-time true --wait \
@@ -191,7 +186,7 @@ Note how the request latency increases too, but it is still okay.
 There is no free lunch, it's always a tradeoff between throughput and latency.
 
 ```sh
-kubectl -n target patch kmm2 my-mm2 --type merge -p '
+$ kubectl -n "$INIT_NAMESPACE"-tgt patch kmm2 my-mm2 --type merge -p '
   spec:
     mirrors:
       - sourceCluster: my-cluster
@@ -208,20 +203,20 @@ kubectl -n target patch kmm2 my-mm2 --type merge -p '
             producer.override.batch.size: 327680'
 kafkamirrormaker2.kafka.strimzi.io/my-mm2 patched
 
-kubectl -n target scale kmm2 my-mm2 --replicas 0
+$ kubectl -n "$INIT_NAMESPACE"-tgt scale kmm2 my-mm2 --replicas 0
 kafkamirrormaker2.kafka.strimzi.io/my-mm2 scaled
 
-krun kafka-producer-perf-test.sh --topic my-topic --record-size 100 --num-records 30000000 \
+$ krun kafka-producer-perf-test.sh --topic my-topic --record-size 100 --num-records 30000000 \
   --throughput -1 --producer-props acks=1 bootstrap.servers=my-cluster-kafka-bootstrap:9092
 253179 records sent, 250585.7 records/sec (23.90 MB/sec), 15.5 ms avg latency, 324.0 ms max latency.
 ...
 30000000 records sent, 241625.657423 records/sec (23.04 MB/sec), 9.02 ms avg latency, 324.00 ms max latency, 1 ms 50th, 44 ms 95th, 65 ms 99th, 84 ms 99.9th.
 
-kubectl -n target scale kmm2 my-mm2 --replicas 1
+$ kubectl -n "$INIT_NAMESPACE"-tgt scale kmm2 my-mm2 --replicas 1
 kafkamirrormaker2.kafka.strimzi.io/my-mm2 scaled
 
 # took less than 2 minutes
-kubectl -n target exec -it $(kubectl -n target get po | grep my-mm2 | awk '{print $1}') -- bash -c '\
+$ kubectl -n "$INIT_NAMESPACE"-tgt exec -it $(kubectl -n "$INIT_NAMESPACE"-tgt get po | grep my-mm2 | awk '{print $1}') -- bash -c '\
   for i in {1..100}; do /opt/kafka/bin/kafka-run-class.sh kafka.tools.JmxTool --jmx-url service:jmx:rmi:///jndi/rmi://:9999/jmxrmi \
     --object-name kafka.producer:type=producer-metrics,client-id=\""connector-producer-my-cluster->my-cluster-tgt.MirrorSourceConnector-0\"" \
     --attributes batch-size-avg,request-latency-avg --date-format yyyy-MM-dd_HH:mm:ss --one-time true --wait \

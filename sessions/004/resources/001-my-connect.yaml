@@ -6,7 +6,7 @@ metadata:
     strimzi.io/use-connector-resources: "true"
 spec:
   replicas: 1
-  version: 3.2.3
+  version: 3.5.1
   bootstrapServers: my-cluster-kafka-bootstrap:9093
   tls:
     trustedCertificates:
@@ -42,7 +42,7 @@ spec:
   build:
     output:
       type: docker
-      image: value0
+      image: SED_IMAGE
       pushSecret: registry-authn
     plugins:
       - name: debezium-mysql

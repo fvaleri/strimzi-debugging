@@ -40,16 +40,16 @@ Volumes with either `persistentVolumeReclaimPolicy: Retain`, or using a storage 
 
 # Example: no space left on device
 
-First, we [deploy the AMQ Streams operator and Kafka cluster](/sessions/001).
+First, we [deploy the Strimzi Cluster Operator and Kafka cluster](/sessions/001).
 When the cluster is ready, we purposely break it by sending 11 GiB of data to a topic with a replication factor of 3 (33 GiB in total), which exceeds the combined cluster disk capacity of 30 GiB.
 
 ```sh
-kubectl get pv | grep kafka
+$ kubectl get pv | grep kafka
 pvc-2e3c7665-2b92-4376-bb1d-22b1d23fcc6a   10Gi       RWO            Delete           Bound    test/data-my-cluster-kafka-2       gp2                     4m1s
 pvc-b1e5e0a3-ab83-487f-9b81-c38e1badfccc   10Gi       RWO            Delete           Bound    test/data-my-cluster-kafka-0       gp2                     4m1s
 pvc-e66030cd-3992-4adc-9d94-d9d4ab164a45   10Gi       RWO            Delete           Bound    test/data-my-cluster-kafka-1       gp2                     4m1s
 
-krun kafka-producer-perf-test.sh --topic my-topic --record-size 1000 --num-records 12000000 \
+$ krun kafka-producer-perf-test.sh --topic my-topic --record-size 1000 --num-records 12000000 \
   --throughput -1 --producer-props acks=1 bootstrap.servers=my-cluster-kafka-bootstrap:9092
 287699 records sent, 57528.3 records/sec (54.86 MB/sec), 144.6 ms avg latency, 455.0 ms max latency.
 309618 records sent, 61923.6 records/sec (59.05 MB/sec), 29.1 ms avg latency, 132.0 ms max latency.
@@ -58,14 +58,14 @@ krun kafka-producer-perf-test.sh --topic my-topic --record-size 1000 --num-recor
 [2022-10-14 15:14:26,695] WARN [Producer clientId=perf-producer-client] Connection to node 2 (my-cluster-kafka-2.my-cluster-kafka-brokers.test.svc/10.128.2.32:9092) could not be established. Broker may not be available. (org.apache.kafka.clients.NetworkClient)
 [2022-10-14 15:14:26,885] WARN [Producer clientId=perf-producer-client] Connection to node 0 (my-cluster-kafka-0.my-cluster-kafka-brokers.test.svc/10.129.2.59:9092) could not be established. Broker may not be available. (org.apache.kafka.clients.NetworkClient)
 [2022-10-14 15:14:27,036] WARN [Producer clientId=perf-producer-client] Connection to node 1 (my-cluster-kafka-1.my-cluster-kafka-brokers.test.svc/10.131.0.37:9092) could not be established. Broker may not be available. (org.apache.kafka.clients.NetworkClient)
-^Cpod "rkc-1665760296" deleted
+^C
 
-kubectl get po | grep kafka
+$ kubectl get po | grep kafka
 my-cluster-kafka-0                            0/1     CrashLoopBackOff   3 (26s ago)   15m
 my-cluster-kafka-1                            0/1     CrashLoopBackOff   3 (26s ago)   15m
 my-cluster-kafka-2                            0/1     CrashLoopBackOff   3 (20s ago)   15m
 
-kubectl logs my-cluster-kafka-0 | grep "No space left on device" | tail -n1
+$ kubectl logs my-cluster-kafka-0 | grep "No space left on device" | tail -n1
 java.io.IOException: No space left on device
 ```
 
@@ -74,27 +74,27 @@ However, it's important to note that the expansion process may take some time to
 We didn't specify any storage class, so we have been assigned the default one.
 
 ```sh
-kubectl get sc $(kubectl get pv | grep data-my-cluster-kafka-0 | awk '{print $7}') -o yaml | yq '.allowVolumeExpansion'
+$ kubectl get sc $(kubectl get pv | grep data-my-cluster-kafka-0 | awk '{print $7}') -o yaml | yq '.allowVolumeExpansion'
 true
 
-kubectl patch k my-cluster --type merge -p '
+$ kubectl patch k my-cluster --type merge -p '
   spec:
     kafka:
       storage:
         size: 20Gi'
 kafka.kafka.strimzi.io/my-cluster patched
 
-kubectl -n openshift-operators logs $(kubectl -n openshift-operators get po | grep cluster-operator | cut -d" " -f1) | grep "Resizing"
+$ kubectl -n openshift-operators logs $(kubectl -n openshift-operators get po | grep cluster-operator | cut -d" " -f1) | grep "Resizing"
 2022-09-21 16:21:44 INFO  KafkaAssemblyOperator:2915 - Reconciliation #1(watch) Kafka(test/my-cluster): Resizing PVC data-my-cluster-kafka-0 from 10 to 20Gi.
 2022-09-21 16:21:44 INFO  KafkaAssemblyOperator:2915 - Reconciliation #1(watch) Kafka(test/my-cluster): Resizing PVC data-my-cluster-kafka-1 from 10 to 20Gi.
 2022-09-21 16:21:44 INFO  KafkaAssemblyOperator:2915 - Reconciliation #1(watch) Kafka(test/my-cluster): Resizing PVC data-my-cluster-kafka-2 from 10 to 20Gi.
 
-kubectl get pv | grep kafka
+$ kubectl get pv | grep kafka
 pvc-2e3c7665-2b92-4376-bb1d-22b1d23fcc6a   20Gi       RWO            Delete           Bound    test/data-my-cluster-kafka-2       gp2                     30m
 pvc-b1e5e0a3-ab83-487f-9b81-c38e1badfccc   20Gi       RWO            Delete           Bound    test/data-my-cluster-kafka-0       gp2                     30m
 pvc-e66030cd-3992-4adc-9d94-d9d4ab164a45   20Gi       RWO            Delete           Bound    test/data-my-cluster-kafka-1       gp2                     30m
 
-kubectl get po | grep kafka
+$ kubectl get po | grep kafka
 my-cluster-kafka-0                            1/1     Running   0             2m22s
 my-cluster-kafka-1                            1/1     Running   0             3m37s
 my-cluster-kafka-2                            1/1     Running   0             4m53s
@@ -108,16 +108,16 @@ When you are done with all partitions, you can scale up again and unpause the Cl
 A similar technique can also be used to copy data to your local disk and from there to new and bigger volumes.
 
 ```sh
-kubectl annotate k my-cluster strimzi.io/pause-reconciliation="true" \
+$ kubectl annotate k my-cluster strimzi.io/pause-reconciliation="true" \
   && kubectl scale sts my-cluster-kafka --replicas=0
 kafka.kafka.strimzi.io/my-cluster annotated
 statefulset.apps/my-cluster-kafka scaled
 
-kubectl run recovery --image "dummy" --restart "Never" \
-  --overrides "$(sed "s,value0,data-my-cluster-kafka-0,g" sessions/006/resources/patch.json)"
+$ kubectl run recovery --image "dummy" --restart "Never" \
+  --overrides "$(sed "s/SED_CLAIM/data-my-cluster-kafka-0/g" sessions/006/resources/patch.json)"
 pod/recovery created
 
-kubectl exec -it strimzi-debug -- bash
+$ kubectl exec -it strimzi-debug -- bash
 [root@strimzi-debug /]# cd /data/kafka-log0/my-topic-0
 [root@strimzi-debug my-topic-0]# ls -lh 
 total 3.3G
@@ -151,17 +151,18 @@ total 297M
 # ...
 
 [root@strimzi-debug my-topic-0]# exit
-kubectl delete pod recovery
-pod "recovery" deleted
+
+$ kubectl delete pod strimzi-debug
+pod "strimzi-debug" deleted
 
 # ...
 
-kubectl scale sts my-cluster-kafka --replicas=3 \
+$ kubectl scale sts my-cluster-kafka --replicas=3 \
   && kubectl annotate k my-cluster strimzi.io/pause-reconciliation-
 statefulset.apps/my-cluster-kafka scaled
 kafka.kafka.strimzi.io/my-cluster annotated
 
-kubectl get po | grep kafka
+$ kubectl get po | grep kafka
 my-cluster-kafka-0                            1/1     Running   0          18m
 my-cluster-kafka-1                            1/1     Running   0          18m
 my-cluster-kafka-2                            1/1     Running   0          18m
@@ -169,18 +170,18 @@ my-cluster-kafka-2                            1/1     Running   0          18m
 
 # Example: unintentional cluster deletion with retained volumes
 
-By default, the AMQ Streams examples have the `.spec.kafka.storage.deleteClaim` property set to `false`, which means that Persistent Volume Claims (PVCs) associated with the Kafka cluster will not be deleted when the cluster is undeployed.
+By default, the `.spec.kafka.storage.deleteClaim` property is set to `false`, which means that Persistent Volume Claims (PVCs) associated with the Kafka cluster will not be deleted when the cluster is undeployed.
 However, this default value can be changed by the user. 
 If the value is changed and the PVCs are deleted, any data stored in the PVCs are lost permanently through garbage collection, unless `persistentVolumeReclaimPolicy` is set to `retain`. 
 In this case, there is a chance to recover the data.
 This example shows how this can be achieved.
 
-First, we [deploy the AMQ Streams operator and Kafka cluster](/sessions/001).
+First, we [deploy the Strimzi Cluster Operator and Kafka cluster](/sessions/001).
 When the cluster is ready, we change the reclaim policy at the persistent volume level.
 Also note that the status is `Bound`.
 
 ```sh
-kubectl get pv
+$ kubectl get pv
 NAME                                       CAPACITY   ACCESS MODES   RECLAIM POLICY   STATUS   CLAIM                              STORAGECLASS   REASON   AGE
 pvc-162c6551-f05f-4c89-9319-637a4b3d417c   5Gi        RWO            Delete           Bound    test/data-my-cluster-zookeeper-1   gp2                     2m50s
 pvc-3c131641-dca8-4648-8cfb-ea844145a5a3   5Gi        RWO            Delete           Bound    test/data-my-cluster-zookeeper-2   gp2                     2m50s
@@ -189,7 +190,7 @@ pvc-8587e7b0-bedd-494c-b43f-0f249cec03c7   10Gi       RWO            Delete     
 pvc-c2cb8453-b953-4bb1-83b5-f4e4c76fbf91   10Gi       RWO            Delete           Bound    test/data-my-cluster-kafka-1       gp2                     79s
 pvc-f5b75d58-b621-4cf9-8c5c-2e9215b268e0   5Gi        RWO            Delete           Bound    test/data-my-cluster-zookeeper-0   gp2                     2m50s
 
-for pv in $(kubectl get pv | grep "my-cluster" | awk '{print $1}'); do
+$ for pv in $(kubectl get pv | grep "my-cluster" | awk '{print $1}'); do
   kubectl patch pv $pv --type merge -p '
     metadata:
       labels:
@@ -204,7 +205,7 @@ persistentvolume/pvc-8587e7b0-bedd-494c-b43f-0f249cec03c7 patched
 persistentvolume/pvc-c2cb8453-b953-4bb1-83b5-f4e4c76fbf91 patched
 persistentvolume/pvc-f5b75d58-b621-4cf9-8c5c-2e9215b268e0 patched
 
-kubectl get pv
+$ kubectl get pv
 NAME                                       CAPACITY   ACCESS MODES   RECLAIM POLICY   STATUS   CLAIM                              STORAGECLASS   REASON   AGE
 pvc-162c6551-f05f-4c89-9319-637a4b3d417c   5Gi        RWO            Retain           Bound    test/data-my-cluster-zookeeper-1   gp2                     3m22s
 pvc-3c131641-dca8-4648-8cfb-ea844145a5a3   5Gi        RWO            Retain           Bound    test/data-my-cluster-zookeeper-2   gp2                     3m22s
@@ -219,16 +220,16 @@ As expected, all persistent volumes are still there after the namespace deletion
 Note that OpenShift also retains some useful information that is needed when reattaching them (capacity, claim, storage class).
 
 ```sh
-krun kafka-console-producer.sh --bootstrap-server my-cluster-kafka-bootstrap:9092 --topic my-topic
-aaa
+$ krun kafka-console-producer.sh --bootstrap-server my-cluster-kafka-bootstrap:9092 --topic my-topic
+>aaa
 >bbb
 >ccc
 >^C
 
-kubectl delete ns test
+$ kubectl delete ns "$INIT_NAMESPACE"
 namespace "test" deleted
 
-kubectl get pv
+$ kubectl get pv
 NAME                                       CAPACITY   ACCESS MODES   RECLAIM POLICY   STATUS     CLAIM                              STORAGECLASS   REASON   AGE
 pvc-162c6551-f05f-4c89-9319-637a4b3d417c   5Gi        RWO            Retain           Released   test/data-my-cluster-zookeeper-1   gp2                     5m48s
 pvc-3c131641-dca8-4648-8cfb-ea844145a5a3   5Gi        RWO            Retain           Released   test/data-my-cluster-zookeeper-2   gp2                     5m48s
@@ -238,21 +239,21 @@ pvc-c2cb8453-b953-4bb1-83b5-f4e4c76fbf91   10Gi       RWO            Retain     
 pvc-f5b75d58-b621-4cf9-8c5c-2e9215b268e0   5Gi        RWO            Retain           Released   test/data-my-cluster-zookeeper-0   gp2                     5m48s
 ```
 
-We need to create the conditions so that the old volumes can be reattached by the new AMQ Streams cluster.
+We need to create the conditions so that the old volumes can be reattached by the new Kafka cluster.
 We use a simple script to collect all required data from the retained PVs, remove the old `claimRef` metadata and create the new PVCs.
 Volumes are `Bound` again, and they should be reattached if we deploy a new Kafka cluster with the same configuration.
 
 ```sh
-kubectl create ns test
+$ kubectl create ns "$INIT_NAMESPACE"
 namespace/test created
 
-for line in $(kubectl get pv | grep "my-cluster" | awk '{print $1 "#" $2 "#" $6 "#" $7}'); do
+$ for line in $(kubectl get pv | grep "my-cluster" | awk '{print $1 "#" $2 "#" $6 "#" $7}'); do
   pvc="$(echo $line | awk -F'#' '{print $3}' | sed 's|test\/||g')"
   size="$(echo $line | awk -F'#' '{print $2}')"
   sc="$(echo $line | awk -F'#' '{print $4}')"
   pv="$(echo $line | awk -F'#' '{print $1}')"
   kubectl patch pv "$pv" --type json -p '[{"op":"remove","path":"/spec/claimRef"}]'
-  sed "s#value0#$pvc#g; s#value1#$size#g; s#value2#$sc#g; s#value3#$pv#g" \
+  sed "s/SED_NAME/$pvc/g; s/SED_SIZE/$size/g; s/SED_CLASS/$sc/g; s/SED_VOLUME/$pv/g" \
     sessions/006/resources/pvc.yaml | kubectl create -f -
 done
 persistentvolume/pvc-162c6551-f05f-4c89-9319-637a4b3d417c patched
@@ -268,7 +269,7 @@ persistentvolumeclaim/data-my-cluster-kafka-1 created
 persistentvolume/pvc-f5b75d58-b621-4cf9-8c5c-2e9215b268e0 patched
 persistentvolumeclaim/data-my-cluster-zookeeper-0 created
 
-kubectl get pv
+$ kubectl get pv
 NAME                                       CAPACITY   ACCESS MODES   RECLAIM POLICY   STATUS   CLAIM                              STORAGECLASS   REASON   AGE
 pvc-162c6551-f05f-4c89-9319-637a4b3d417c   5Gi        RWO            Retain           Bound    test/data-my-cluster-zookeeper-1   gp2                     6m37s
 pvc-3c131641-dca8-4648-8cfb-ea844145a5a3   5Gi        RWO            Retain           Bound    test/data-my-cluster-zookeeper-2   gp2                     6m37s
@@ -278,30 +279,29 @@ pvc-c2cb8453-b953-4bb1-83b5-f4e4c76fbf91   10Gi       RWO            Retain     
 pvc-f5b75d58-b621-4cf9-8c5c-2e9215b268e0   5Gi        RWO            Retain           Bound    test/data-my-cluster-zookeeper-0   gp2                     6m37s
 ```
 
-Now we can deploy the new AMQ Streams cluster.
+Now we can deploy the new Kafka cluster.
 Note that this is actually the same Kafka cluster, because retained volumes maintain the same Kafka cluster ID.
 
-  
-   > Before deploying the TO, we must delete its internal topics so that it can safely reinitialize from Kafka on startup. 
-   If you don't do this, there is a high change that the Topic Operator deletes all topics with your data.
-   Topic deletion happens asynchronously, so always make sure to confirm that it is actually deleted.
+**Before deploying the TO, we must delete its internal topics so that it can safely reinitialize from Kafka on startup. 
+If you don't do this, there is a high change that the Topic Operator deletes all topics with your data.
+Topic deletion happens asynchronously, so always make sure to confirm that it is actually deleted.**
 
 ```sh
-cat sessions/001/resources/000-my-cluster.yaml | yq 'del(.spec.entityOperator.topicOperator)' | kubectl create -f -
+$ cat sessions/001/resources/000-my-cluster.yaml | yq 'del(.spec.entityOperator.topicOperator)' | kubectl create -f -
 kafka.kafka.strimzi.io/my-cluster created
 kafkatopic.kafka.strimzi.io/my-topic created
 
-krun kafka-topics.sh --bootstrap-server my-cluster-kafka-bootstrap:9092 --list
+$ krun kafka-topics.sh --bootstrap-server my-cluster-kafka-bootstrap:9092 --list
 __consumer_offsets
 __strimzi-topic-operator-kstreams-topic-store-changelog
 __strimzi_store_topic
 my-topic
 
-for topic in "__strimzi_store_topic" ".*topic-store-changelog"; do
+$ for topic in "__strimzi_store_topic" ".*topic-store-changelog"; do
   krun kafka-topics.sh --bootstrap-server my-cluster-kafka-bootstrap:9092 --topic $topic --delete
 done
   
-krun kafka-topics.sh --bootstrap-server my-cluster-kafka-bootstrap:9092 --list
+$ krun kafka-topics.sh --bootstrap-server my-cluster-kafka-bootstrap:9092 --list
 __consumer_offsets
 my-topic
 ```
@@ -309,10 +309,10 @@ my-topic
 When these topics are deleted, we can safely deploy the Topic Operator and try to consume our messages from the restored cluster.
 
 ```sh
-kubectl apply -f sessions/001/resources/000-my-cluster.yaml
+$ kubectl apply -f sessions/001/resources/000-my-cluster.yaml
 kafka.kafka.strimzi.io/my-cluster configured
 
-kubectl get kt my-topic -o yaml | yq '.status'
+$ kubectl get kt my-topic -o yaml | yq '.status'
 conditions:
   - lastTransitionTime: "2022-10-27T15:04:21.052978Z"
     status: "True"
@@ -321,7 +321,7 @@ observedGeneration: 1
 topicName: my-topic
 
 # drumroll
-krun kafka-console-consumer.sh --bootstrap-server my-cluster-kafka-bootstrap:9092 \
+$ krun kafka-console-consumer.sh --bootstrap-server my-cluster-kafka-bootstrap:9092 \
   --topic my-topic --from-beginning
 bbb
 aaa

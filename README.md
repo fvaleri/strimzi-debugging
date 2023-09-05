@@ -1,9 +1,7 @@
-# Streams debugging
+# Strimzi debugging
 
-This project contains a series of debugging sessions for Red Hat AMQ Streams (LTS).
-They assume user level knowledge about Red Hat OpenShift and Apache Kafka.
-The examples are not meant to be exhaustive, but just a way to show common scenarios and tools.
-Most of them require an OpenShift cluster with 3 worker nodes (e.g. 3x `m5.4xlarge`) and a user with admin permissions.
+This project contains a series of debugging sessions for Kafka and Strimzi.
+They assume user level knowledge about Kubernetes/OpenShift and Kafka.
 Any feedback or contribution is appreciated.
 
 1. [Kafka introduction and deployments](/sessions/001)

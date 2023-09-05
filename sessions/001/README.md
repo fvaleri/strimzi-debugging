@@ -1,8 +1,7 @@
 # Kafka introduction and deployments
 
-[Apache Kafka](https://kafka.apache.org) is an Open Source distributed streaming platform that lets you read, write, store, and process messages across many machines.
-[Red Hat AMQ Streams](https://catalog.redhat.com/software/operators/detail/5ef20efd46bc301a95a1e9a4) includes Kafka and a set of operators from the [CNCF Strimzi](https://strimzi.io) project.
-The operators are a way of extending the OpenShift or Kubernetes platforms by deploying application controllers with domain knowledge.
+[Apache Kafka](https://kafka.apache.org) is a distributed streaming platform that lets you read, write, store, and process messages across many machines.
+The [CNCF Strimzi](https://strimzi.io) project includes a set of operators, which help in deploying and manging Kafka clusters on Kubernetes.
 Not every use case justifies the additional complexity that Kafka brings to the table.
 It is best suited when you have a high throughput of relatively small messages that traditional message brokers struggle to manage, or you have near realtime stream processing requirements.
 
@@ -56,20 +55,24 @@ In this example, we deploy a Kafka cluster on localhost.
 This is useful for quick tests where a multi node cluster is not required.
 We use the latest upstream Kafka release because the downstream release is just a rebuild with few additional and optional plugins.
 
-The `init.sh` script initializes the environment, passing the OpenShift parameters.
-When it returns, two processes are running on the system: one is Kafka and the other is ZooKeeper.
+The `init.sh` script can be used to easily initialize or reset the test environment.
+It downloads Kafka to localhost and initializes the Kubernetes cluster installing the Cluster Operator.
 
 ```sh
-source init.sh --skip-ocp
-Checking prerequisites
-Getting Kafka from ASF
-Kafka home: /tmp/kafka.yidQitI
-Localhost OK
+$ source init.sh
+Configuring Kafka on localhost
+Getting Kafka from /tmp
+Kafka home: /tmp/kafka.9aqqP7a
+Done
+Configuring Kafka on Kubernetes
+namespace/test created
+namespace/test-tgt created
+Done
 
-$KAFKA_HOME/bin/zookeeper-server-start.sh -daemon $KAFKA_HOME/config/zookeeper.properties \
+$ $KAFKA_HOME/bin/zookeeper-server-start.sh -daemon $KAFKA_HOME/config/zookeeper.properties \
   && sleep 5 && $KAFKA_HOME/bin/kafka-server-start.sh -daemon $KAFKA_HOME/config/server.properties
 
-jcmd | grep kafka
+$ jcmd | grep kafka
 831273 org.apache.zookeeper.server.quorum.QuorumPeerMain /tmp/kafka.yidQitI/config/zookeeper.properties
 831635 kafka.Kafka /tmp/kafka.yidQitI/config/server.properties
 ```
@@ -79,21 +82,21 @@ When consuming messages, you can print additional data such as the partition num
 Every consumer with the same `group.id` is part of the same consumer group.
 
 ```sh
-$KAFKA_HOME/bin/kafka-topics.sh --bootstrap-server :9092 --topic my-topic --create --partitions 3 --replication-factor 1 
+$ $KAFKA_HOME/bin/kafka-topics.sh --bootstrap-server :9092 --topic my-topic --create --partitions 3 --replication-factor 1 
 Created topic my-topic.
 
-$KAFKA_HOME/bin/kafka-topics.sh --bootstrap-server :9092 --topic my-topic --describe
+$ $KAFKA_HOME/bin/kafka-topics.sh --bootstrap-server :9092 --topic my-topic --describe
 Topic: my-topic	TopicId: a4Lnw1iQSW6MALg0gvxZNQ	PartitionCount: 3	ReplicationFactor: 1	Configs: segment.bytes=1073741824
 	Topic: my-topic	Partition: 0	Leader: 0	Replicas: 0	Isr: 0
 	Topic: my-topic	Partition: 1	Leader: 0	Replicas: 0	Isr: 0
 	Topic: my-topic	Partition: 2	Leader: 0	Replicas: 0	Isr: 0
 
-$KAFKA_HOME/bin/kafka-console-producer.sh --bootstrap-server :9092 --topic my-topic --property parse.key=true --property key.separator="#"
+$ $KAFKA_HOME/bin/kafka-console-producer.sh --bootstrap-server :9092 --topic my-topic --property parse.key=true --property key.separator="#"
 >1#hello
 >2#world
 >^C
 
-$KAFKA_HOME/bin/kafka-console-consumer.sh --bootstrap-server :9092 --topic my-topic --group my-group --from-beginning \
+$ $KAFKA_HOME/bin/kafka-console-consumer.sh --bootstrap-server :9092 --topic my-topic --group my-group --from-beginning \
   --property print.partition=true --property print.key=true
 Partition:0	1	hello
 Partition:2	2	world
@@ -104,10 +107,10 @@ It works, but where these messages are being stored? The broker property `log.di
 We have 3 partitions, which corresponds to exactly 3 folders on disk.
 
 ```sh
-cat $KAFKA_HOME/config/server.properties | grep log.dirs
+$ cat $KAFKA_HOME/config/server.properties | grep log.dirs
 log.dirs=/tmp/kafka-logs
 
-ls -lh /tmp/kafka-logs/ | grep my-topic
+$ ls -lh /tmp/kafka-logs/ | grep my-topic
 drwxr-xr-x. 2 fvaleri fvaleri  140 Sep  8 16:55 my-topic-0
 drwxr-xr-x. 2 fvaleri fvaleri  140 Sep  8 16:55 my-topic-1
 drwxr-xr-x. 2 fvaleri fvaleri  140 Sep  8 16:55 my-topic-2
@@ -118,7 +121,7 @@ Looking inside partition 0, we have a `.log` file containing our records (each s
 The other two files contain additional metadata.
 
 ```sh
-ls -lh /tmp/kafka-logs/my-topic-0/
+$ ls -lh /tmp/kafka-logs/my-topic-0/
 total 12K
 -rw-r--r--. 1 fvaleri fvaleri 10M Sep  8 16:55 00000000000000000000.index
 -rw-r--r--. 1 fvaleri fvaleri  74 Sep  8 16:57 00000000000000000000.log
@@ -131,8 +134,7 @@ Partition log files are in binary format, but Kafka includes a dump tool for dec
 On this partition, we have one batch (`baseOffset`), containing only one record (`| offset`) with key "1" and value "hello".
 
 ```sh
-$KAFKA_HOME/bin/kafka-dump-log.sh --deep-iteration --print-data-log \
-  --files /tmp/kafka-logs/my-topic-0/00000000000000000000.log
+$ $KAFKA_HOME/bin/kafka-dump-log.sh --deep-iteration --print-data-log --files /tmp/kafka-logs/my-topic-0/00000000000000000000.log
 Dumping /tmp/kafka-logs/my-topic-0/00000000000000000000.log
 Starting offset: 0
 baseOffset: 0 lastOffset: 0 count: 1 baseSequence: 0 lastSequence: 0 producerId: 0 producerEpoch: 0 partitionLeaderEpoch: 0 isTransactional: false isControl: false deleteHorizonMs: OptionalLong.empty position: 0 CreateTime: 1662649069768 size: 74 magic: 2 compresscodec: none crc: 3775885203 isvalid: true
@@ -145,7 +147,7 @@ We can use the same algorithm that Kafka uses to map a `group.id` to a specific 
 The `kafka-cp` function is defined inside the `init.sh` script.
 
 ```sh
-kafka-cp my-group
+$ kafka-cp my-group
 12
 ```
 
@@ -157,7 +159,7 @@ We have a batch from our consumer group, which includes 3 records, one for each 
 As expected, the consumer group committed offset1 on partition0 and partition2, plus offset0 on partition1 (we sent 2 messages).
 
 ```sh
-$KAFKA_HOME/bin/kafka-dump-log.sh --deep-iteration --print-data-log --offsets-decoder \
+$ $KAFKA_HOME/bin/kafka-dump-log.sh --deep-iteration --print-data-log --offsets-decoder \
   --files /tmp/kafka-logs/__consumer_offsets-12/00000000000000000000.log
 Dumping /tmp/kafka-logs/__consumer_offsets-12/00000000000000000000.log
 Starting offset: 0
@@ -168,51 +170,38 @@ baseOffset: 15 lastOffset: 17 count: 3 baseSequence: 0 lastSequence: 2 producerI
 | offset: 17 CreateTime: 1662649581270 keySize: 26 valueSize: 24 sequence: 2 headerKeys: [] key: offset_commit::group=my-group,partition=my-topic-2 payload: offset=1
 ```
 
-# Example: deploy a Kafka cluster on OpenShift
+# Example: deploy a Kafka cluster on Kubernetes
 
-In this example, we deploy the AMQ Streams operator and a 3-node cluster on OpenShift using the built-in OperatorHub (OLM) component, which is integrated with the web console and provides updates.
-
-We use the `init.sh` script to initialize the environment by passing OpenShift parameters.
-You can reuse it whenever you want to reinitialize your environment.
-
-When it returns, two cluster-wide operators start in the `openshift-operators` namespace.
-Remember that CRDs are cluster wide resources, so we can't deploy multiple operator versions running on the same OpenShift cluster, unless their CRDs are fully compatible, which is not guaranteed.
-If you delete the CRDs, every Kafka cluster deployed on that OpenShift cluster is garbage collected.
+In this example, we deploy a Kafka cluster to a Kubernetes cluster using the operator.
+**Login if you are running on OpenShift or authentication is required.**
 
 ```sh
-source init.sh
-Checking prerequisites
+$ source init.sh
+Configuring Kafka on localhost
 Getting Kafka from /tmp
-Kafka home: /tmp/kafka.yidQitI
-Localhost OK
-Configuring OpenShift
-API URL: https://api.openshift.example.com:6443
-Username: my-user
-Password: 
+Kafka home: /tmp/kafka.9aqqP7a
+Done
+Configuring Kafka on Kubernetes
 namespace/test created
-subscription.operators.coreos.com/my-streams created
-subscription.operators.coreos.com/my-registry created
-OpenShift OK
-
-kubectl -n openshift-operators get po
-NAME                                                         READY   STATUS    RESTARTS   AGE
-amq-streams-cluster-operator-v2.2.0-1-58bb4cf646-gbh55       1/1     Running   0          12m
-apicurio-registry-operator-v1.1.0-redhat.1-f5f95b4fd-7l9fq   1/1     Running   0          12m
+namespace/test-tgt created
+Done
 ```
 
-We create a new Kafka cluster and test topic.
-In the YAML files, we can see how the cluster state is declared.
-The AMQ Streams Cluster Operator periodically verifies that the desired state corresponds to the actual state and takes action if not.
+**Remember that CRDs are cluster-wide resources, so we can't deploy multiple operator versions running on the same OpenShift cluster, unless their CRDs are fully compatible, which is not guaranteed.
+If you delete the CRDs, every Kafka cluster deployed on that OpenShift cluster is garbage collected.**
 
-In addition to ZooKeeper and Kafka pods, the Entity Operator (EO) pod is also deployed, which includes two namespace operators: the Topic Operator (TO), which reconciles topic resources, and the User Operator (UO), which reconciles user resources.
+Then, we create a new Kafka cluster and test topic.
+In the YAML files, we can see how the desired cluster state is declared.
+
+In addition to ZooKeeper and Kafka pods, the Entity Operator (EO) pod is also deployed, which includes two namespaced operators: the Topic Operator (TO), which reconciles topic resources, and the User Operator (UO), which reconciles user resources.
 If you want to deploy multiple Kafka clusters on the same namespace, make sure to have only one instance of these operators to avoid race conditions.
 
 ```sh
-kubectl create -f sessions/001/resources
+$ kubectl create -f sessions/001/resources
 kafka.kafka.strimzi.io/my-cluster created
 kafkatopic.kafka.strimzi.io/my-topic created
 
-kubectl get k,kt,po
+$ kubectl get k,kt,po
 NAME                                DESIRED KAFKA REPLICAS   DESIRED ZK REPLICAS   READY   WARNINGS
 kafka.kafka.strimzi.io/my-cluster   3                        3                     True    
 
@@ -222,14 +211,15 @@ kafkatopic.kafka.strimzi.io/my-topic                                            
 kafkatopic.kafka.strimzi.io/strimzi-store-topic---effb8e3e057afce1ecf67c3f5d8e4e3ff177fc55                                     my-cluster   1            3                    True
 kafkatopic.kafka.strimzi.io/strimzi-topic-operator-kstreams-topic-store-changelog---b75e702040b99be8a9263134de3507fc0cc4017b   my-cluster   1            3                    True
 
-NAME                                              READY   STATUS    RESTARTS   AGE
-pod/my-cluster-entity-operator-6b68959588-4klzj   3/3     Running   0          2m4s
-pod/my-cluster-kafka-0                            1/1     Running   0          3m34s
-pod/my-cluster-kafka-1                            1/1     Running   0          3m34s
-pod/my-cluster-kafka-2                            1/1     Running   0          3m34s
-pod/my-cluster-zookeeper-0                        1/1     Running   0          5m4s
-pod/my-cluster-zookeeper-1                        1/1     Running   0          5m4s
-pod/my-cluster-zookeeper-2                        1/1     Running   0          5m4s
+NAME                                          READY   STATUS    RESTARTS   AGE
+my-cluster-entity-operator-6d4d7b6fff-d2x7z   3/3     Running   0          83s
+my-cluster-kafka-0                            1/1     Running   0          2m45s
+my-cluster-kafka-1                            1/1     Running   0          2m45s
+my-cluster-kafka-2                            1/1     Running   0          2m45s
+my-cluster-zookeeper-0                        1/1     Running   0          4m7s
+my-cluster-zookeeper-1                        1/1     Running   0          4m7s
+my-cluster-zookeeper-2                        1/1     Running   0          4m7s
+strimzi-cluster-operator-7b6bfcc96c-srsdt     1/1     Running   0          8m5s
 ```
 
 When the Kafka cluster is ready, we produce and consume some messages.
@@ -237,17 +227,16 @@ Note that we are using a nice function to avoid repeating that for every client 
 You can also use the broker pods for that, but it is always risky to spin up another JVM inside a pod, especially in production.
 
 ```sh
-krun kafka-console-producer.sh --bootstrap-server my-cluster-kafka-bootstrap:9092 --topic my-topic
+$ krun kafka-console-producer.sh --bootstrap-server my-cluster-kafka-bootstrap:9092 --topic my-topic
 >hello
 >world
->^Cpod "rkc-1664886431" deleted
+>^C
 
-krun kafka-console-consumer.sh --bootstrap-server my-cluster-kafka-bootstrap:9092 \
+$ krun kafka-console-consumer.sh --bootstrap-server my-cluster-kafka-bootstrap:9092 \
   --topic my-topic --group my-group --from-beginning
 world
 hello
 ^CProcessed a total of 2 messages
-pod "rkc-1664886505" deleted
 ```
 
 When debugging issues, you usually need to retrieve various artifacts from the environment, which can be a lot of effort.
@@ -255,7 +244,7 @@ Fortunately, Strimzi maintains a backward compatible must-gather script that can
 Add the `--secrets=all` option to also get secret values.
 
 ```sh
-curl -sLk "https://raw.githubusercontent.com/strimzi/strimzi-kafka-operator/9573cf0c3ff97280b170ca3abc6f0633e33fe97f/tools/report.sh" \
+$ curl -s https://raw.githubusercontent.com/strimzi/strimzi-kafka-operator/main/tools/report.sh \
   | bash -s -- --namespace=test --cluster=my-cluster --out-dir=~/Downloads
 deployments
     deployment.apps/my-cluster-entity-operator

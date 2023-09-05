@@ -37,6 +37,7 @@ stringData:
   MYSQL_DATABASE: testdb
   MYSQL_USER: admin
   MYSQL_PASSWORD: changeit
+  MYSQL_ALLOW_EMPTY_PASSWORD: "true"
 ---
 apiVersion: v1
 kind: ConfigMap
@@ -45,7 +46,7 @@ metadata:
 data:
   initdb.sql: |
     use testdb;
-    CREATE TABLE customers (
+    CREATE TABLE IF NOT EXISTS customers (
       id INTEGER NOT NULL AUTO_INCREMENT PRIMARY KEY,
       first_name VARCHAR(255) NOT NULL,
       last_name VARCHAR(255) NOT NULL,
@@ -73,7 +74,7 @@ spec:
     spec:
       containers:
         - name: mysql
-          image: registry.redhat.io/rhscl/mysql-80-rhel7:8.0
+          image: quay.io/centos7/mysql-80-centos7:20230712
           resources:
             limits:
               memory: 1Gi

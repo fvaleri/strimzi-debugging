@@ -22,7 +22,7 @@
       {
         "name": "data",
         "persistentVolumeClaim": {
-          "claimName": "value0"
+          "claimName": "SED_CLAIM"
         }
       }
     ]
