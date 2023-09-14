@@ -1,4 +1,4 @@
-# Storage requirements and volume recovery
+## Storage requirements and volume recovery
 
 Kafka requires low latency storage for both broker commit logs and ZooKeeper data.
 The block storage type offers greater efficiency and faster performance than file and object storage types, which is why it is often recommended for Kafka.
@@ -38,7 +38,10 @@ Only volumes created and managed by a SC with `allowVolumeExpansion: true` can b
 When using JBOD, you can also remove a volume, but data needs to be migrated to other volumes upfront.
 Volumes with either `persistentVolumeReclaimPolicy: Retain`, or using a storage class with `reclaimPolicy: Retain` are retained when the Kafka cluster is deleted.
 
-# Example: no space left on device
+<br>
+
+---
+### Example: no space left on device
 
 First, we [deploy the Strimzi Cluster Operator and Kafka cluster](/sessions/001).
 When the cluster is ready, we purposely break it by sending 11 GiB of data to a topic with a replication factor of 3 (33 GiB in total), which exceeds the combined cluster disk capacity of 30 GiB.
@@ -168,7 +171,10 @@ my-cluster-kafka-1                            1/1     Running   0          18m
 my-cluster-kafka-2                            1/1     Running   0          18m
 ```
 
-# Example: unintentional cluster deletion with retained volumes
+<br>
+
+---
+### Example: unintentional cluster deletion with retained volumes
 
 By default, the `.spec.kafka.storage.deleteClaim` property is set to `false`, which means that Persistent Volume Claims (PVCs) associated with the Kafka cluster will not be deleted when the cluster is undeployed.
 However, this default value can be changed by the user. 

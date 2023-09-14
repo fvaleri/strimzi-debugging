@@ -1,4 +1,4 @@
-# TLS authentication and custom certificates
+## TLS authentication and custom certificates
 
 The TLS encryption protocol provides communications security over a computer network.
 Encryption without proper identification is insecure.
@@ -27,7 +27,10 @@ When enabling TLS mutual authentication (mTLS), the server should also support t
 Before the encryption starts, the peers agree to the protocol version and cipher suite to be used, exchange certificates and share encryption keys (connection overhead).
 Almost all authentication problems occur within this initial handshake.
 
-# Example: TLS authentication (mTLS) using an external listener
+<br>
+
+---
+### Example: TLS authentication (mTLS) using an external listener
 
 First, we [deploy the Strimzi Cluster Operator and Kafka cluster](/sessions/001), and set the external listener (we run on OpenShift here, but you need to use `type: ingress` on Kubernetes).
 Then, we apply the configuration changes to enable TLS authentication and wait for the Cluster Operator to restart all pods one by one (rolling update).
@@ -135,7 +138,10 @@ Certificate:
 If this is not enough to spot the issue, we can add the `-Djavax.net.debug=ssl:handshake` Java option to the client in order to get more details.
 As an additional exercise, try to get the clients CA and user certificates to verify if the first signs the second.
 
-# Example: custom certificates
+<br>
+
+---
+### Example: custom certificates
 
 Often, security policies don't allow you to run a Kafka cluster with self-signed certificates in production.
 Configure the listeners to use a custom certificate signed by an external or well-known CA.

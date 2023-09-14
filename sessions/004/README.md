@@ -1,4 +1,4 @@
-# Kafka Connect and change data capture
+## Kafka Connect and change data capture
 
 Kafka Connect is a configuration-driven fault-tolerant integration platform based on Kafka client APIs, which runs in standalone or distributed mode (cluster of workers).
 The platform can be extended by using connector, converter, and transformation plugins that implement the connect API interfaces.
@@ -47,7 +47,10 @@ If the connector stops for too long and the transaction log is purged, then the 
 By default, Debezium provides at-least-once semantics, which means duplicates can arise in failure scenarios.
 The change event contains elements that can be used to identify and filter out duplicates.
 
-# Example: cloud-native CDC pipeline
+<br>
+
+---
+### Example: cloud-native CDC pipeline
 
 First, we [deploy the Strimzi Cluster Operator and Kafka cluster](/sessions/001).
 When the cluster is ready, we deploy a MySQL instance (the external system) and Kafka Connect cluster.

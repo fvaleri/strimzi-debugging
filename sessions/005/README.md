@@ -1,4 +1,4 @@
-# Mirror Maker and disaster recovery
+## Mirror Maker and disaster recovery
 
 In order to create a disaster recovery (DR) plan you need to decide the recovery point objective (RPO), which is the maximum amount of data you are willing to risk losing, and the recovery time objective (RTO), which is the maximum amount of downtime that your system can have.
 Zero RPO requires a really good infrastructure, but there are cheaper alternatives if you can relax this objective.
@@ -26,10 +26,12 @@ It would also be good to have virtual hosts or a cluster proxy, so that you can 
 
 It is possible to combine stretch clusters and mirroring using MirrorMaker 2 to create a multi-region or even multi-cloud disaster recovery plan, where the service can survive a cloud outage (yes, a region can fail!).
 After the failover phase, you can fail back once the original region is back online, or fail forward selecting another region as the new backup cluster (faster).
+All disaster recovery processes should be documented in detail and carefully tested, simulating all possible scenarios such as partial failures.
 
-**All disaster recovery processes should be documented in detail and carefully tested, simulating all possible scenarios such as partial failures.**
+<br>
 
-# Example: active-passive mirroring
+---
+### Example: active-passive mirroring
 
 First, we [deploy the Strimzi Cluster Operator and Kafka cluster](/sessions/001).
 Then, we create the target namespace for the backup cluster.
@@ -124,7 +126,10 @@ my-topic:1:358846
 my-topic:2:287417
 ```
 
-# Example: tuning for throughput
+<br>
+
+---
+### Example: tuning for throughput
 
 High-volume message generation, as seen in web activity tracking, can result in a large number of messages.
 Additionally, even a source cluster with moderate throughput can create a significant volume of messages when mirroring large amounts of existing data.

@@ -1,4 +1,4 @@
-# Schema registry and why it is useful
+## Schema registry and why it is useful
 
 It is pretty obvious why schemas are useful for multiple clients collaborating on the same data because they provide shared metadata, including field availability and types.
 Additionally, data storage and processing are more efficient as schemas do not need to be sent with each message and numbers can be stored in binary form.
@@ -30,7 +30,10 @@ The solution is to register the schema at build time using the Maven plugin.
 The deserializer fetches the right schema version using the `globalId`, but you can also configure it to fetch by `contentId` (Confluent default).
 Setting the `apicurio.registry.check-period-ms` client property, we can determine the time after which a cached artifact is auto-evicted and needs to be fetched again on the next record.
 
-# Example: schema registry in action
+<br>
+
+---
+### Example: schema registry in action
 
 First, we [deploy the Strimzi Cluster Operator and Kafka cluster](/sessions/001), and set the external listener.
 Then, we deploy the Service Registry instance with the in-memory storage system.

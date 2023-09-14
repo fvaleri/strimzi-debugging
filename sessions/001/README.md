@@ -1,4 +1,4 @@
-# Kafka introduction and deployments
+## Kafka introduction and deployments
 
 [Apache Kafka](https://kafka.apache.org) is a distributed streaming platform that lets you read, write, store, and process messages across many machines.
 The [CNCF Strimzi](https://strimzi.io) project includes a set of operators, which help in deploying and manging Kafka clusters on Kubernetes.
@@ -49,7 +49,10 @@ Multiple consumers with the same `group.id` form a consumer group and partitions
 Within a consumer group, a partition is assigned to exactly one consumer to not break ordering, but that consumer can handle multiple partitions.
 Each consumer periodically or manually commits its position (the next offsets to read) to an internal topic called `__consumer_offsets`.
 
-# Example: deploy a Kafka cluster on localhost
+<br>
+
+---
+### Example: deploy a Kafka cluster on localhost
 
 In this example, we deploy a Kafka cluster on localhost.
 This is useful for quick tests where a multi node cluster is not required.
@@ -103,7 +106,8 @@ Partition:2	2	world
 ^CProcessed a total of 2 messages
 ```
 
-It works, but where these messages are being stored? The broker property `log.dirs` configures where our topic partitions are stored.
+It works, but where these messages are being stored?
+The broker property `log.dirs` configures where our topic partitions are stored.
 We have 3 partitions, which corresponds to exactly 3 folders on disk.
 
 ```sh
@@ -170,10 +174,14 @@ baseOffset: 15 lastOffset: 17 count: 3 baseSequence: 0 lastSequence: 2 producerI
 | offset: 17 CreateTime: 1662649581270 keySize: 26 valueSize: 24 sequence: 2 headerKeys: [] key: offset_commit::group=my-group,partition=my-topic-2 payload: offset=1
 ```
 
-# Example: deploy a Kafka cluster on Kubernetes
+<br>
+
+---
+### Example: deploy a Kafka cluster on Kubernetes
 
 In this example, we deploy a Kafka cluster to a Kubernetes cluster using the operator.
-**Login if you are running on OpenShift or authentication is required.**
+
+**Login first if you are running on OpenShift or authentication is required.**
 
 ```sh
 $ source init.sh
@@ -186,9 +194,6 @@ namespace/test created
 namespace/test-tgt created
 Done
 ```
-
-**Remember that CRDs are cluster-wide resources, so we can't deploy multiple operator versions running on the same OpenShift cluster, unless their CRDs are fully compatible, which is not guaranteed.
-If you delete the CRDs, every Kafka cluster deployed on that OpenShift cluster is garbage collected.**
 
 Then, we create a new Kafka cluster and test topic.
 In the YAML files, we can see how the desired cluster state is declared.

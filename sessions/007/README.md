@@ -1,4 +1,4 @@
-# Cruise Control and unbalanced clusters
+## Cruise Control and unbalanced clusters
 
 By default, Kafka tries to distribute the load evenly across brokers.
 This is achieved through the concept of the preferred replica, which is the first replica created for a new topic.
@@ -24,7 +24,10 @@ If two equivalent changes are possible, the one with the lower cost is selected 
 In order to have accurate rebalance proposals when using CPU goals, we can set CPU requests equal to CPU limits in `.spec.kafka.resources`.
 That way, all CPU resources are reserved upfront (Guaranteed QoS) and Cruise Control can properly evaluate CPU utilization when generating the rebalance proposals.
 
-# Example: scaling up the cluster
+<br>
+
+---
+### Example: scaling up the cluster
 
 First, we [deploy the Strimzi Cluster Operator and Kafka cluster](/sessions/001).
 When the cluster is ready, we want to scale it up and put some load on the new broker, which otherwise will sit idle waiting for new topic creation.
@@ -110,7 +113,10 @@ Topic: my-topic	TopicId: odTuFAweSkSLsboC-QQ4wg	PartitionCount: 3	ReplicationFac
 exit
 ```
 
-# Example: scaling up the cluster with CC
+<br>
+
+---
+### Example: scaling up the cluster with CC
 
 Let's repeat the cluster scale up example, but this time using Cruise Control to see how it helps with the planning phase.
 Cruise Control can figure out by itself the required changes, given a set of high-level goals (sensible defaults are provided).
@@ -179,7 +185,7 @@ sessionId: f0605d40-37be-43b9-be1f-83167633f37c
 When the proposal is ready, we can approve it by using another annotation and wait for Cruise Control to move partitions and replica roles around.
 When the rebalance is ready, we can look at the result and see if the new broker has picked some of the existing partitions.
 
-**From Strimzi 0.32, you can enable auto-approval by adding `strimzi.io/rebalance-auto-approval: "true"` as an annotation to the `KafkaRebalance` custom resource before you generate the proposal.**
+From Strimzi 0.32, you can enable auto-approval by adding `strimzi.io/rebalance-auto-approval: "true"` as an annotation to the `KafkaRebalance` custom resource before you generate the proposal.
 
 ```sh
 $ kubectl annotate kr add-brokers strimzi.io/rebalance=approve

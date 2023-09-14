@@ -1,4 +1,4 @@
-# Transactions and how to rollback
+## Transactions and how to rollback
 
 Kafka provides at-least-once semantics by default, so duplicates can arise because of producer retries or consumer restarts after failure.
 The idempotent producer configuration (now default) solves the duplicates problem by creating a producer session identified by a producer id (PID) and an epoch.
@@ -36,7 +36,10 @@ If there is a hanging transaction on a partition (missing or out of order contro
 At this point, transactional consumers can't make progress and compaction is blocked if enabled.
 After transaction rollback, the LSO starts to increment again on every completed transaction.
 
-# Example: transactional application
+<br>
+
+---
+### Example: transactional application
 
 First, we [deploy a Kafka cluster on localhost](/sessions/001).
 We run the transactional application included in this example on a different terminal (there is a new poll/read every 60 seconds).
@@ -126,7 +129,10 @@ baseOffset: 4 lastOffset: 4 count: 1 baseSequence: -1 lastSequence: -1 producerI
 | offset: 4 CreateTime: 1680383688180 keySize: 17 valueSize: 37 sequence: -1 headerKeys: [] key: transaction_metadata::transactionalId=kafka-txn-0 payload: producerId:0,producerEpoch:0,state=CompleteCommit,partitions=[],txnLastUpdateTimestamp=1680383688154,txnTimeoutMs=60000
 ```
 
-# Example: transaction rollback
+<br>
+
+---
+### Example: transaction rollback
 
 When there is a hanging transaction the LSO is stuck, which means that transactional consumers of this partition can't make any progress (CURRENT-OFFSET==LSO).
 
