@@ -19,7 +19,7 @@ The analyzer uses this model to create a valid rebalance proposal when possible 
 The executor ensures that there is only one active rebalancing at any given time and applies changes in batches, enabling graceful cancellation.
 If two equivalent changes are possible, the one with the lower cost is selected (leadership change > replica move > replica swap).
 
-![](images/cc.png)
+![cc.png](images%2Fcc.png)
 
 In order to have accurate rebalance proposals when using CPU goals, we can set CPU requests equal to CPU limits in `.spec.kafka.resources`.
 That way, all CPU resources are reserved upfront (Guaranteed QoS) and Cruise Control can properly evaluate CPU utilization when generating the rebalance proposals.

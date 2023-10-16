@@ -16,7 +16,7 @@ Within a Kafka cluster, in addition to the client-server communication, inter-cl
 All of this work is done by the Strimzi Cluster Operator, which is a great example of how the operator pattern simplifies cluster management.
 Two self-signed CAs are automatically generated and used to sign all cluster (cluster CA) and user (clients CA) certificates.
 
-![](images/connections.png)
+![connections.png](images%2Fconnections.png)
 
 The server name indication (SNI) extension allows a client to indicate which hostname it is trying to connect to at the start of the TLS handshake.
 The server can present multiple certificates on the same IP address and port number.

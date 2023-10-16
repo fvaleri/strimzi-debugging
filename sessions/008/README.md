@@ -10,7 +10,7 @@ This is usually the case for read-process-write applications, where the exactly-
 Transactions are only supported inside a single Kafka cluster, excluding any external system. 
 If this is the requirement, you would need to use an additional component such as the Spring Transaction Manager.
 
-![](images/txn.png)
+![txn.png](images%2Ftxn.png)
 
 Each producer instance must have its own static and unique `transactional.id` (TID), which is mapped to a producer id (PID) and epoch (to implement zombie fencing).
 Consumers with `isolation.level=read_committed` only get committed messages, ignoring aborted transactions.
