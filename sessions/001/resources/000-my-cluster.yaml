@@ -60,6 +60,7 @@ spec:
         zookeeper.root.logger: "INFO"
     resources:
       limits:
+        cpu: 500m
         memory: 1Gi
       requests:
         cpu: 500m
@@ -82,6 +83,7 @@ spec:
           rootLogger.level: "INFO"
       resources:
         limits:
+          cpu: 500m
           memory: 512Mi
         requests:
           cpu: 500m
@@ -99,6 +101,7 @@ spec:
           rootLogger.level: "INFO"
       resources:
         limits:
+          cpu: 500m
           memory: 512Mi
         requests:
           cpu: 500m

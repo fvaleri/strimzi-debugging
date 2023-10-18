@@ -66,6 +66,7 @@ spec:
       connect.root.logger.level: "INFO"
   resources:
     limits:
+      cpu: 3000m
       memory: 3Gi
     requests:
       cpu: 1000m
