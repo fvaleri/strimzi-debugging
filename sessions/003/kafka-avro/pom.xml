@@ -11,8 +11,11 @@
     <properties>
         <project.build.sourceEncoding>UTF-8</project.build.sourceEncoding>
         <project.reporting.outputEncoding>UTF-8</project.reporting.outputEncoding>
+        <java.source.version>17</java.source.version>
+        <java.target.version>17</java.target.version>
+        <main.class>it.fvaleri.example.Main</main.class>
 
-        <kafka.version>3.5.1</kafka.version>
+        <kafka.version>${env.INIT_KAFKA_VERSION}</kafka.version>
         <apicurio.registry.version>2.4.5.Final</apicurio.registry.version>
         <jackson.databind.version>2.15.2</jackson.databind.version>
         <slf4j.version>1.7.36</slf4j.version>
@@ -56,8 +59,8 @@
                 <artifactId>maven-compiler-plugin</artifactId>
                 <version>${plugin.compiler.version}</version>
                 <configuration>
-                    <source>17</source>
-                    <target>17</target>
+                    <source>${java.source.version}</source>
+                    <target>${java.target.version}</target>
                 </configuration>
             </plugin>
             <plugin>
@@ -65,7 +68,7 @@
                 <artifactId>exec-maven-plugin</artifactId>
                 <version>${plugin.exec.version}</version>
                 <configuration>
-                    <mainClass>it.fvaleri.example.Main</mainClass>
+                    <mainClass>${main.class}</mainClass>
                 </configuration>
             </plugin>
             <plugin>
