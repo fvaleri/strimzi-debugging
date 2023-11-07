@@ -37,10 +37,6 @@ Then, we apply the configuration changes to enable TLS authentication and wait f
 If the Kafka cluster is operating correctly, it is possible to update the configuration with zero downtime.
 
 ```sh
-$ kubectl apply -f sessions/002/resources/mtls
-kafka.kafka.strimzi.io/my-cluster configured
-kafkauser.kafka.strimzi.io/my-user created
-
 $ kubectl create -f sessions/002/resources \
   && kubectl patch k my-cluster --type merge -p '
     spec:
