@@ -15,7 +15,15 @@ Connectors use converters to serialize and deserialize data when communicating w
 For light modifications, such as filters, mappings, and replacements, transformations (also called Single Message Transformations) can be applied at the record level.
 However, for complex transformations such as aggregations, joins, and external service calls, it's recommended to use a stream processing library like Kafka Streams.
 
-![connect.png](images%2Fconnect.png)
+<figure>
+    <img src="images/pipeline.png" height=450>
+    <figcaption><small>
+        Fig 1. Kafka Connect data pipeline.
+    </small></figcaption>
+</figure>
+
+<br/>
+<br/>
 
 Each connector job is split into a number of single thread tasks which run on worker nodes.
 You can configure the maximum number of tasks created by setting the `maxTasks` at the connector configuration level, but the actual number of tasks depends on the specific connector and, for sink connectors, on how many input partitions.
@@ -47,7 +55,7 @@ If the connector stops for too long and the transaction log is purged, then the 
 By default, Debezium provides at-least-once semantics, which means duplicates can arise in failure scenarios.
 The change event contains elements that can be used to identify and filter out duplicates.
 
-<br>
+<br/>
 
 ---
 ### Example: cloud-native CDC pipeline

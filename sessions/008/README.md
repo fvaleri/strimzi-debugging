@@ -10,7 +10,15 @@ This is usually the case for read-process-write applications, where the exactly-
 Transactions are only supported inside a single Kafka cluster, excluding any external system. 
 If this is the requirement, you would need to use an additional component such as the Spring Transaction Manager.
 
-![txn.png](images%2Ftxn.png)
+<figure>
+    <img src="images/apis.png" height=450>
+    <figcaption><small>
+        Fig 1. Kafka transaction APIs.
+    </small></figcaption>
+</figure>
+
+<br/>
+<br/> 
 
 Each producer instance must have its own static and unique `transactional.id` (TID), which is mapped to a producer id (PID) and epoch (to implement zombie fencing).
 Consumers with `isolation.level=read_committed` only get committed messages, ignoring aborted transactions.
@@ -36,7 +44,7 @@ If there is a hanging transaction on a partition (missing or out of order contro
 At this point, transactional consumers can't make progress and compaction is blocked if enabled.
 After transaction rollback, the LSO starts to increment again on every completed transaction.
 
-<br>
+<br/>
 
 ---
 ### Example: transactional application
@@ -129,7 +137,7 @@ baseOffset: 4 lastOffset: 4 count: 1 baseSequence: -1 lastSequence: -1 producerI
 | offset: 4 CreateTime: 1680383688180 keySize: 17 valueSize: 37 sequence: -1 headerKeys: [] key: transaction_metadata::transactionalId=kafka-txn-0 payload: producerId:0,producerEpoch:0,state=CompleteCommit,partitions=[],txnLastUpdateTimestamp=1680383688154,txnTimeoutMs=60000
 ```
 
-<br>
+<br/>
 
 ---
 ### Example: transaction rollback

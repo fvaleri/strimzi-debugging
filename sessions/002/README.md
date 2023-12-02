@@ -16,7 +16,15 @@ Within a Kafka cluster, in addition to the client-server communication, inter-cl
 All of this work is done by the Strimzi Cluster Operator, which is a great example of how the operator pattern simplifies cluster management.
 Two self-signed CAs are automatically generated and used to sign all cluster (cluster CA) and user (clients CA) certificates.
 
-![connections.png](images%2Fconnections.png)
+<figure>
+    <img src="images/network.png" height=350>
+    <figcaption><small>
+        Fig 1. Network communication between cluster components.
+    </small></figcaption>
+</figure>
+
+<br/>
+<br/>
 
 The server name indication (SNI) extension allows a client to indicate which hostname it is trying to connect to at the start of the TLS handshake.
 The server can present multiple certificates on the same IP address and port number.
@@ -27,7 +35,7 @@ When enabling TLS mutual authentication (mTLS), the server should also support t
 Before the encryption starts, the peers agree to the protocol version and cipher suite to be used, exchange certificates and share encryption keys (connection overhead).
 Almost all authentication problems occur within this initial handshake.
 
-<br>
+<br/>
 
 ---
 ### Example: TLS authentication (mTLS) using an external listener
@@ -134,7 +142,7 @@ Certificate:
 If this is not enough to spot the issue, we can add the `-Djavax.net.debug=ssl:handshake` Java option to the client in order to get more details.
 As an additional exercise, try to get the clients CA and user certificates to verify if the first signs the second.
 
-<br>
+<br/>
 
 ---
 ### Example: custom certificates

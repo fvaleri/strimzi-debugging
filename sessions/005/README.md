@@ -13,7 +13,15 @@ In order to do that, you would need at least three DCs with guaranteed low laten
 OpenShift supports stretch/multi-site clusters, so you can simply deploy Strimzi on top of that, using affinities rules to achieve the desired topology.
 Then, you set rack awareness to ensure that replicas are distributed evenly across DCs and deploy Cruise Control with rack awareness goals to make sure that replicas remain distributed across different racks.
 
-![stretch.png](images%2Fstretch.png)
+<figure>
+    <img src="images/stretch.png" height=350>
+    <figcaption><small>
+        Fig 1. Stretch cluster architecture.
+    </small></figcaption>
+</figure>
+
+<br/>
+<br/>
 
 The cheaper alternative to the stretch cluster is using MirrorMaker 2 (MM2), where a passive/backup cluster is continuously kept in-sync, including consumer group offsets and topic ACLs.
 You can also have active/active replication using MM2, which means your clients are distributed between two Kafka clusters resulting in a much more complex architecture.
@@ -22,13 +30,21 @@ Producers should be able to re-send missing data, which means storing the latest
 In case of disaster, the amount of data that may be lost depends on the latency of the MM2 connectors, so you should carefully monitor these metrics and set alerts.
 It would also be good to have virtual hosts or a cluster proxy, so that you can switch all clients at once from a central place.
 
-![mm2.png](images%2Fmm2.png)
+<figure>
+    <img src="images/mm2.png" height=200>
+    <figcaption><small>
+        Fig 2. Mirror Maker 2 architecture.
+    </small></figcaption>
+</figure>
+
+<br/>
+<br/> 
 
 It is possible to combine stretch clusters and mirroring using MirrorMaker 2 to create a multi-region or even multi-cloud disaster recovery plan, where the service can survive a cloud outage (yes, a region can fail!).
 After the failover phase, you can fail back once the original region is back online, or fail forward selecting another region as the new backup cluster (faster).
 All disaster recovery processes should be documented in detail and carefully tested, simulating all possible scenarios such as partial failures.
 
-<br>
+<br/>
 
 ---
 ### Example: active-passive mirroring
@@ -126,7 +142,7 @@ my-topic:1:358846
 my-topic:2:287417
 ```
 
-<br>
+<br/>
 
 ---
 ### Example: tuning for throughput

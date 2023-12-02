@@ -11,7 +11,15 @@ Within a cluster, the control plane handles cluster metadata and the data plane 
 A broker in a cluster is elected as controller, which has the additional responsibility of managing the states of data partitions and replicas and for performing administrative tasks like reassigning partitions.
 In ZooKeeper mode there is only one elected controller, while in the new KRaft mode we have a quorum of controllers. One broker is active at any time, while the others are ready to take over in case of failure.
 
-![cluster.png](images%2Fcluster.png)
+<figure>
+    <img src="images/cluster.png" height=250>
+    <figcaption><small>
+        Fig 1. Cluster control and data planes.
+    </small></figcaption>
+</figure>
+
+<br/>
+<br/>
 
 Kafka uses a binary communication protocol over TCP (KRPC).
 The protocol defines APIs as request/response message pairs and includes both the message format and error codes.
@@ -41,7 +49,15 @@ If you set a topic replication factor of N, the system can tolerate N-1 broker f
 The last committed offset of a partition is called the high watermark (HW).
 Records are guaranteed to be fully replicated up to this offset and only committed records are exposed to consumers.
 
-![replicas.png](images%2Freplicas.png)
+<figure>
+    <img src="images/replicas.png" height=450>
+    <figcaption><small>
+        Fig 2. Kafka replication protocol.
+    </small></figcaption>
+</figure>
+
+<br/>
+<br/>
 
 When sending messages, a producer with `acks=all` configuration (now default) will not get a send acknowledgement until all `min.insync.replicas` (ISR) have replicated the message.
 At any time, the ISR only includes replicas that are up to date.
@@ -49,7 +65,7 @@ Multiple consumers with the same `group.id` form a consumer group and partitions
 Within a consumer group, a partition is assigned to exactly one consumer to not break ordering, but that consumer can handle multiple partitions.
 Each consumer periodically or manually commits its position (the next offsets to read) to an internal topic called `__consumer_offsets`.
 
-<br>
+<br/>
 
 ---
 ### Example: deploy a Kafka cluster on localhost
@@ -174,7 +190,7 @@ baseOffset: 15 lastOffset: 17 count: 3 baseSequence: 0 lastSequence: 2 producerI
 | offset: 17 CreateTime: 1662649581270 keySize: 26 valueSize: 24 sequence: 2 headerKeys: [] key: offset_commit::group=my-group,partition=my-topic-2 payload: offset=1
 ```
 
-<br>
+<br/>
 
 ---
 ### Example: deploy a Kafka cluster on Kubernetes

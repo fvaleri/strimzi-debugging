@@ -38,7 +38,7 @@ Only volumes created and managed by a SC with `allowVolumeExpansion: true` can b
 When using JBOD, you can also remove a volume, but data needs to be migrated to other volumes upfront.
 Volumes with either `persistentVolumeReclaimPolicy: Retain`, or using a storage class with `reclaimPolicy: Retain` are retained when the Kafka cluster is deleted.
 
-<br>
+<br/>
 
 ---
 ### Example: no space left on device
@@ -171,7 +171,7 @@ my-cluster-kafka-1                            1/1     Running   0          18m
 my-cluster-kafka-2                            1/1     Running   0          18m
 ```
 
-<br>
+<br/>
 
 ---
 ### Example: unintentional cluster deletion with retained volumes
