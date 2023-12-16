@@ -64,17 +64,8 @@ First, we [deploy the Strimzi Cluster Operator and Kafka cluster](/sessions/001)
 When the cluster is ready, we deploy a MySQL instance (the external system) and Kafka Connect cluster.
 Note that we are also initializing the database.
 The Kafka Connect image uses an internal component (kaniko) to build a custom image containing the configured MySQL connector.
-This component requires credentials for pushing to an external image registry, so we first need to create a secret for that. 
-
-**Pro tip: You can use a `quay.io` robot account instead of your user account.**
 
 ```sh
-# use your credentials
-$ kubectl create secret docker-registry registry-authn \
-  --docker-server="quay.io" --docker-username="fvaleri+test" --docker-password="changeit" \
-  --dry-run=client -o yaml | kubectl replace --force -f -
-secret/registry-authn replaced
-
 # use your image name
 $ for f in sessions/004/resources/*.yaml; do sed "s#SED_IMAGE#quay.io/fvaleri/my-connect:latest#g" $f | kubectl create -f -; done \
   && kubectl wait --for=condition=Ready pod -l app=my-connect-mysql --timeout=300s \

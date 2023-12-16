@@ -6,7 +6,8 @@ metadata:
     strimzi.io/use-connector-resources: "true"
 spec:
   replicas: 1
-  version: 3.5.1
+  # set the kafka version
+  #version: 3.5.1
   bootstrapServers: my-cluster-kafka-bootstrap:9093
   tls:
     trustedCertificates:
@@ -43,8 +44,7 @@ spec:
   build:
     output:
       type: docker
-      image: SED_IMAGE
-      pushSecret: registry-authn
+      image: ttl.sh/fvaleri/kafka-connect:24h
     plugins:
       - name: debezium-mysql
         artifacts:
