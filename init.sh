@@ -4,9 +4,6 @@
 INIT_NAMESPACE="test"
 INIT_KAFKA_VERSION="3.5.1"
 INIT_STRIMZI_VERSION="0.37.0"
-INIT_KAFKA_IMAGE="quay.io/strimzi/kafka:latest-kafka-$INIT_KAFKA_VERSION"
-INIT_DEPLOY_URL="https://github.com/strimzi/strimzi-kafka-operator/\
-releases/download/$INIT_STRIMZI_VERSION/strimzi-cluster-operator-$INIT_STRIMZI_VERSION.yaml"
 
 for x in curl kubectl openssl keytool unzip yq jq java javac jshell mvn; do
   if ! command -v "$x" &>/dev/null; then
@@ -39,7 +36,7 @@ kafka-cp() {
 }
 
 krun() { kubectl run krun-"$(date +%s)" -itq --rm --restart="Never" \
-  --image="$INIT_KAFKA_IMAGE" -- sh -c "/opt/kafka/bin/$*; exit 0"; }
+  --image="quay.io/strimzi/kafka:latest-kafka-$INIT_KAFKA_VERSION" -- sh -c "$*; exit 0"; }
 
 echo "Configuring Kafka on localhost"
 pkill -9 -f "kafka.Kafka" ||true
@@ -66,7 +63,7 @@ kubectl create clusterrolebinding strimzi-cluster-operator-watched \
 kubectl create clusterrolebinding strimzi-cluster-operator-entity-operator-delegation \
   --clusterrole strimzi-entity-operator --serviceaccount "$INIT_NAMESPACE":strimzi-cluster-operator \
   --dry-run=client -o yaml | kubectl replace --force -f - &>/dev/null
-curl -sL "$INIT_DEPLOY_URL" | sed -E "s/namespace: .*/namespace: $INIT_NAMESPACE/g" \
-  | kubectl create -f - --dry-run=client -o yaml | kubectl replace --force -f - &>/dev/null
+curl -sL "https://github.com/strimzi/strimzi-kafka-operator/releases/download/$INIT_STRIMZI_VERSION/strimzi-cluster-operator-$INIT_STRIMZI_VERSION.yaml" \
+  | sed -E "s/namespace: .*/namespace: $INIT_NAMESPACE/g" | kubectl create -f - --dry-run=client -o yaml | kubectl replace --force -f - &>/dev/null
 kubectl set env deploy strimzi-cluster-operator STRIMZI_NAMESPACE="*" &>/dev/null
 echo "Done"

@@ -52,7 +52,7 @@ pvc-2e3c7665-2b92-4376-bb1d-22b1d23fcc6a   10Gi       RWO            Delete     
 pvc-b1e5e0a3-ab83-487f-9b81-c38e1badfccc   10Gi       RWO            Delete           Bound    test/data-my-cluster-kafka-0       gp2                     4m1s
 pvc-e66030cd-3992-4adc-9d94-d9d4ab164a45   10Gi       RWO            Delete           Bound    test/data-my-cluster-kafka-1       gp2                     4m1s
 
-$ krun kafka-producer-perf-test.sh --topic my-topic --record-size 1000 --num-records 12000000 \
+$ krun bin/kafka-producer-perf-test.sh --topic my-topic --record-size 1000 --num-records 12000000 \
   --throughput -1 --producer-props acks=1 bootstrap.servers=my-cluster-kafka-bootstrap:9092
 287699 records sent, 57528.3 records/sec (54.86 MB/sec), 144.6 ms avg latency, 455.0 ms max latency.
 309618 records sent, 61923.6 records/sec (59.05 MB/sec), 29.1 ms avg latency, 132.0 ms max latency.
@@ -226,7 +226,7 @@ As expected, all persistent volumes are still there after the namespace deletion
 Note that OpenShift also retains some useful information that is needed when reattaching them (capacity, claim, storage class).
 
 ```sh
-$ krun kafka-console-producer.sh --bootstrap-server my-cluster-kafka-bootstrap:9092 --topic my-topic
+$ krun bin/kafka-console-producer.sh --bootstrap-server my-cluster-kafka-bootstrap:9092 --topic my-topic
 >aaa
 >bbb
 >ccc
@@ -297,17 +297,17 @@ $ cat sessions/001/resources/000-my-cluster.yaml | yq 'del(.spec.entityOperator.
 kafka.kafka.strimzi.io/my-cluster created
 kafkatopic.kafka.strimzi.io/my-topic created
 
-$ krun kafka-topics.sh --bootstrap-server my-cluster-kafka-bootstrap:9092 --list
+$ krun bin/kafka-topics.sh --bootstrap-server my-cluster-kafka-bootstrap:9092 --list
 __consumer_offsets
 __strimzi-topic-operator-kstreams-topic-store-changelog
 __strimzi_store_topic
 my-topic
 
 $ for topic in "__strimzi_store_topic" ".*topic-store-changelog"; do
-  krun kafka-topics.sh --bootstrap-server my-cluster-kafka-bootstrap:9092 --topic $topic --delete
+  krun bin/kafka-topics.sh --bootstrap-server my-cluster-kafka-bootstrap:9092 --topic $topic --delete
 done
   
-$ krun kafka-topics.sh --bootstrap-server my-cluster-kafka-bootstrap:9092 --list
+$ krun bin/kafka-topics.sh --bootstrap-server my-cluster-kafka-bootstrap:9092 --list
 __consumer_offsets
 my-topic
 ```
@@ -327,7 +327,7 @@ observedGeneration: 1
 topicName: my-topic
 
 # drumroll
-$ krun kafka-console-consumer.sh --bootstrap-server my-cluster-kafka-bootstrap:9092 \
+$ krun bin/kafka-console-consumer.sh --bootstrap-server my-cluster-kafka-bootstrap:9092 \
   --topic my-topic --from-beginning
 bbb
 aaa
