@@ -81,18 +81,20 @@ Topic: my-topic	TopicId: odTuFAweSkSLsboC-QQ4wg	PartitionCount: 3	ReplicationFac
 EOF
 
 [strimzi@rkc-1664115586 kafka]$ bin/kafka-reassign-partitions.sh --bootstrap-server my-cluster-kafka-bootstrap:9092 \
-  --reassignment-json-file /tmp/reassign.json --throttle 5000000 --execute
+  --reassignment-json-file /tmp/reassign.json --throttle 10000000 --execute
 Current partition replica assignment
 
 {"version":1,"partitions":[{"topic":"my-topic","partition":0,"replicas":[1,0,2],"log_dirs":["any","any","any"]},{"topic":"my-topic","partition":1,"replicas":[0,2,1],"log_dirs":["any","any","any"]},{"topic":"my-topic","partition":2,"replicas":[2,1,0],"log_dirs":["any","any","any"]}]}
 
 Save this to use as the --reassignment-json-file option during rollback
 Warning: You must run --verify periodically, until the reassignment completes, to ensure the throttle is removed.
-The inter-broker throttle limit was set to 5000000 B/s
+The inter-broker throttle limit was set to 10000000 B/s
 Successfully started partition reassignments for my-topic-0,my-topic-1,my-topic-2
 ```
 
-To prevent any impact on the cluster while moving partitions between brokers, we use the `--throttle` option with a limit of 5 MB/s. However, it's important to note that this option also applies to the normal replication traffic between brokers. As a result, we need to find the right balance between the `--throttle` limit and the replication traffic to ensure that we can move data in a reasonable amount of time without slowing down replication too much.
+To prevent any impact on the cluster while moving partitions between brokers, we use the `--throttle` option with a limit of 10 MB/s.
+However, it's important to note that this option also applies to the normal replication traffic between brokers.
+As a result, we need to find the right balance between the `--throttle` limit and the replication traffic to ensure that we can move data in a reasonable amount of time without slowing down replication too much.
 
 We can start from a safe throttle value and then use the `kafka.server:type=FetcherLagMetrics,name=ConsumerLag,clientId=([-.\w]+),topic=([-.\w]+),partition=([0-9]+)` metric to observe how far the followers are lagging behind the leader for a given partition. 
 If this lag is growing or the reassignment is taking too much time, we can run the command again with the `--additional` option to increase the throttle value.
