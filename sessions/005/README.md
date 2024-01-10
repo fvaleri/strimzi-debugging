@@ -13,15 +13,7 @@ In order to do that, you would need at least three DCs with guaranteed low laten
 OpenShift supports stretch/multi-site clusters, so you can simply deploy Strimzi on top of that, using affinities rules to achieve the desired topology.
 Then, you set rack awareness to ensure that replicas are distributed evenly across DCs and deploy Cruise Control with rack awareness goals to make sure that replicas remain distributed across different racks.
 
-<figure>
-    <img src="images/stretch.png" height=350>
-    <figcaption><small>
-        Fig 1. Stretch cluster architecture.
-    </small></figcaption>
-</figure>
-
-<br/>
-<br/>
+<p align="center"><img src="images/stretch.png" height=350/></p>
 
 The cheaper alternative to the stretch cluster is using MirrorMaker 2 (MM2), where a passive/backup cluster is continuously kept in-sync, including consumer group offsets and topic ACLs.
 You can also have active/active replication using MM2, which means your clients are distributed between two Kafka clusters resulting in a much more complex architecture.
@@ -30,15 +22,7 @@ Producers should be able to re-send missing data, which means storing the latest
 In case of disaster, the amount of data that may be lost depends on the latency of the MM2 connectors, so you should carefully monitor these metrics and set alerts.
 It would also be good to have virtual hosts or a cluster proxy, so that you can switch all clients at once from a central place.
 
-<figure>
-    <img src="images/mm2.png" height=200>
-    <figcaption><small>
-        Fig 2. Mirror Maker 2 architecture.
-    </small></figcaption>
-</figure>
-
-<br/>
-<br/> 
+<p align="center"><img src="images/mm2.png" height=200/></p>
 
 It is possible to combine stretch clusters and mirroring using MirrorMaker 2 to create a multi-region or even multi-cloud disaster recovery plan, where the service can survive a cloud outage (yes, a region can fail!).
 After the failover phase, you can fail back once the original region is back online, or fail forward selecting another region as the new backup cluster (faster).
