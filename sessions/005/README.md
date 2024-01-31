@@ -109,17 +109,17 @@ Note that this is a controlled experiment, but the actual offsets tend to natura
 This is why we have offset mapping metadata.
 
 ```sh
-$ krun bin/kafka-producer-perf-test.sh --topic my-topic --record-size 100 --num-records 1000000 \
+$ kubectl-kafka bin/kafka-producer-perf-test.sh --topic my-topic --record-size 100 --num-records 1000000 \
   --throughput -1 --producer-props acks=1 bootstrap.servers=my-cluster-kafka-bootstrap:9092
 1000000 records sent, 201531.640468 records/sec (19.22 MB/sec), 255.97 ms avg latency, 715.00 ms max latency, 185 ms 50th, 627 ms 95th, 687 ms 99th, 704 ms 99.9th.
 
-$ krun bin/kafka-run-class.sh kafka.tools.GetOffsetShell \
+$ kubectl-kafka bin/kubectl-kafka-class.sh kafka.tools.GetOffsetShell \
   --broker-list my-cluster-kafka-bootstrap:9092 --topic my-topic --time -1
 my-topic:0:353737
 my-topic:1:358846
 my-topic:2:287417
 
-$ krun bin/kafka-run-class.sh kafka.tools.GetOffsetShell \
+$ kubectl-kafka bin/kubectl-kafka-class.sh kafka.tools.GetOffsetShell \
   --broker-list my-cluster-tgt-kafka-bootstrap."$INIT_NAMESPACE"-tgt.svc:9092 --topic my-topic --time -1
 my-topic:0:353737
 my-topic:1:358846
@@ -142,7 +142,7 @@ By looking at `MirrorSourceConnector` task metrics, we see that we are saturatin
 $ kubectl -n "$INIT_NAMESPACE"-tgt scale kmm2 my-mm2 --replicas 0
 kafkamirrormaker2.kafka.strimzi.io/my-mm2 scaled
 
-$ krun bin/kafka-producer-perf-test.sh --topic my-topic --record-size 100 --num-records 30000000 \
+$ kubectl-kafka bin/kafka-producer-perf-test.sh --topic my-topic --record-size 100 --num-records 30000000 \
   --throughput -1 --producer-props acks=1 bootstrap.servers=my-cluster-kafka-bootstrap:9092
 1047156 records sent, 209389.3 records/sec (19.97 MB/sec), 102.5 ms avg latency, 496.0 ms max latency.
 ...
@@ -154,7 +154,7 @@ kafkamirrormaker2.kafka.strimzi.io/my-mm2 scaled
 
 # took about 3 minutes
 $ kubectl -n "$INIT_NAMESPACE"-tgt exec -it $(kubectl -n "$INIT_NAMESPACE"-tgt get po | grep my-mm2 | awk '{print $1}') -- bash -c '\
-  for i in {1..100}; do /opt/kafka/bin/kafka-run-class.sh kafka.tools.JmxTool --jmx-url service:jmx:rmi:///jndi/rmi://:9999/jmxrmi \
+  for i in {1..100}; do /opt/kafka/bin/kubectl-kafka-class.sh kafka.tools.JmxTool --jmx-url service:jmx:rmi:///jndi/rmi://:9999/jmxrmi \
     --object-name kafka.producer:type=producer-metrics,client-id=\""connector-producer-my-cluster->my-cluster-tgt.MirrorSourceConnector-0\"" \
     --attributes batch-size-avg,request-latency-avg --date-format yyyy-MM-dd_HH:mm:ss --one-time true --wait \
       2>/dev/null | grep $(date +"%Y") && sleep 5; done'
@@ -211,7 +211,7 @@ kafkamirrormaker2.kafka.strimzi.io/my-mm2 patched
 $ kubectl -n "$INIT_NAMESPACE"-tgt scale kmm2 my-mm2 --replicas 0
 kafkamirrormaker2.kafka.strimzi.io/my-mm2 scaled
 
-$ krun bin/kafka-producer-perf-test.sh --topic my-topic --record-size 100 --num-records 30000000 \
+$ kubectl-kafka bin/kafka-producer-perf-test.sh --topic my-topic --record-size 100 --num-records 30000000 \
   --throughput -1 --producer-props acks=1 bootstrap.servers=my-cluster-kafka-bootstrap:9092
 253179 records sent, 250585.7 records/sec (23.90 MB/sec), 15.5 ms avg latency, 324.0 ms max latency.
 ...
@@ -222,7 +222,7 @@ kafkamirrormaker2.kafka.strimzi.io/my-mm2 scaled
 
 # took less than 2 minutes
 $ kubectl -n "$INIT_NAMESPACE"-tgt exec -it $(kubectl -n "$INIT_NAMESPACE"-tgt get po | grep my-mm2 | awk '{print $1}') -- bash -c '\
-  for i in {1..100}; do /opt/kafka/bin/kafka-run-class.sh kafka.tools.JmxTool --jmx-url service:jmx:rmi:///jndi/rmi://:9999/jmxrmi \
+  for i in {1..100}; do /opt/kafka/bin/kubectl-kafka-class.sh kafka.tools.JmxTool --jmx-url service:jmx:rmi:///jndi/rmi://:9999/jmxrmi \
     --object-name kafka.producer:type=producer-metrics,client-id=\""connector-producer-my-cluster->my-cluster-tgt.MirrorSourceConnector-0\"" \
     --attributes batch-size-avg,request-latency-avg --date-format yyyy-MM-dd_HH:mm:ss --one-time true --wait \
       2>/dev/null | grep $(date +"%Y") && sleep 5; done'

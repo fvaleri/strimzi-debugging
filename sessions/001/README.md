@@ -232,12 +232,12 @@ Note that we are using a nice function to avoid repeating that for every client 
 You can also use the broker pods for that, but it is always risky to spin up another JVM inside a pod, especially in production.
 
 ```sh
-$ krun bin/kafka-console-producer.sh --bootstrap-server my-cluster-kafka-bootstrap:9092 --topic my-topic
+$ kubectl-kafka bin/kafka-console-producer.sh --bootstrap-server my-cluster-kafka-bootstrap:9092 --topic my-topic
 >hello
 >world
 >^C
 
-$ krun bin/kafka-console-consumer.sh --bootstrap-server my-cluster-kafka-bootstrap:9092 \
+$ kubectl-kafka bin/kafka-console-consumer.sh --bootstrap-server my-cluster-kafka-bootstrap:9092 \
   --topic my-topic --group my-group --from-beginning
 world
 hello

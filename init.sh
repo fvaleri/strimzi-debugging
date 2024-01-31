@@ -35,7 +35,7 @@ kafka-cp() {
     run("'"$id"'", '"$part"');' | jshell -
 }
 
-krun() { kubectl run krun-"$(date +%s)" -itq --rm --restart="Never" \
+kubectl-kafka() { kubectl run kubectl-kafka-"$(date +%s)" -itq --rm --restart="Never" \
   --image="quay.io/strimzi/kafka:latest-kafka-$INIT_KAFKA_VERSION" -- sh -c "$*; exit 0"; }
 
 echo "Configuring Kafka on localhost"
