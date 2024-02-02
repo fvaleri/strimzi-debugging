@@ -1,13 +1,16 @@
 #!/usr/bin/env bash
-# Source this file to configure your bash environment.
 
 INIT_NAMESPACE="test"
 INIT_KAFKA_VERSION="3.5.1"
 INIT_STRIMZI_VERSION="0.37.0"
 
+if [[ "${BASH_SOURCE[0]}" -ef "$0" ]]; then
+  echo "Source this script, not execute it"; exit 1
+fi
+
 for x in curl kubectl openssl keytool unzip yq jq java javac jshell mvn; do
   if ! command -v "$x" &>/dev/null; then
-    echo "Missing required utility: $x" && return 1
+    echo "Missing required utility: $x"; return 1
   fi
 done
 
@@ -29,7 +32,7 @@ get-kafka() {
 
 kafka-cp() {
   local id="${1-}" part="${2-50}"
-  if [[ -z $id ]]; then echo "Missing id parameter" && return; fi
+  if [[ -z $id ]]; then echo "Missing id parameter"; return; fi
   echo 'public void run(String id, int part) { System.out.println(abs(id.hashCode()) % part); }
     private int abs(int n) { return (n == Integer.MIN_VALUE) ? 0 : Math.abs(n); }
     run("'"$id"'", '"$part"');' | jshell -
