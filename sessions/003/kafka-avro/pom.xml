@@ -14,12 +14,10 @@
         <java.source.version>17</java.source.version>
         <java.target.version>17</java.target.version>
         <main.class>it.fvaleri.example.Main</main.class>
-
         <kafka.version>${env.INIT_KAFKA_VERSION}</kafka.version>
         <apicurio.registry.version>2.4.5.Final</apicurio.registry.version>
         <jackson.databind.version>2.15.2</jackson.databind.version>
         <slf4j.version>1.7.36</slf4j.version>
-
         <plugin.compiler.version>3.11.0</plugin.compiler.version>
         <plugin.exec.version>3.1.0</plugin.exec.version>
     </properties>

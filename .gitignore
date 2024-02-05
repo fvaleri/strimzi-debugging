@@ -6,4 +6,5 @@ target/
 .classpath
 .factorypath
 .DS_Store
+.attach_pid*
 *.iml
