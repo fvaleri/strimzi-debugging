@@ -19,7 +19,7 @@ By disabling `noatime`, the system can avoid unnecessary disk I/O operations and
 
 Ideally, when provisioning a new Kafka cluster or topic, the retention policy should be set properly based on requirements and expected throughput (measured in MB/s). 
 Inactive segments can be deleted based on specific retention policies, such as `segment.ms` or `segment.bytes`.
-Even if one record is not yet eligible for deletion based on `retention.ms` or `retention.bytes`, the broker retains the entire segment file.
+If one record is not yet eligible for deletion based on `retention.ms` or `retention.bytes`, the broker retains the entire segment file.
 When the topic combines both time and size-based retention policies, the size-based policy defines the upper cap.
 Deletion timing also depends on the cluster load and how many `background.threads` are available for normal topics, and `log.cleaner.threads` for compacted topics.
 The required storage capacity can be calculated based on the message retention.
@@ -29,7 +29,7 @@ The required storage capacity can be calculated based on the message retention.
 storage_capacity (MB) = retention_sec * topic_write_rate (MB/s) * replication_factor
 
 # size-based retention
-storage_capacity (MB) = retention_mb * replication_factor * part_number
+storage_capacity (MB) = retention_mb * replication_factor
 ```
 
 In OpenShift, a persistent volume (PV) lives outside any namespace, and it is claimed by using a persistent volume claim (PVC).
