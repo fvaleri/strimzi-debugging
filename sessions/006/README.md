@@ -17,20 +17,20 @@ You can also use JBOD (just a bunch of disks), which gives good performance when
 An easy optimization to improve performance is to disable the last access time file attribute (`noatime`).
 By disabling `noatime`, the system can avoid unnecessary disk I/O operations and reduce the overall overhead of file system access.
 
-Ideally, when provisioning a new Kafka cluster or topic, the retention policy should be set properly based on requirements and expected throughput (measured in MB/s). 
-Inactive segments can be deleted based on specific retention policies, such as `segment.ms` or `segment.bytes`.
-If one record is not yet eligible for deletion based on `retention.ms` or `retention.bytes`, the broker retains the entire segment file.
-When the topic combines both time and size-based retention policies, the size-based policy defines the upper cap.
+Ideally, when provisioning a new Kafka cluster or topic, the retention policy should be set properly based on requirements and expected throughput (MB/s).
+Log segments become inactive after a period of time determined by `segment.ms`, or after reaching a certain size determined by `segment.bytes`.
+By default and if you don't set your own, the record's time is set by the producer application with the current time of its system clock.
+If only one record is not yet eligible for deletion based on `retention.ms` or `retention.bytes`, the broker retains the entire segment file.
+For this reason, it is usually recommended to set both time and size based retention, and you can also set `log.message.timestamp.type=LogAppendTime`.
 Deletion timing also depends on the cluster load and how many `background.threads` are available for normal topics, and `log.cleaner.threads` for compacted topics.
-The required storage capacity can be calculated based on the message retention.
+The required storage capacity can be  estimated based on the calculation from message write rate and the retention policy.
 
-```sh
-# time-based retention
-storage_capacity (MB) = retention_sec * topic_write_rate (MB/s) * replication_factor
+- Time based storage capacity (MB) = retention_sec * topic_write_rate (MB/s) * replication_factor
+- Size based storage capacity (MB) = retention_mb * replication_factor
 
-# size-based retention
-storage_capacity (MB) = retention_mb * replication_factor
-```
+When very old segments are not deleted in your cluster, you should confirm that there are future timestamps by consuming all records or using the dump tool.
+If there are some, you can fix the issue by adding the size based retention configuration, taking care of not deleting good data.
+Additionally, you can also set `log.message.timestamp.type=LogAppendTime` at the broker level.
 
 In OpenShift, a persistent volume (PV) lives outside any namespace, and it is claimed by using a persistent volume claim (PVC).
 You can specify the storage class (SC) used for provisioning directly in the Kafka CR.
