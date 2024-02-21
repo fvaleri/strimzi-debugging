@@ -49,7 +49,7 @@ $ kubectl patch k my-cluster --type merge -p '
           tls: true'
 kafka.kafka.strimzi.io/my-cluster patched
 
-$ for f in sessions/003/resources/*.yaml; do sed "s/namespace: .*/namespace: $INIT_NAMESPACE/g" $f \
+$ for f in sessions/003/resources/*.yaml; do sed "s/namespace: .*/namespace: $NAMESPACE/g" $f \
   | kubectl create -f - --dry-run=client -o yaml | kubectl replace --force -f -; done
 clusterrole.rbac.authorization.k8s.io "apicurioregistry-editor-role" deleted
 clusterrole.rbac.authorization.k8s.io "apicurioregistry-viewer-role" deleted

@@ -2,7 +2,7 @@
   "spec": {
     "containers": [
       {
-        "name": "strimzi-debug",
+        "name": "ubi",
         "image": "registry.access.redhat.com/ubi8/ubi:8.4",
         "imagePullPolicy": "IfNotPresent",
         "command": [

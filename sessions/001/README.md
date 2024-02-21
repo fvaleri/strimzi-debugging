@@ -257,14 +257,14 @@ $ curl -s https://raw.githubusercontent.com/strimzi/strimzi-kafka-operator/main/
 deployments
     deployment.apps/my-cluster-entity-operator
 statefulsets
-    statefulset.apps/my-cluster-kafka
-    statefulset.apps/my-cluster-zookeeper
 replicasets
-    replicaset.apps/my-cluster-entity-operator-6b68959588
+    replicaset.apps/my-cluster-entity-operator-7d576599c5
 configmaps
     configmap/my-cluster-entity-topic-operator-config
     configmap/my-cluster-entity-user-operator-config
-    configmap/my-cluster-kafka-config
+    configmap/my-cluster-kafka-0
+    configmap/my-cluster-kafka-1
+    configmap/my-cluster-kafka-2
     configmap/my-cluster-zookeeper-config
 secrets
     secret/my-cluster-clients-ca
@@ -276,14 +276,9 @@ secrets
     secret/my-cluster-entity-user-operator-certs
     secret/my-cluster-kafka-brokers
     secret/my-cluster-zookeeper-nodes
-    secret/my-user
 services
-    service/my-cluster-kafka-0
-    service/my-cluster-kafka-1
-    service/my-cluster-kafka-2
     service/my-cluster-kafka-bootstrap
     service/my-cluster-kafka-brokers
-    service/my-cluster-kafka-external-bootstrap
     service/my-cluster-zookeeper-client
     service/my-cluster-zookeeper-nodes
 poddisruptionbudgets
@@ -295,10 +290,11 @@ rolebindings
     rolebinding.rbac.authorization.k8s.io/my-cluster-entity-topic-operator-role
     rolebinding.rbac.authorization.k8s.io/my-cluster-entity-user-operator-role
 networkpolicies
+    networkpolicy.networking.k8s.io/my-cluster-entity-operator
     networkpolicy.networking.k8s.io/my-cluster-network-policy-kafka
     networkpolicy.networking.k8s.io/my-cluster-network-policy-zookeeper
 pods
-    pod/my-cluster-entity-operator-6b68959588-6fqcb
+    pod/my-cluster-entity-operator-7d576599c5-9q22j
     pod/my-cluster-kafka-0
     pod/my-cluster-kafka-1
     pod/my-cluster-kafka-2
@@ -314,24 +310,24 @@ persistentvolumeclaims
     persistentvolumeclaim/data-my-cluster-zookeeper-2
 ingresses
 routes
-    route.route.openshift.io/my-cluster-kafka-0
-    route.route.openshift.io/my-cluster-kafka-1
-    route.route.openshift.io/my-cluster-kafka-2
-    route.route.openshift.io/my-cluster-kafka-bootstrap
 clusterroles
+    clusterrole.rbac.authorization.k8s.io/strimzi-cluster-operator-global
+    clusterrole.rbac.authorization.k8s.io/strimzi-cluster-operator-leader-election
+    clusterrole.rbac.authorization.k8s.io/strimzi-cluster-operator-namespaced
+    clusterrole.rbac.authorization.k8s.io/strimzi-cluster-operator-watched
     clusterrole.rbac.authorization.k8s.io/strimzi-entity-operator
     clusterrole.rbac.authorization.k8s.io/strimzi-kafka-broker
     clusterrole.rbac.authorization.k8s.io/strimzi-kafka-client
 clusterrolebindings
-podlogs
-    my-cluster-entity-operator-6b68959588-6fqcb
-    my-cluster-kafka-0
-    my-cluster-kafka-1
-    my-cluster-kafka-2
-    my-cluster-zookeeper-0
-    my-cluster-zookeeper-1
-    my-cluster-zookeeper-2
+    clusterrolebinding.rbac.authorization.k8s.io/strimzi-cluster-operator
+    clusterrolebinding.rbac.authorization.k8s.io/strimzi-cluster-operator-kafka-broker-delegation
+    clusterrolebinding.rbac.authorization.k8s.io/strimzi-cluster-operator-kafka-client-delegation
 clusteroperator
+    deployment.apps/strimzi-cluster-operator
+    replicaset.apps/strimzi-cluster-operator-85b9b646cc
+replicaset.apps/strimzi-cluster-operator-86948f6756
+    pod/strimzi-cluster-operator-85b9b646cc-dvjfh
+    configmap/strimzi-cluster-operator
 draincleaner
 customresources
     kafkas.kafka.strimzi.io
@@ -341,19 +337,17 @@ customresources
         my-topic
         strimzi-store-topic---effb8e3e057afce1ecf67c3f5d8e4e3ff177fc55
         strimzi-topic-operator-kstreams-topic-store-changelog---b75e702040b99be8a9263134de3507fc0cc4017b
-    kafkausers.kafka.strimzi.io
-        my-user
-customresourcedefinitions
-    kafkabridges.kafka.strimzi.io
-    kafkaconnectors.kafka.strimzi.io
-    kafkaconnects.kafka.strimzi.io
-    kafkamirrormaker2s.kafka.strimzi.io
-    kafkamirrormakers.kafka.strimzi.io
-    kafkarebalances.kafka.strimzi.io
-    kafkas.kafka.strimzi.io
-    kafkatopics.kafka.strimzi.io
-    kafkausers.kafka.strimzi.io
     strimzipodsets.core.strimzi.io
+        my-cluster-kafka
+        my-cluster-zookeeper
 events
-Report file report-08-09-2022_18-49-41.zip created
+logs
+    my-cluster-kafka-0
+    my-cluster-kafka-1
+    my-cluster-kafka-2
+    my-cluster-zookeeper-0
+    my-cluster-zookeeper-1
+    my-cluster-zookeeper-2
+    my-cluster-entity-operator-7d576599c5-9q22j
+Report file report-21-02-2024_15-11-18.zip created
 ```
