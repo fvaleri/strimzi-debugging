@@ -34,14 +34,17 @@ If this is a requirement, you can create a single-partition topic or use the sam
 Beware that increasing topic partitions may break ordering.
 
 The partition replication protocol is fundamental to Kafka.
-Replication ensures durability and high availability by spreading partition replicas across brokers.
-Kafka is fast because it relies on the OS page cache for disk writes (no fsync call except for the new KRaft internal topic), so it's really important that you set the right amount of replicas for your use case.
-One of these replicas is elected as the leader that gets all messages from producers, while the others are followers and can be read by consumers.
-If you set a topic replication factor of N, the system can tolerate N-1 broker failures.
-The last committed offset of a partition is called the high watermark (HW).
-Records are guaranteed to be fully replicated up to this offset and only committed records are exposed to consumers.
+By default, when a new batch of messages arrives, it is firstly written into the Operating System's page cache, and only flushed to disk asynchronously.
+If the Kafka JVM crashes for whatever reason, recent messages are still in the page cache, and will be flushed by the Operating System.
+However, this doesn't protect from data loss when the machine crashes.
+This is why enabling topic replication is important: Having multiple replicas means data loss is only possible if multiple brokers can crash simultaneously.
+To further improve fault tolerance (for example if brokers do not have independent power supplies), a rack-aware Kafka cluster can be used to distribute topic replicas evenly across data centers in the same geographic region.
 
 <p align="center"><img src="images/replicas.png" height=450/></p>
+
+One of the partition replicas is elected as the leader that gets all messages from producers, while the others are followers and can be read by consumers.
+If you set a topic replication factor of N, the system can tolerate N-1 broker failures.
+The last committed offset of a partition is called the high watermark (HW).
 
 When sending messages, a producer with `acks=all` configuration (now default) will not get a send acknowledgement until all `min.insync.replicas` (ISR) have replicated the message.
 At any time, the ISR only includes replicas that are up to date.
