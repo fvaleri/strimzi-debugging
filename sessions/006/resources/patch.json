@@ -8,21 +8,31 @@
         "command": [
           "/bin/bash",
           "-c",
-          "trap : TERM INT; sleep infinity & wait"
+          "cp -R /old/* /new"
         ],
         "volumeMounts": [
           {
-            "name": "data",
-            "mountPath": "/data"
+            "name": "old",
+            "mountPath": "/old"
+          },
+          {
+            "name": "new",
+            "mountPath": "/new"
           }
         ]
       }
     ],
     "volumes": [
       {
-        "name": "data",
+        "name": "old",
         "persistentVolumeClaim": {
-          "claimName": "SED_CLAIM"
+          "claimName": "SED_OLD_CLAIM"
+        }
+      },
+      {
+        "name": "new",
+        "persistentVolumeClaim": {
+          "claimName": "SED_NEW_CLAIM"
         }
       }
     ]

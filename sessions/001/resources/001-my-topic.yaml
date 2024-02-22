@@ -10,5 +10,3 @@ spec:
   replicas: 3
   config:
     min.insync.replicas: 2
-    # this is to avoid filling up the disk with perf tests
-    retention.bytes: 1073741824

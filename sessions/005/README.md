@@ -138,11 +138,18 @@ Additionally, even a source cluster with moderate throughput can create a signif
 In this case MM2 replication is slow even if you have a fast network, because default producers are not optimized for throughput.
 
 Let's run a load test and see how fast we can replicate data with default settings.
+In this case, ee set a small retention policy to avoid filling up the disk with our perf tests.
 By looking at `MirrorSourceConnector` task metrics, we see that we are saturating the producer buffer (default: 16384 bytes) and creating a bottleneck.
 
 ```sh
 $ kubectl -n "$NAMESPACE" scale kmm2 my-mm2 --replicas 0
 kafkamirrormaker2.kafka.strimzi.io/my-mm2 scaled
+
+$ kubectl patch kt my-topic --type merge -p '
+    spec:
+      config:
+        retention.bytes: 1073741824'
+kafkatopic.kafka.strimzi.io/my-topic patched
 
 $ kubectl-kafka bin/kafka-producer-perf-test.sh --topic my-topic --record-size 100 --num-records 30000000 \
   --throughput -1 --producer-props acks=1 bootstrap.servers=my-cluster-kafka-bootstrap:9092
@@ -213,7 +220,7 @@ kafkamirrormaker2.kafka.strimzi.io/my-mm2 patched
 $ kubectl -n "$NAMESPACE" scale kmm2 my-mm2 --replicas 0
 kafkamirrormaker2.kafka.strimzi.io/my-mm2 scaled
 
-$ kubectl-kafka bin/kafka-producer-perf-test.sh --topic mm2-tuning-topic --record-size 100 --num-records 30000000 \
+$ kubectl-kafka bin/kafka-producer-perf-test.sh --topic my-topic --record-size 100 --num-records 30000000 \
   --throughput -1 --producer-props acks=1 bootstrap.servers=my-cluster-kafka-bootstrap:9092
 253179 records sent, 250585.7 records/sec (23.90 MB/sec), 15.5 ms avg latency, 324.0 ms max latency.
 ...

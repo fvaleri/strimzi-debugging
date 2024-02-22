@@ -72,9 +72,9 @@ $ kubectl logs my-cluster-kafka-0 | grep "No space left on device" | tail -n1
 java.io.IOException: No space left on device
 ```
 
+Even if not all pods failed, like in this case, we still need to increase the volume size of all brokers because the storage configuration is shared.
 If volume expansion is supported, you can simply edit the Kafka Custom Resource (CR) to specify the desired disk size increase, and the operator will handle the rest of the process. 
 However, it's important to note that the expansion process may take some time to complete, depending on the size of the volume and the available resources in the cluster.
-We didn't specify any storage class, so we have been assigned the default one.
 
 ```sh
 $ kubectl get sc $(kubectl get pv | grep data-my-cluster-kafka-0 | awk '{print $7}') -o yaml | yq '.allowVolumeExpansion'
@@ -109,208 +109,245 @@ my-cluster-kafka-2                            1/1     Running   0             4m
 ### Example: no space left on device WITHOUT volume expansion
 
 First, we [deploy the Strimzi Cluster Operator and Kafka cluster](/sessions/001).
-When the cluster is ready, we purposely break it by sending 11 GiB of data to a topic with a replication factor of 3 (33 GiB in total), which exceeds the combined cluster disk capacity of 30 GiB.
+When the cluster is ready, we break it by sending 11 GiB of data to a topic, which exceeds the disk capacity of 10 GiB.
 
 ```sh
-$ kubectl get pv | grep kafka
-pvc-2e3c7665-2b92-4376-bb1d-22b1d23fcc6a   10Gi       RWO            Delete           Bound    test/data-my-cluster-kafka-2       gp2                     4m1s
-pvc-b1e5e0a3-ab83-487f-9b81-c38e1badfccc   10Gi       RWO            Delete           Bound    test/data-my-cluster-kafka-0       gp2                     4m1s
-pvc-e66030cd-3992-4adc-9d94-d9d4ab164a45   10Gi       RWO            Delete           Bound    test/data-my-cluster-kafka-1       gp2                     4m1s
+$ KAFKA_PODS="$(kubectl get po -l strimzi.io/name=my-cluster-kafka --no-headers -o custom-columns=':metadata.name')" \
+  NEW_PV_CLASS="$(kubectl get pv | grep my-cluster-kafka-0 | awk '{print $7}')" \
+  NEW_PV_SIZE="20Gi"
+  
+$ kubectl get pvc -l strimzi.io/name=my-cluster-kafka
+NAME                      STATUS   VOLUME                                     CAPACITY   ACCESS MODES   STORAGECLASS                           AGE
+data-my-cluster-kafka-0   Bound    pvc-04b55551-fe7f-4662-9955-5e4baaf4df57   10Gi       RWO            ocs-external-storagecluster-ceph-rbd   106s
+data-my-cluster-kafka-1   Bound    pvc-18280833-16a8-4cd5-8c6f-eb764acd3ce9   10Gi       RWO            ocs-external-storagecluster-ceph-rbd   106s
+data-my-cluster-kafka-2   Bound    pvc-a148ee8b-2eef-422b-a35e-b71714b1ef85   10Gi       RWO            ocs-external-storagecluster-ceph-rbd   106s
 
-$ kubectl-kafka bin/kafka-producer-perf-test.sh --topic my-topic --record-size 1000 --num-records 12000000 \
+$ kubectl-kafka bin/kafka-producer-perf-test.sh --topic my-topic --record-size 1000 --num-records 11000000 \
   --throughput -1 --producer-props acks=1 bootstrap.servers=my-cluster-kafka-bootstrap:9092
-287699 records sent, 57528.3 records/sec (54.86 MB/sec), 144.6 ms avg latency, 455.0 ms max latency.
-309618 records sent, 61923.6 records/sec (59.05 MB/sec), 29.1 ms avg latency, 132.0 ms max latency.
-301344 records sent, 60268.8 records/sec (57.48 MB/sec), 53.2 ms avg latency, 361.0 ms max latency.
+289857 records sent, 57971.4 records/sec (55.29 MB/sec), 454.4 ms avg latency, 1810.0 ms max latency.
+550224 records sent, 110044.8 records/sec (104.95 MB/sec), 297.4 ms avg latency, 1658.0 ms max latency.
+599168 records sent, 119833.6 records/sec (114.28 MB/sec), 276.1 ms avg latency, 1642.0 ms max latency.
+605376 records sent, 121075.2 records/sec (115.47 MB/sec), 271.0 ms avg latency, 1634.0 ms max latency.
 ...
-[2022-10-14 15:14:26,695] WARN [Producer clientId=perf-producer-client] Connection to node 2 (my-cluster-kafka-2.my-cluster-kafka-brokers.test.svc/10.128.2.32:9092) could not be established. Broker may not be available. (org.apache.kafka.clients.NetworkClient)
-[2022-10-14 15:14:26,885] WARN [Producer clientId=perf-producer-client] Connection to node 0 (my-cluster-kafka-0.my-cluster-kafka-brokers.test.svc/10.129.2.59:9092) could not be established. Broker may not be available. (org.apache.kafka.clients.NetworkClient)
-[2022-10-14 15:14:27,036] WARN [Producer clientId=perf-producer-client] Connection to node 1 (my-cluster-kafka-1.my-cluster-kafka-brokers.test.svc/10.131.0.37:9092) could not be established. Broker may not be available. (org.apache.kafka.clients.NetworkClient)
-^C
+[2024-02-22 20:12:53,830] WARN [Producer clientId=perf-producer-client] Connection to node 1 (my-cluster-kafka-1.my-cluster-kafka-brokers.test.svc/10.134.0.55:9092) could not be established. Node may not be available. (org.apache.kafka.clients.NetworkClient)
+[2024-02-22 20:12:54,160] WARN [Producer clientId=perf-producer-client] Connection to node 0 (my-cluster-kafka-0.my-cluster-kafka-brokers.test.svc/10.132.2.63:9092) could not be established. Node may not be available. (org.apache.kafka.clients.NetworkClient)...
+...
 
-$ kubectl get po | grep kafka
-my-cluster-kafka-0                            0/1     CrashLoopBackOff   3 (26s ago)   15m
-my-cluster-kafka-1                            0/1     CrashLoopBackOff   3 (26s ago)   15m
-my-cluster-kafka-2                            0/1     CrashLoopBackOff   3 (20s ago)   15m
+$ kubectl get po -l strimzi.io/name=my-cluster-kafka
+NAME                 READY   STATUS             RESTARTS      AGE
+my-cluster-kafka-0   0/1     CrashLoopBackOff   3 (10s ago)   5m49s
+my-cluster-kafka-1   0/1     CrashLoopBackOff   3 (14s ago)   5m49s
+my-cluster-kafka-2   1/1     Running            0             5m49s
 
 $ kubectl logs my-cluster-kafka-0 | grep "No space left on device" | tail -n1
 java.io.IOException: No space left on device
 ```
 
-**We now set the persistent volume reclaim policy to Retain to avoid losing our data.**
+Even if not all pods failed, like in this case, we still need to increase the volume size of all brokers because the storage configuration is shared.
+**Make sure that the delete claim storage configuration is set to false in Kafka resource, and only then delete the Kafka cluster.**
 
 ```sh
-$ kubectl get pv | grep my-cluster
-NAME                                       CAPACITY   ACCESS MODES   RECLAIM POLICY   STATUS   CLAIM                              STORAGECLASS   REASON   AGE
-pvc-162c6551-f05f-4c89-9319-637a4b3d417c   5Gi        RWO            Delete           Bound    test/data-my-cluster-zookeeper-1   gp2                     2m50s
-pvc-3c131641-dca8-4648-8cfb-ea844145a5a3   5Gi        RWO            Delete           Bound    test/data-my-cluster-zookeeper-2   gp2                     2m50s
-pvc-566ffb72-4b5e-454e-8e40-03877f0100e5   10Gi       RWO            Delete           Bound    test/data-my-cluster-kafka-2       gp2                     79s
-pvc-8587e7b0-bedd-494c-b43f-0f249cec03c7   10Gi       RWO            Delete           Bound    test/data-my-cluster-kafka-0       gp2                     79s
-pvc-c2cb8453-b953-4bb1-83b5-f4e4c76fbf91   10Gi       RWO            Delete           Bound    test/data-my-cluster-kafka-1       gp2                     79s
-pvc-f5b75d58-b621-4cf9-8c5c-2e9215b268e0   5Gi        RWO            Delete           Bound    test/data-my-cluster-zookeeper-0   gp2                     2m50s
+$ kubectl get k my-cluster -o yaml | yq '.spec.kafka.storage.deleteClaim'
+false
 
-$ for pv in $(kubectl get pv | grep "my-cluster" | awk '{print $1}'); do
+$ kubectl delete k my-cluster
+kafka.kafka.strimzi.io "my-cluster" deleted
+```
+
+Create new bigger volumes for our brokers (10Gi -> 20Gi).
+
+```sh
+$ for pod in $KAFKA_PODS; do
+echo "kind: PersistentVolumeClaim
+apiVersion: v1
+metadata:
+  name: data-$pod-new
+  labels:
+    strimzi.io/name: my-cluster-kafka
+spec:
+  accessModes:
+    - ReadWriteOnce
+  storageClassName: $NEW_PV_CLASS
+  resources:
+    requests:
+      storage: $NEW_PV_SIZE" | kubectl create -f -
+done
+persistentvolumeclaim/data-my-cluster-kafka-0-new created
+persistentvolumeclaim/data-my-cluster-kafka-1-new created
+persistentvolumeclaim/data-my-cluster-kafka-2-new created
+
+$ kubectl get pvc -l strimzi.io/name=my-cluster-kafka
+NAME                          STATUS   VOLUME                                     CAPACITY   ACCESS MODES   STORAGECLASS                           AGE
+data-my-cluster-kafka-0       Bound    pvc-04b55551-fe7f-4662-9955-5e4baaf4df57   10Gi       RWO            ocs-external-storagecluster-ceph-rbd   6m11s
+data-my-cluster-kafka-0-new   Bound    pvc-1a66039a-14e7-4416-9319-6d6437543c02   20Gi       RWO            ocs-external-storagecluster-ceph-rbd   9s
+data-my-cluster-kafka-1       Bound    pvc-18280833-16a8-4cd5-8c6f-eb764acd3ce9   10Gi       RWO            ocs-external-storagecluster-ceph-rbd   6m11s
+data-my-cluster-kafka-1-new   Bound    pvc-0bd38196-2f5b-4a05-8917-b43bd2dde50b   20Gi       RWO            ocs-external-storagecluster-ceph-rbd   8s
+data-my-cluster-kafka-2       Bound    pvc-a148ee8b-2eef-422b-a35e-b71714b1ef85   10Gi       RWO            ocs-external-storagecluster-ceph-rbd   6m11s
+data-my-cluster-kafka-2-new   Bound    pvc-ca348d35-f466-446e-9f93-e3c15722d214   20Gi       RWO            ocs-external-storagecluster-ceph-rbd   7s
+```
+
+**Set the persistent volume reclaim policy to Retain to avoid losing broker data when deleting kafka PVCs.**
+
+```sh
+$ kubectl get pv | grep my-cluster-kafka
+pvc-04b55551-fe7f-4662-9955-5e4baaf4df57   10Gi       RWO            Delete           Bound    test/data-my-cluster-kafka-0                                         ocs-external-storagecluster-ceph-rbd            6m24s
+pvc-0bd38196-2f5b-4a05-8917-b43bd2dde50b   20Gi       RWO            Delete           Bound    test/data-my-cluster-kafka-1-new                                     ocs-external-storagecluster-ceph-rbd            21s
+pvc-18280833-16a8-4cd5-8c6f-eb764acd3ce9   10Gi       RWO            Delete           Bound    test/data-my-cluster-kafka-1                                         ocs-external-storagecluster-ceph-rbd            6m24s
+pvc-1a66039a-14e7-4416-9319-6d6437543c02   20Gi       RWO            Delete           Bound    test/data-my-cluster-kafka-0-new                                     ocs-external-storagecluster-ceph-rbd            21s
+pvc-a148ee8b-2eef-422b-a35e-b71714b1ef85   10Gi       RWO            Delete           Bound    test/data-my-cluster-kafka-2                                         ocs-external-storagecluster-ceph-rbd            6m24s
+pvc-ca348d35-f466-446e-9f93-e3c15722d214   20Gi       RWO            Delete           Bound    test/data-my-cluster-kafka-2-new                                     ocs-external-storagecluster-ceph-rbd            20s
+
+$ for pv in $(kubectl get pv | grep my-cluster-kafka | awk '{print $1}'); do
   kubectl patch pv $pv --type merge -p '
-    metadata:
-      labels:
-        app: retain-patch
     spec:
       persistentVolumeReclaimPolicy: Retain'
 done
-persistentvolume/pvc-162c6551-f05f-4c89-9319-637a4b3d417c patched
-persistentvolume/pvc-3c131641-dca8-4648-8cfb-ea844145a5a3 patched
-persistentvolume/pvc-566ffb72-4b5e-454e-8e40-03877f0100e5 patched
-persistentvolume/pvc-8587e7b0-bedd-494c-b43f-0f249cec03c7 patched
-persistentvolume/pvc-c2cb8453-b953-4bb1-83b5-f4e4c76fbf91 patched
-persistentvolume/pvc-f5b75d58-b621-4cf9-8c5c-2e9215b268e0 patched
+persistentvolume/pvc-36fb911c-ded7-4c2a-ba58-1af76b2d4c53 patched
+persistentvolume/pvc-4f4612c3-f81b-4d53-b14d-93e0dc9470d3 patched
+persistentvolume/pvc-6ab420ec-f31c-4903-9e51-7d800c0291b2 patched
+persistentvolume/pvc-81172edf-0c14-4434-9e70-880ebadc71a9 patched
+persistentvolume/pvc-961db1cb-529c-442f-8106-bc9aaf5adf38 patched
+persistentvolume/pvc-aea941e3-f13d-4676-ae50-6865e97aee8e patched
 
-$ kubectl get pv | grep my-cluster
-NAME                                       CAPACITY   ACCESS MODES   RECLAIM POLICY   STATUS   CLAIM                              STORAGECLASS   REASON   AGE
-pvc-162c6551-f05f-4c89-9319-637a4b3d417c   5Gi        RWO            Retain           Bound    test/data-my-cluster-zookeeper-1   gp2                     3m22s
-pvc-3c131641-dca8-4648-8cfb-ea844145a5a3   5Gi        RWO            Retain           Bound    test/data-my-cluster-zookeeper-2   gp2                     3m22s
-pvc-566ffb72-4b5e-454e-8e40-03877f0100e5   10Gi       RWO            Retain           Bound    test/data-my-cluster-kafka-2       gp2                     111s
-pvc-8587e7b0-bedd-494c-b43f-0f249cec03c7   10Gi       RWO            Retain           Bound    test/data-my-cluster-kafka-0       gp2                     111s
-pvc-c2cb8453-b953-4bb1-83b5-f4e4c76fbf91   10Gi       RWO            Retain           Bound    test/data-my-cluster-kafka-1       gp2                     111s
-pvc-f5b75d58-b621-4cf9-8c5c-2e9215b268e0   5Gi        RWO            Retain           Bound    test/data-my-cluster-zookeeper-0   gp2                     3m22s
+$ kubectl get pv | grep my-cluster-kafka
+pvc-04b55551-fe7f-4662-9955-5e4baaf4df57   10Gi       RWO            Retain           Bound    test/data-my-cluster-kafka-0                                         ocs-external-storagecluster-ceph-rbd            6m48s
+pvc-0bd38196-2f5b-4a05-8917-b43bd2dde50b   20Gi       RWO            Retain           Bound    test/data-my-cluster-kafka-1-new                                     ocs-external-storagecluster-ceph-rbd            45s
+pvc-18280833-16a8-4cd5-8c6f-eb764acd3ce9   10Gi       RWO            Retain           Bound    test/data-my-cluster-kafka-1                                         ocs-external-storagecluster-ceph-rbd            6m48s
+pvc-1a66039a-14e7-4416-9319-6d6437543c02   20Gi       RWO            Retain           Bound    test/data-my-cluster-kafka-0-new                                     ocs-external-storagecluster-ceph-rbd            45s
+pvc-a148ee8b-2eef-422b-a35e-b71714b1ef85   10Gi       RWO            Retain           Bound    test/data-my-cluster-kafka-2                                         ocs-external-storagecluster-ceph-rbd            6m48s
+pvc-ca348d35-f466-446e-9f93-e3c15722d214   20Gi       RWO            Retain           Bound    test/data-my-cluster-kafka-2-new                                     ocs-external-storagecluster-ceph-rbd            44s
 ```
 
-After this, we can safely delete the Kafka cluster and the associated claims, so that our volumes will become Released.
+Copy all broker data from the old volumes to the new volumes using a maintenance pod.
+Note that these commands may take some time, depending on the amount of data to copy.
 
 ```sh
-$ kubectl delete k my-cluster
-kafka.kafka.strimzi.io "my-cluster" deleted
+# TODO: simplify these commands
+kubectl run kubectl-copy-broker-0 -itq --rm --restart "Never" --image "dummy" --overrides \
+  "$(sed "s/SED_OLD_CLAIM/data-my-cluster-kafka-0/g; s/SED_NEW_CLAIM/data-my-cluster-kafka-0-new/g" sessions/006/resources/patch.json)"
+kubectl run kubectl-copy-broker-1 -itq --rm --restart "Never" --image "dummy" --overrides \
+  "$(sed "s/SED_OLD_CLAIM/data-my-cluster-kafka-1/g; s/SED_NEW_CLAIM/data-my-cluster-kafka-1-new/g" sessions/006/resources/patch.json)"
+kubectl run kubectl-copy-broker-2 -itq --rm --restart "Never" --image "dummy" --overrides \
+  "$(sed "s/SED_OLD_CLAIM/data-my-cluster-kafka-2/g; s/SED_NEW_CLAIM/data-my-cluster-kafka-2-new/g" sessions/006/resources/patch.json)"
+```
 
-$ kubectl delete pvc -l strimzi.io/name=my-cluster-kafka \
-  && kubectl delete pvc -l strimzi.io/name=my-cluster-zookeeper
+After that, we need to create the conditions for them to be reattached by the Kafka cluster.
+Delete the all Kafka PVCs and PV claim references, just before creating the final PVCs with the new storage size.
+
+```sh
+$ for pod in $KAFKA_PODS; do
+PVC_NAMES="$(kubectl get pvc | grep data-$pod | awk '{print $1}')"
+kubectl delete pvc $PVC_NAMES
+PV_NAMES="$(kubectl get pv | grep data-$pod | awk '{print $1}')"
+NEW_PV_NAME="$(kubectl get pv | grep data-$pod-new | awk '{print $1}')"
+kubectl patch pv $PV_NAMES --type json -p '[{"op":"remove","path":"/spec/claimRef"}]'
+echo -e "apiVersion: v1
+kind: PersistentVolumeClaim
+metadata:
+  name: data-$pod
+  labels:
+    strimzi.io/name: my-cluster-kafka
+spec:
+  accessModes:
+    - ReadWriteOnce
+  resources:
+    requests:
+      storage: $NEW_PV_SIZE
+  storageClassName: $NEW_PV_CLASS
+  volumeName: $NEW_PV_NAME" | kubectl create -f -
+done
 persistentvolumeclaim "data-my-cluster-kafka-0" deleted
-persistentvolumeclaim "data-my-cluster-kafka-1" deleted
-persistentvolumeclaim "data-my-cluster-kafka-2" deleted
-persistentvolumeclaim "data-my-cluster-zookeeper-0" deleted
-persistentvolumeclaim "data-my-cluster-zookeeper-1" deleted
-persistentvolumeclaim "data-my-cluster-zookeeper-2" deleted
-
-$ kubectl get pv | grep my-cluster
-NAME                                       CAPACITY   ACCESS MODES   RECLAIM POLICY   STATUS      CLAIM                              STORAGECLASS   REASON   AGE
-pvc-162c6551-f05f-4c89-9319-637a4b3d417c   5Gi        RWO            Retain           Released    test/data-my-cluster-zookeeper-1   gp2                     3m22s
-pvc-3c131641-dca8-4648-8cfb-ea844145a5a3   5Gi        RWO            Retain           Released    test/data-my-cluster-zookeeper-2   gp2                     3m22s
-pvc-566ffb72-4b5e-454e-8e40-03877f0100e5   10Gi       RWO            Retain           Released    test/data-my-cluster-kafka-2       gp2                     111s
-pvc-8587e7b0-bedd-494c-b43f-0f249cec03c7   10Gi       RWO            Retain           Released    test/data-my-cluster-kafka-0       gp2                     111s
-pvc-c2cb8453-b953-4bb1-83b5-f4e4c76fbf91   10Gi       RWO            Retain           Released    test/data-my-cluster-kafka-1       gp2                     111s
-pvc-f5b75d58-b621-4cf9-8c5c-2e9215b268e0   5Gi        RWO            Retain           Released    test/data-my-cluster-zookeeper-0   gp2                     3m22s
-```
-
-These volumes can now be mounted by a maintenance pod, for example for moving all data to a bigger volume.
-Here, I'm just showing the log.dirs folder on broker-0.
-
-```sh
-$ kubectl run strimzi-debug --image "dummy" --restart "Never" \
-  --overrides "$(sed "s/SED_CLAIM/data-my-cluster-kafka-0/g" sessions/006/resources/patch.json)"
-pod/recovery created
-
-$ kubectl exec -it strimzi-debug -- ls -lh /data/kafka-log0/my-topic-0
-total 3.3G
--rw-rw-r--. 1 1000660000 1000660000 321K Sep 23 07:49 00000000000000000000.index
--rw-rw-r--. 1 1000660000 1000660000 1.0G Sep 23 07:49 00000000000000000000.log
--rw-rw-r--. 1 1000660000 1000660000 340K Sep 23 07:49 00000000000000000000.timeindex
--rw-rw-r--. 1 1000660000 1000660000 381K Sep 23 07:51 00000000000009703326.index
--rw-rw-r--. 1 1000660000 1000660000 1.0G Sep 23 07:51 00000000000009703326.log
--rw-rw-r--. 1 1000660000 1000660000   10 Sep 23 07:49 00000000000009703326.snapshot
--rw-rw-r--. 1 1000660000 1000660000 392K Sep 23 07:51 00000000000009703326.timeindex
--rw-rw-r--. 1 1000660000 1000660000 414K Sep 23 07:53 00000000000019401640.index
--rw-rw-r--. 1 1000660000 1000660000 1.0G Sep 23 07:53 00000000000019401640.log
--rw-rw-r--. 1 1000660000 1000660000   10 Sep 23 07:51 00000000000019401640.snapshot
--rw-rw-r--. 1 1000660000 1000660000 422K Sep 23 07:53 00000000000019401640.timeindex
--rw-rw-r--. 1 1000660000 1000660000  10M Sep 23 07:53 00000000000029095294.index
--rw-rw-r--. 1 1000660000 1000660000 296M Sep 23 07:53 00000000000029095294.log
--rw-rw-r--. 1 1000660000 1000660000   10 Sep 23 07:53 00000000000029095294.snapshot
--rw-rw-r--. 1 1000660000 1000660000  10M Sep 23 07:53 00000000000029095294.timeindex
--rw-rw-r--. 1 1000660000 1000660000    8 Sep 23 07:47 leader-epoch-checkpoint
--rw-rw-r--. 1 1000660000 1000660000   43 Sep 23 07:45 partition.metadata
-```
-
-After the maintenance is completed, we need to create the conditions so that the new volumes can be reattached by the new Kafka cluster.
-We use a simple script to collect all required data from the retained PVs, remove the old `claimRef` metadata and create the new PVCs.
-Volumes are `Bound` again, and they should be reattached if we deploy a new Kafka cluster with the same configuration.
-
-```sh
-$ for line in $(kubectl get pv | grep "my-cluster" | awk '{print $1 "#" $2 "#" $6 "#" $7}'); do
-  pvc="$(echo $line | awk -F'#' '{print $3}' | sed 's|test\/||g')"
-  size="$(echo $line | awk -F'#' '{print $2}')"
-  sc="$(echo $line | awk -F'#' '{print $4}')"
-  pv="$(echo $line | awk -F'#' '{print $1}')"
-  kubectl patch pv "$pv" --type json -p '[{"op":"remove","path":"/spec/claimRef"}]'
-  sed "s/SED_NAME/$pvc/g; s/SED_SIZE/$size/g; s/SED_CLASS/$sc/g; s/SED_VOLUME/$pv/g" \
-    sessions/006/resources/pvc.yaml | kubectl create -f -
-done
-persistentvolume/pvc-162c6551-f05f-4c89-9319-637a4b3d417c patched
-persistentvolumeclaim/data-my-cluster-zookeeper-1 created
-persistentvolume/pvc-3c131641-dca8-4648-8cfb-ea844145a5a3 patched
-persistentvolumeclaim/data-my-cluster-zookeeper-2 created
-persistentvolume/pvc-566ffb72-4b5e-454e-8e40-03877f0100e5 patched
-persistentvolumeclaim/data-my-cluster-kafka-2 created
-persistentvolume/pvc-8587e7b0-bedd-494c-b43f-0f249cec03c7 patched
+persistentvolumeclaim "data-my-cluster-kafka-0-new" deleted
+persistentvolume/pvc-04b55551-fe7f-4662-9955-5e4baaf4df57 patched
+persistentvolume/pvc-1a66039a-14e7-4416-9319-6d6437543c02 patched
 persistentvolumeclaim/data-my-cluster-kafka-0 created
-persistentvolume/pvc-c2cb8453-b953-4bb1-83b5-f4e4c76fbf91 patched
+persistentvolumeclaim "data-my-cluster-kafka-1" deleted
+persistentvolumeclaim "data-my-cluster-kafka-1-new" deleted
+persistentvolume/pvc-0bd38196-2f5b-4a05-8917-b43bd2dde50b patched
+persistentvolume/pvc-18280833-16a8-4cd5-8c6f-eb764acd3ce9 patched
 persistentvolumeclaim/data-my-cluster-kafka-1 created
-persistentvolume/pvc-f5b75d58-b621-4cf9-8c5c-2e9215b268e0 patched
-persistentvolumeclaim/data-my-cluster-zookeeper-0 created
+persistentvolumeclaim "data-my-cluster-kafka-2" deleted
+persistentvolumeclaim "data-my-cluster-kafka-2-new" deleted
+persistentvolume/pvc-a148ee8b-2eef-422b-a35e-b71714b1ef85 patched
+persistentvolume/pvc-ca348d35-f466-446e-9f93-e3c15722d214 patched
+persistentvolumeclaim/data-my-cluster-kafka-2 created
 
-$ kubectl get pv | grep my-cluster
-NAME                                       CAPACITY   ACCESS MODES   RECLAIM POLICY   STATUS   CLAIM                              STORAGECLASS   REASON   AGE
-pvc-162c6551-f05f-4c89-9319-637a4b3d417c   5Gi        RWO            Retain           Bound    test/data-my-cluster-zookeeper-1   gp2                     6m37s
-pvc-3c131641-dca8-4648-8cfb-ea844145a5a3   5Gi        RWO            Retain           Bound    test/data-my-cluster-zookeeper-2   gp2                     6m37s
-pvc-566ffb72-4b5e-454e-8e40-03877f0100e5   10Gi       RWO            Retain           Bound    test/data-my-cluster-kafka-2       gp2                     5m6s
-pvc-8587e7b0-bedd-494c-b43f-0f249cec03c7   10Gi       RWO            Retain           Bound    test/data-my-cluster-kafka-0       gp2                     5m6s
-pvc-c2cb8453-b953-4bb1-83b5-f4e4c76fbf91   10Gi       RWO            Retain           Bound    test/data-my-cluster-kafka-1       gp2                     5m6s
-pvc-f5b75d58-b621-4cf9-8c5c-2e9215b268e0   5Gi        RWO            Retain           Bound    test/data-my-cluster-zookeeper-0   gp2                     6m37s
+$ kubectl get pvc -l strimzi.io/name=my-cluster-kafka
+NAME                      STATUS   VOLUME                                     CAPACITY   ACCESS MODES   STORAGECLASS                           AGE
+data-my-cluster-kafka-0   Bound    pvc-1a66039a-14e7-4416-9319-6d6437543c02   20Gi       RWO            ocs-external-storagecluster-ceph-rbd   15s
+data-my-cluster-kafka-1   Bound    pvc-0bd38196-2f5b-4a05-8917-b43bd2dde50b   20Gi       RWO            ocs-external-storagecluster-ceph-rbd   10s
+data-my-cluster-kafka-2   Bound    pvc-ca348d35-f466-446e-9f93-e3c15722d214   20Gi       RWO            ocs-external-storagecluster-ceph-rbd   5s
 ```
 
-Now we can deploy the new Kafka cluster.
-Note that this is actually the same Kafka cluster, because it maintains the Kafka cluster ID.
-
-**Before deploying the TO, we must delete its internal topics so that it can safely reinitialize from Kafka on startup.
-If you don't do this, there is a high change that the Topic Operator deletes all topics with your data.
-Topic deletion happens asynchronously, so always make sure to confirm that it is actually deleted.**
+Deploy the Kafka cluster with our brand new volumes, and check that it runs fine.
+**Don't forget to adjust the storage size in Kafka resource and disable the Topic Operator.**
+In order to let broker pod roll, it may be needed to set `unclean.leader.election.enable` to true.
 
 ```sh
-$ cat sessions/001/resources/000-my-cluster.yaml | yq 'del(.spec.entityOperator.topicOperator)' | kubectl create -f -
+$ cat sessions/001/resources/000-my-cluster.yaml \
+  | yq '.spec.kafka.storage.size = "20Gi"' \
+  | kubectl create -f -
 kafka.kafka.strimzi.io/my-cluster created
-kafkatopic.kafka.strimzi.io/my-topic created
 
-$ kubectl-kafka bin/kafka-topics.sh --bootstrap-server my-cluster-kafka-bootstrap:9092 --list
-__consumer_offsets
-__strimzi-topic-operator-kstreams-topic-store-changelog
-__strimzi_store_topic
-my-topic
+$ kubectl patch k my-cluster --type merge -p '
+    spec:
+      kafka:
+        config:
+          unclean.leader.election.enable: true'
+kafka.kafka.strimzi.io/my-cluster patched
 
-$ for topic in "__strimzi_store_topic" ".*topic-store-changelog"; do
-  kubectl-kafka bin/kafka-topics.sh --bootstrap-server my-cluster-kafka-bootstrap:9092 --topic $topic --delete
-done
-  
-$ kubectl-kafka bin/kafka-topics.sh --bootstrap-server my-cluster-kafka-bootstrap:9092 --list
-__consumer_offsets
-my-topic
+$ kubectl get po -l strimzi.io/cluster=my-cluster
+NAME                                          READY   STATUS    RESTARTS   AGE
+my-cluster-entity-operator-7d6d6bd454-sh7rc   3/3     Running   0          96s
+my-cluster-kafka-0                            1/1     Running   0          5m9s
+my-cluster-kafka-1                            1/1     Running   0          5m9s
+my-cluster-kafka-2                            1/1     Running   0          5m9s
+my-cluster-zookeeper-0                        1/1     Running   0          6m14s
+my-cluster-zookeeper-1                        1/1     Running   0          6m14s
+my-cluster-zookeeper-2                        1/1     Running   0          6m14s
+
+$ kubectl-kafka bin/kafka-console-consumer.sh --bootstrap-server my-cluster-kafka-bootstrap:9092 \
+  --topic my-topic --from-beginning --max-messages 3
+XVFTWDJKAIYRBIKZRFOEZNWURGQHGPDMOZYAEBTFLNCXMVOJOCPCXZLUZJKPTIFQVRHWKHBMTMHFHJGAIXNWURPJOKMXRAWLHMUNNWVYSNPIMZXJDKSLVMLJYZFJCQOIQXNFLYYYTEFK...
+FVABXPFDUNYNYMNVYWZDVZLGZASDYATOWNFMRODUPWCUVVIZFRLZNDOSQWZVNGMGEYHDVAWZDQLXBAIZGFDUOKGGHDBTLOJLMLPXTPXXZZQXFIVTAZOHHGWJBUSMPKIPCMOAJVSLUYGJ...
+OAPJJFCTIWBLZMWUVMWRSGJQMXVLATYRECKCHDEIHYOMLCLKAULDWNSRIXKVWSNHLJUADUZNUMCJQYASBCSJWHIKXLATGMGNENPSSVIUAWSRRABUBXFZZRKOGOFGTBVIWTWFUWHEEMGF...
+^CProcessed a total of 3 messages
 ```
 
-When these topics are deleted, we can safely deploy the Topic Operator and try to consume our messages from the restored cluster.
+Finally, we can disable unclean leader election, delete the old volumes to reclaim some space, and set back the new volumes' retain policy to Delete.
 
 ```sh
-$ kubectl apply -f sessions/001/resources/000-my-cluster.yaml
-kafka.kafka.strimzi.io/my-cluster configured
+$ kubectl patch k my-cluster --type merge -p '
+    spec:
+      kafka:
+        config:
+          unclean.leader.election.enable: false'
+kafka.kafka.strimzi.io/my-cluster patched
+          
+$ kubectl get pv | grep Available
+pvc-04b55551-fe7f-4662-9955-5e4baaf4df57   10Gi       RWO            Retain           Available                                                                        ocs-external-storagecluster-ceph-rbd            23m
+pvc-18280833-16a8-4cd5-8c6f-eb764acd3ce9   10Gi       RWO            Retain           Available                                                                        ocs-external-storagecluster-ceph-rbd            23m
+pvc-a148ee8b-2eef-422b-a35e-b71714b1ef85   10Gi       RWO            Retain           Available                                                                        ocs-external-storagecluster-ceph-rbd            23m
 
-$ kubectl get kt my-topic -o yaml | yq '.status'
-conditions:
-  - lastTransitionTime: "2022-10-27T15:04:21.052978Z"
-    status: "True"
-    type: Ready
-observedGeneration: 1
-topicName: my-topic
+$ kubectl delete pv $(kubectl get pv | grep Available | awk '{print $1}')
+persistentvolume "pvc-04b55551-fe7f-4662-9955-5e4baaf4df57" deleted
+persistentvolume "pvc-18280833-16a8-4cd5-8c6f-eb764acd3ce9" deleted
+persistentvolume "pvc-a148ee8b-2eef-422b-a35e-b71714b1ef85" deleted
 
-# drumroll
-$ kubectl-kafka bin/kafka-console-consumer.sh --bootstrap-server my-cluster-kafka-bootstrap:9092 \
-  --topic my-topic --from-beginning
-bbb
-aaa
-ccc
-^CProcessed a total of 3 messages
+$ kubectl get pv | grep my-cluster-kafka
+pvc-0bd38196-2f5b-4a05-8917-b43bd2dde50b   20Gi       RWO            Retain           Bound    test/data-my-cluster-kafka-1                                         ocs-external-storagecluster-ceph-rbd            17m
+pvc-1a66039a-14e7-4416-9319-6d6437543c02   20Gi       RWO            Retain           Bound    test/data-my-cluster-kafka-0                                         ocs-external-storagecluster-ceph-rbd            17m
+pvc-ca348d35-f466-446e-9f93-e3c15722d214   20Gi       RWO            Retain           Bound    test/data-my-cluster-kafka-2                                         ocs-external-storagecluster-ceph-rbd            17m
+
+$ kubectl patch pv $(kubectl get pv | grep my-cluster-kafka | awk '{print $1}') --type merge -p '
+    spec:
+      persistentVolumeReclaimPolicy: Delete'
+persistentvolume/pvc-0bd38196-2f5b-4a05-8917-b43bd2dde50b patched
+persistentvolume/pvc-1a66039a-14e7-4416-9319-6d6437543c02 patched
+persistentvolume/pvc-ca348d35-f466-446e-9f93-e3c15722d214 patched
+
+$ kubectl get pv | grep my-cluster-kafka
+pvc-0bd38196-2f5b-4a05-8917-b43bd2dde50b   20Gi       RWO            Delete           Bound    test/data-my-cluster-kafka-1                                         ocs-external-storagecluster-ceph-rbd            18m
+pvc-1a66039a-14e7-4416-9319-6d6437543c02   20Gi       RWO            Delete           Bound    test/data-my-cluster-kafka-0                                         ocs-external-storagecluster-ceph-rbd            18m
+pvc-ca348d35-f466-446e-9f93-e3c15722d214   20Gi       RWO            Delete           Bound    test/data-my-cluster-kafka-2                                         ocs-external-storagecluster-ceph-rbd            18m
 ```

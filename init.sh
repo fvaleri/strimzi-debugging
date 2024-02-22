@@ -15,18 +15,13 @@ for x in curl kubectl openssl keytool unzip yq jq java javac jshell mvn; do
 done
 
 get-kafka() {
-  local home && home="$(find /tmp -name 'kafka.*' -printf '%T@ %p\n' 2>/dev/null |sort -n |tail -n1 |awk '{print $2}')"
-  if [[ -n $home ]]; then
-    local version && version="$("$home"/bin/kafka-topics.sh --version 2>/dev/null |awk '{print $1}')"
-    if [[ $version == "$KAFKA_VERSION" ]]; then
-      echo "Getting Kafka from /tmp"
-      KAFKA_HOME="$home" && export KAFKA_HOME
-      return
-    fi
+  KAFKA_HOME="/tmp/kafka-test" && mkdir -p "$KAFKA_HOME" && export KAFKA_HOME
+  local version && version="$("$KAFKA_HOME"/bin/kafka-topics.sh --version 2>/dev/null |awk '{print $1}')"
+  if [[ $version == "$KAFKA_VERSION" ]]; then
+    echo "Reusing Kafka from $KAFKA_HOME"
+    return
   fi
-  echo "Getting Kafka from ASF"
-  KAFKA_HOME="/tmp/kafka-test" && export KAFKA_HOME
-  rm -rf "$KAFKA_HOME" /tmp/kafka-logs /tmp/zookeeper; mkdir -p "$KAFKA_HOME"
+  echo "Download Kafka into $KAFKA_HOME"
   curl -sLk "https://archive.apache.org/dist/kafka/$KAFKA_VERSION/kafka_2.13-$KAFKA_VERSION.tgz" \
     | tar xz -C "$KAFKA_HOME" --strip-components 1
 }
@@ -45,26 +40,14 @@ kubectl-kafka() { kubectl run kubectl-kafka-"$(date +%s)" -itq --rm --restart="N
 echo "Configuring Kafka on localhost"
 pkill -9 -f "kafka.Kafka" &>/dev/null ||true
 pkill -9 -f "quorum.QuorumPeerMain" &>/dev/null ||true
+rm -rf /tmp/kafka-logs /tmp/zookeeper
 get-kafka
-echo "Kafka home: $KAFKA_HOME"
 echo "Done"
 
 echo "Configuring Kafka on Kubernetes"
-kubectl delete ns "$NAMESPACE" --wait &>/dev/null
-kubectl wait --for=delete ns/"$NAMESPACE" --timeout=120s &>/dev/null
-kubectl create ns "$NAMESPACE"
+kubectl delete ns "$NAMESPACE" --force --wait --ignore-not-found &>/dev/null
+kubectl wait --for=delete ns/"$NAMESPACE" --timeout=120s &>/dev/null && kubectl create ns "$NAMESPACE"
 kubectl config set-context --current --namespace="$NAMESPACE" &>/dev/null
-# deploy cluster-wide operator
-kubectl create clusterrolebinding strimzi-cluster-operator-namespaced \
-  --clusterrole strimzi-cluster-operator-namespaced --serviceaccount "$NAMESPACE":strimzi-cluster-operator \
-  --dry-run=client -o yaml | kubectl replace --force -f - &>/dev/null
-kubectl create clusterrolebinding strimzi-cluster-operator-watched \
-  --clusterrole strimzi-cluster-operator-watched --serviceaccount "$NAMESPACE":strimzi-cluster-operator \
-  --dry-run=client -o yaml | kubectl replace --force -f - &>/dev/null
-kubectl create clusterrolebinding strimzi-cluster-operator-entity-operator-delegation \
-  --clusterrole strimzi-entity-operator --serviceaccount "$NAMESPACE":strimzi-cluster-operator \
-  --dry-run=client -o yaml | kubectl replace --force -f - &>/dev/null
 curl -sL "https://github.com/strimzi/strimzi-kafka-operator/releases/download/$STRIMZI_VERSION/strimzi-cluster-operator-$STRIMZI_VERSION.yaml" \
   | sed -E "s/namespace: .*/namespace: $NAMESPACE/g" | kubectl create -f - --dry-run=client -o yaml | kubectl replace --force -f - &>/dev/null
-kubectl set env deploy strimzi-cluster-operator STRIMZI_NAMESPACE="*" &>/dev/null
 echo "Done"
