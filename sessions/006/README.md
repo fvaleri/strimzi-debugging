@@ -174,29 +174,11 @@ pvc-c2cb8453-b953-4bb1-83b5-f4e4c76fbf91   10Gi       RWO            Retain     
 pvc-f5b75d58-b621-4cf9-8c5c-2e9215b268e0   5Gi        RWO            Retain           Bound    test/data-my-cluster-zookeeper-0   gp2                     3m22s
 ```
 
-After this, we can safely delete the Kafka cluster and the associated claims, so that our volumes will become Released.
+After this, we can safely delete the Kafka cluster.
 
 ```sh
 $ kubectl delete k my-cluster
 kafka.kafka.strimzi.io "my-cluster" deleted
-
-$ kubectl delete pvc -l strimzi.io/name=my-cluster-kafka \
-  && kubectl delete pvc -l strimzi.io/name=my-cluster-zookeeper
-persistentvolumeclaim "data-my-cluster-kafka-0" deleted
-persistentvolumeclaim "data-my-cluster-kafka-1" deleted
-persistentvolumeclaim "data-my-cluster-kafka-2" deleted
-persistentvolumeclaim "data-my-cluster-zookeeper-0" deleted
-persistentvolumeclaim "data-my-cluster-zookeeper-1" deleted
-persistentvolumeclaim "data-my-cluster-zookeeper-2" deleted
-
-$ kubectl get pv | grep my-cluster
-NAME                                       CAPACITY   ACCESS MODES   RECLAIM POLICY   STATUS      CLAIM                              STORAGECLASS   REASON   AGE
-pvc-162c6551-f05f-4c89-9319-637a4b3d417c   5Gi        RWO            Retain           Released    test/data-my-cluster-zookeeper-1   gp2                     3m22s
-pvc-3c131641-dca8-4648-8cfb-ea844145a5a3   5Gi        RWO            Retain           Released    test/data-my-cluster-zookeeper-2   gp2                     3m22s
-pvc-566ffb72-4b5e-454e-8e40-03877f0100e5   10Gi       RWO            Retain           Released    test/data-my-cluster-kafka-2       gp2                     111s
-pvc-8587e7b0-bedd-494c-b43f-0f249cec03c7   10Gi       RWO            Retain           Released    test/data-my-cluster-kafka-0       gp2                     111s
-pvc-c2cb8453-b953-4bb1-83b5-f4e4c76fbf91   10Gi       RWO            Retain           Released    test/data-my-cluster-kafka-1       gp2                     111s
-pvc-f5b75d58-b621-4cf9-8c5c-2e9215b268e0   5Gi        RWO            Retain           Released    test/data-my-cluster-zookeeper-0   gp2                     3m22s
 ```
 
 These volumes can now be mounted by a maintenance pod, for example for moving all data to a bigger volume.
@@ -228,7 +210,28 @@ total 3.3G
 -rw-rw-r--. 1 1000660000 1000660000   43 Sep 23 07:45 partition.metadata
 ```
 
-After the maintenance is completed, we need to create the conditions so that the new volumes can be reattached by the new Kafka cluster.
+After the maintenance is completed, we can safely delete the associated claims, so that our volumes will become Released.
+```sh
+$ kubectl delete pvc -l strimzi.io/name=my-cluster-kafka \
+  && kubectl delete pvc -l strimzi.io/name=my-cluster-zookeeper
+persistentvolumeclaim "data-my-cluster-kafka-0" deleted
+persistentvolumeclaim "data-my-cluster-kafka-1" deleted
+persistentvolumeclaim "data-my-cluster-kafka-2" deleted
+persistentvolumeclaim "data-my-cluster-zookeeper-0" deleted
+persistentvolumeclaim "data-my-cluster-zookeeper-1" deleted
+persistentvolumeclaim "data-my-cluster-zookeeper-2" deleted
+
+$ kubectl get pv | grep my-cluster
+NAME                                       CAPACITY   ACCESS MODES   RECLAIM POLICY   STATUS      CLAIM                              STORAGECLASS   REASON   AGE
+pvc-162c6551-f05f-4c89-9319-637a4b3d417c   5Gi        RWO            Retain           Released    test/data-my-cluster-zookeeper-1   gp2                     3m22s
+pvc-3c131641-dca8-4648-8cfb-ea844145a5a3   5Gi        RWO            Retain           Released    test/data-my-cluster-zookeeper-2   gp2                     3m22s
+pvc-566ffb72-4b5e-454e-8e40-03877f0100e5   10Gi       RWO            Retain           Released    test/data-my-cluster-kafka-2       gp2                     111s
+pvc-8587e7b0-bedd-494c-b43f-0f249cec03c7   10Gi       RWO            Retain           Released    test/data-my-cluster-kafka-0       gp2                     111s
+pvc-c2cb8453-b953-4bb1-83b5-f4e4c76fbf91   10Gi       RWO            Retain           Released    test/data-my-cluster-kafka-1       gp2                     111s
+pvc-f5b75d58-b621-4cf9-8c5c-2e9215b268e0   5Gi        RWO            Retain           Released    test/data-my-cluster-zookeeper-0   gp2                     3m22s
+```
+
+Now, we need to create the conditions so that the new volumes can be reattached by the new Kafka cluster.
 We use a simple script to collect all required data from the retained PVs, remove the old `claimRef` metadata and create the new PVCs.
 Volumes are `Bound` again, and they should be reattached if we deploy a new Kafka cluster with the same configuration.
 
@@ -269,7 +272,7 @@ Now we can deploy the new Kafka cluster.
 Note that this is actually the same Kafka cluster, because it maintains the Kafka cluster ID.
 
 **Before deploying the TO, we must delete its internal topics so that it can safely reinitialize from Kafka on startup.
-If you don't do this, there is a high change that the Topic Operator deletes all topics with your data.
+If you don't do this, there is a high chance that the Topic Operator deletes all topics with your data.
 Topic deletion happens asynchronously, so always make sure to confirm that it is actually deleted.**
 
 ```sh
@@ -308,7 +311,7 @@ topicName: my-topic
 
 # drumroll
 $ kubectl-kafka bin/kafka-console-consumer.sh --bootstrap-server my-cluster-kafka-bootstrap:9092 \
-  --topic my-topic --from-beginning
+  --topic my-topic --from-beginning --max-messages 3
 bbb
 aaa
 ccc
