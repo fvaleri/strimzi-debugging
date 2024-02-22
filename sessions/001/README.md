@@ -34,11 +34,11 @@ If this is a requirement, you can create a single-partition topic or use the sam
 Beware that increasing topic partitions may break ordering.
 
 The partition replication protocol is fundamental to Kafka.
-By default, when a new batch of messages arrives, it is firstly written into the Operating System's page cache, and only flushed to disk asynchronously.
+By default, when a new batch of records arrives, it is firstly written into the Operating System's page cache, and only flushed to disk asynchronously.
 If the Kafka JVM crashes for whatever reason, recent messages are still in the page cache, and will be flushed by the Operating System.
 However, this doesn't protect from data loss when the machine crashes.
-This is why enabling topic replication is important: Having multiple replicas means data loss is only possible if multiple brokers can crash simultaneously.
-To further improve fault tolerance (for example if brokers do not have independent power supplies), a rack-aware Kafka cluster can be used to distribute topic replicas evenly across data centers in the same geographic region.
+This is why enabling topic replication is important: having multiple replicas means data loss is only possible if multiple brokers can crash simultaneously.
+To further improve fault tolerance, a rack-aware Kafka cluster can be used to distribute topic replicas evenly across data centers in the same geographic region.
 
 <p align="center"><img src="images/replicas.png" height=450/></p>
 
