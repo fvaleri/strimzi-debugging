@@ -26,13 +26,13 @@
       {
         "name": "old",
         "persistentVolumeClaim": {
-          "claimName": "SED_OLD_CLAIM"
+          "claimName": "OLD_CLAIM"
         }
       },
       {
         "name": "new",
         "persistentVolumeClaim": {
-          "claimName": "SED_NEW_CLAIM"
+          "claimName": "NEW_CLAIM"
         }
       }
     ]
