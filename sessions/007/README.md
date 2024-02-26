@@ -1,18 +1,18 @@
 ## Cruise Control and unbalanced clusters
 
-By default, Kafka tries to distribute the load evenly across brokers.
+By default, Kafka tries to distribute the load evenly across all brokers.
 This is achieved through the concept of the preferred replica, which is the first replica created for a new topic.
 The preferred replica is designated as the partition leader and assigned to a broker for balanced leader distribution.
 A background thread moves the leader role to the preferred replica when it is in sync.
 
 This may not be enough, and we may end up with uneven distribution of load across brokers as a consequence of broker failures, addition of new brokers or simply because some partitions are used more than others.
-
 The `kafka.server:type=KafkaRequestHandlerPool,name=RequestHandlerAvgIdlePercent` metric is a good overall load metric for Kafka scaling and rebalancing decisions.
 Below 0.7 (i.e. the request handler threads are busy 30% of the time) performance start to degrade, below 0.5 you start getting into trouble (scaling or rebalancing at this point adds even more load), and if you hit 0.3 it's barely usable for users.
 
-Rebalancing means moving partitions between brokers (inter-broker rebalancing), between broker disks (intra-broker reblancing), and simply changing partition leaders to restore cluster balance.
-We can apply partition and leadership movements using the `kafka-reassign-partitions.sh` tool, but the user has to determine the rebalance proposal, which can be tricky and time-consuming.
-This is why [Cruise Control](https://github.com/linkedin/cruise-control) (CC) was developed.
+The load is composed of various resources that brokers have in limited supply (CPU cycles, disk space, network bandwidth).
+Rebalancing estimates the load imposed by each replica on a broker and tries to rearrange partition leaders and followers to get a better balance.
+That rearrangement usually involves moving the data between different brokers (inter-broker rebalancing), same broker's disks (intra-broker reblancing), and changing partition leaders.
+Doing this job using the `kafka-reassign-partitions.sh` tool is quite complicated, that's why [Cruise Control](https://github.com/linkedin/cruise-control) (CC) was created.
 
 A replica workload model is periodically updated by the workload monitor using the resource utilization metrics from broker agents (CPU, disk, bytes-in, bytes-out).
 The analyzer uses this model to create a valid rebalance proposal when possible (one that must satisfy all configured hard goals, and possibly soft goals).
