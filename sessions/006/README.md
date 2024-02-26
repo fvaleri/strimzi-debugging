@@ -159,8 +159,12 @@ Create new bigger volumes for our brokers (10Gi -> 20Gi).
 
 ```sh
 $ for pod in $KAFKA_PODS; do
-  sed "s#PVC_NAME#data-$pod-new#g; s#CLUSTER_NAME#$CLUSTER_NAME#g; s#NEW_PV_SIZE#$NEW_PV_SIZE#g; \
-    s#NEW_PV_CLASS#$NEW_PV_CLASS#g" sessions/006/resources/pvc-new.yaml | kubectl create -f -
+  cat sessions/006/resources/pvc-new.yaml \
+    | yq ".metadata.name = \"data-$pod-new\" \
+      | .metadata.labels.\"strimzi.io/name\" = \"$CLUSTER_NAME-kafka\" \
+      | .spec.storageClassName = \"$NEW_PV_CLASS\" \
+      | .spec.resources.requests.storage = \"$NEW_PV_SIZE\"" \
+    | kubectl create -f -
 done
 persistentvolumeclaim/data-my-cluster-kafka-0-new created
 persistentvolumeclaim/data-my-cluster-kafka-1-new created
@@ -213,8 +217,9 @@ Note that these commands may take some time, depending on the amount of data to 
 
 ```sh
 $ for pod in $KAFKA_PODS; do
-  kubectl run kubectl-copy-$pod -itq --rm --restart "Never" --image "dummy" --overrides \
-    "$(sed "s#OLD_CLAIM#data-$pod#g; s#NEW_CLAIM#data-$pod-new#g" sessions/006/resources/patch.json)"
+  kubectl run kubectl-copy-$pod -itq --rm --restart "Never" --image "dummy" --overrides "$(cat sessions/006/resources/patch.yaml \
+    | yq ".spec.volumes[0].persistentVolumeClaim.claimName = \"data-$pod\", .spec.volumes[1].persistentVolumeClaim.claimName = \"data-$pod-new\"" \
+    | yq -p yaml -o json)"
 done
 ```
 
@@ -228,8 +233,13 @@ $ for pod in $KAFKA_PODS; do
   PV_NAMES="$(kubectl get pv | grep data-$pod | awk '{print $1}')"
   NEW_PV_NAME="$(kubectl get pv | grep data-$pod-new | awk '{print $1}')"
   kubectl patch pv $PV_NAMES --type json -p '[{"op":"remove","path":"/spec/claimRef"}]'
-  sed "s#PVC_NAME#data-$pod#g; s#CLUSTER_NAME#$CLUSTER_NAME#g; s#NEW_PV_SIZE#$NEW_PV_SIZE#g; \
-    s#NEW_PV_CLASS#$NEW_PV_CLASS#g; s#NEW_PV_NAME#$NEW_PV_NAME#g" sessions/006/resources/pvc.yaml | kubectl create -f -
+  cat sessions/006/resources/pvc.yaml \
+    | yq ".metadata.name = \"data-$pod-new\" \
+      | .metadata.labels.\"strimzi.io/name\" = \"$CLUSTER_NAME-kafka\" \
+      | .spec.storageClassName = \"$NEW_PV_CLASS\" \
+      | .spec.volumeName = \"$NEW_PV_NAME\" \
+      | .spec.resources.requests.storage = \"$NEW_PV_SIZE\"" \
+    | kubectl create -f -
 done
 persistentvolumeclaim "data-my-cluster-kafka-0" deleted
 persistentvolumeclaim "data-my-cluster-kafka-0-new" deleted
@@ -255,28 +265,41 @@ data-my-cluster-kafka-2   Bound    pvc-ca348d35-f466-446e-9f93-e3c15722d214   20
 ```
 
 Deploy the Kafka cluster with our brand new volumes, and check that it runs fine.
-**Don't forget to adjust the storage size in Kafka resource and disable the Topic Operator.**
-In order to let broker pod roll, we also have to temporary enable unclean leader election.
+**Adjust the storage size in Kafka resource, and disable the Topic Operator.**
+To let the cluster operator roll broker pods, we have to temporary enable unclean leader election.
+The Bidirectional Topic Operator may delete our topics, so we have to first delete its internal topics, that will be reinitialized from Kafka on startup.
 
 ```sh
-$ cat sessions/001/resources/000-my-cluster.yaml | yq '.spec.kafka.storage.size = "20Gi"' | kubectl create -f - \
-  && kubectl patch k $CLUSTER_NAME --type merge -p '
-    spec:
-      kafka:
-        config:
-          unclean.leader.election.enable: true'
+$ cat sessions/001/resources/000-my-cluster.yaml \
+  | yq '.spec.kafka.storage.size = "20Gi"' \
+  | yq ".spec.kafka.config.\"unclean.leader.election.enable\" = true" \
+  | yq 'del(.spec.entityOperator.topicOperator)' \
+  | kubectl create -f -
 kafka.kafka.strimzi.io/my-cluster created
-kafka.kafka.strimzi.io/my-cluster patched
 
 $ kubectl get po -l strimzi.io/cluster=$CLUSTER_NAME
 NAME                                          READY   STATUS    RESTARTS   AGE
-my-cluster-entity-operator-7d6d6bd454-sh7rc   3/3     Running   0          96s
+my-cluster-entity-operator-7d6d6bd454-sh7rc   2/2     Running   0          96s
 my-cluster-kafka-0                            1/1     Running   0          5m9s
 my-cluster-kafka-1                            1/1     Running   0          5m9s
 my-cluster-kafka-2                            1/1     Running   0          5m9s
 my-cluster-zookeeper-0                        1/1     Running   0          6m14s
 my-cluster-zookeeper-1                        1/1     Running   0          6m14s
 my-cluster-zookeeper-2                        1/1     Running   0          6m14s
+
+$ for topic in "__strimzi_store_topic" ".*topic-store-changelog"; do
+  kubectl-kafka bin/kafka-topics.sh --bootstrap-server $CLUSTER_NAME-kafka-bootstrap:9092 --topic $topic --delete
+done
+  
+$ kubectl-kafka bin/kafka-topics.sh --bootstrap-server $CLUSTER_NAME-kafka-bootstrap:9092 --list
+__consumer_offsets
+my-topic
+
+$ kubectl patch k $CLUSTER_NAME --type merge -p '
+    spec:
+      entityOperator:
+        topicOperator: {}'
+kafka.kafka.strimzi.io/my-cluster patched
 
 $ kubectl-kafka bin/kafka-console-consumer.sh --bootstrap-server $CLUSTER_NAME-kafka-bootstrap:9092 \
   --topic my-topic --from-beginning --max-messages 3

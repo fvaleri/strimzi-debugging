@@ -39,8 +39,9 @@ The following step copies the source CA certificate in the target namespace, whe
 We can skip this step in this case, as it is only required when source and target clusters runs on different namespaces or Kubernetes clusters.
 
 ```sh
-$ EXP="del(.metadata.namespace, .metadata.resourceVersion, .metadata.selfLink, .metadata.uid, .metadata.ownerReferences, .status)" \
-  && kubectl get secret "my-cluster-cluster-ca-cert" -o yaml | yq "$EXP" | kubectl -n target-namespace create -f -
+$ kubectl get secret "my-cluster-cluster-ca-cert" -o yaml \
+  | yq "del(.metadata.namespace, .metadata.resourceVersion, .metadata.selfLink, .metadata.uid, .metadata.ownerReferences, .status)" \
+  | kubectl -n target-namespace create -f -
 secret/my-cluster-cluster-ca-cert created
 ```
 

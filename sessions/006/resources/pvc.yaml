@@ -7,8 +7,8 @@ metadata:
 spec:
   accessModes:
     - ReadWriteOnce
+  storageClassName: NEW_PV_CLASS
+  volumeName: NEW_PV_NAME
   resources:
     requests:
       storage: NEW_PV_SIZE
-  storageClassName: NEW_PV_CLASS
-  volumeName: NEW_PV_NAME
