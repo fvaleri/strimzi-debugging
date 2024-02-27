@@ -265,8 +265,8 @@ data-my-cluster-kafka-2   Bound    pvc-ca348d35-f466-446e-9f93-e3c15722d214   20
 ```
 
 Deploy the Kafka cluster with our brand new volumes, and check that it runs fine.
-**Adjust the storage size in Kafka resource, and disable the Topic Operator.**
-The Bidirectional Topic Operator may delete our topics, so we have to first delete its internal topics, that will be reinitialized from Kafka on startup.
+**Don't forget to adjust the storage size in Kafka resource.**
+To let the cluster operator roll the broker pods, we have to temporary enable unclean leader election.
 
 ```sh
 $ cat sessions/001/resources/000-my-cluster.yaml \
