@@ -47,6 +47,8 @@ echo "Done"
 echo "Configuring Kafka on Kubernetes"
 kubectl delete ns "$NAMESPACE" --force --wait --ignore-not-found &>/dev/null
 kubectl wait --for=delete ns/"$NAMESPACE" --timeout=120s &>/dev/null && kubectl create ns "$NAMESPACE"
+# shellcheck disable=SC2046
+kubectl delete pv $(kubectl get pv | grep "my-cluster\|Available" | awk '{print $1}') &>/dev/null
 kubectl config set-context --current --namespace="$NAMESPACE" &>/dev/null
 curl -sL "https://github.com/strimzi/strimzi-kafka-operator/releases/download/$STRIMZI_VERSION/strimzi-cluster-operator-$STRIMZI_VERSION.yaml" \
   | sed -E "s/namespace: .*/namespace: $NAMESPACE/g" | kubectl create -f - --dry-run=client -o yaml | kubectl replace --force -f - &>/dev/null

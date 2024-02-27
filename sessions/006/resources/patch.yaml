@@ -1,10 +1,10 @@
 spec:
   containers:
-    - name: ubi
-      image: registry.access.redhat.com/ubi8/ubi:8.4
+    - name: busybox
+      image: busybox
       imagePullPolicy: IfNotPresent
       command:
-        - /bin/bash
+        - /bin/sh
         - -c
         - cp -R /old/* /new
       volumeMounts:
