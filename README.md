@@ -1,7 +1,8 @@
 # Strimzi debugging
 
-This project contains a series of debugging sessions for Kafka and Strimzi.
-They assume user level knowledge about Kubernetes/OpenShift and Kafka.
+This project contains a series of debugging sessions for Strimzi and Kafka.
+They assume user level knowledge about Kubernetes and Kafka.
+You can use Minikube to try the example, but a real Kubernetes cluster is recommended.
 Any feedback or contribution is appreciated.
 
 1. [Kafka introduction and deployments](/sessions/001)
