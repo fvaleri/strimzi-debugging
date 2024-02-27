@@ -6,7 +6,7 @@ spec:
       command:
         - /bin/sh
         - -c
-        - cp -R /old/* /new
+        - cp -auvR /old/* /new
       volumeMounts:
         - name: old
           mountPath: /old

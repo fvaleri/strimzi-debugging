@@ -35,7 +35,7 @@ Setting the `apicurio.registry.check-period-ms` client property, we can determin
 ---
 ### Example: schema registry in action
 
-First, we [deploy the Strimzi Cluster Operator and Kafka cluster](/sessions/001), and set the external listener.
+First, [deploy the Strimzi Cluster Operator and Kafka cluster](/sessions/001), and set the external listener.
 Then, we deploy the Service Registry instance with the in-memory storage system.
 
 ```sh

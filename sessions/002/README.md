@@ -32,7 +32,7 @@ Almost all authentication problems occur within this initial handshake.
 ---
 ### Example: TLS authentication (mTLS) using an external listener
 
-First, we [deploy the Strimzi Cluster Operator and Kafka cluster](/sessions/001), and set the external listener (we run on OpenShift here, but you need to use `type: ingress` on Kubernetes).
+First, [deploy the Strimzi Cluster Operator and Kafka cluster](/sessions/001), and set the external listener (we run on OpenShift here, but you need to use `type: ingress` on Kubernetes).
 Then, we apply the configuration changes to enable TLS authentication and wait for the Cluster Operator to restart all pods one by one (rolling update).
 If the Kafka cluster is operating correctly, it is possible to update the configuration with zero downtime.
 

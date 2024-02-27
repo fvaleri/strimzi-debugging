@@ -52,7 +52,7 @@ The change event contains elements that can be used to identify and filter out d
 ---
 ### Example: cloud-native CDC pipeline
 
-First, we [deploy the Strimzi Cluster Operator and Kafka cluster](/sessions/001).
+First, [deploy the Strimzi Cluster Operator and Kafka cluster](/sessions/001).
 When the cluster is ready, we deploy a MySQL instance (the external system) and Kafka Connect cluster.
 Note that we are also initializing the database.
 The Kafka Connect image uses an internal component (Kaniko) to build a custom image containing the configured MySQL connector.

@@ -29,7 +29,7 @@ That way, all CPU resources are reserved upfront (Guaranteed QoS) and Cruise Con
 ---
 ### Example: scaling up the cluster
 
-First, we [deploy the Strimzi Cluster Operator and Kafka cluster](/sessions/001).
+First, [deploy the Strimzi Cluster Operator and Kafka cluster](/sessions/001).
 When the cluster is ready, we want to scale it up and put some load on the new broker, which otherwise will sit idle waiting for new topic creation.
 Thanks to the Cluster Operator, we can scale the cluster up by simply raising the number of broker replicas in the Kafka custom resource (CR).
 
@@ -123,7 +123,7 @@ exit
 Let's repeat the cluster scale up example, but this time using Cruise Control to see how it helps with the planning phase.
 Cruise Control can figure out by itself the required changes, given a set of high-level goals (sensible defaults are provided).
 
-First, we [deploy the Strimzi Cluster Operator and Kafka cluster](/sessions/001).
+First, [deploy the Strimzi Cluster Operator and Kafka cluster](/sessions/001).
 When the cluster is ready, we verify how the topic partitions are distributed between the available brokers.
 Then we add one broker, deploy Cruise Control by adding the `.spec.cruiseControl` section to the Kafka CR and create a rebalance CR with `mode: add-brokers`.
 

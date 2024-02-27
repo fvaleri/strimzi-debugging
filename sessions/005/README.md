@@ -33,7 +33,7 @@ All disaster recovery processes should be documented in detail and carefully tes
 ---
 ### Example: active-passive mirroring
 
-First, we [deploy the Strimzi Cluster Operator and Kafka cluster](/sessions/001).
+First, [deploy the Strimzi Cluster Operator and Kafka cluster](/sessions/001).
 
 The following step copies the source CA certificate in the target namespace, where we will deploy MirrorMaker 2.
 We can skip this step in this case, as it is only required when source and target clusters runs on different namespaces or Kubernetes clusters.

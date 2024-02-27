@@ -43,8 +43,8 @@ Volumes with either `persistentVolumeReclaimPolicy: Retain`, or using a storage 
 ---
 ### Example: no space left on device WITH volume expansion
 
-First, we [deploy the Strimzi Cluster Operator and Kafka cluster](/sessions/001).
-When the cluster is ready, we purposely break it by sending 11 GiB of data to a topic with a replication factor of 3 (33 GiB in total), which exceeds the combined cluster disk capacity of 30 GiB.
+First, [deploy the Strimzi Cluster Operator and Kafka cluster](/sessions/001).
+When the cluster is ready, break it by sending 11 GiB of data to a topic, which exceeds the disk capacity of 10 GiB.
 
 ```sh
 $ kubectl get pv | grep kafka
@@ -52,7 +52,7 @@ pvc-2e3c7665-2b92-4376-bb1d-22b1d23fcc6a   10Gi       RWO            Delete     
 pvc-b1e5e0a3-ab83-487f-9b81-c38e1badfccc   10Gi       RWO            Delete           Bound    test/data-my-cluster-kafka-0       gp2                     4m1s
 pvc-e66030cd-3992-4adc-9d94-d9d4ab164a45   10Gi       RWO            Delete           Bound    test/data-my-cluster-kafka-1       gp2                     4m1s
 
-$ kubectl-kafka bin/kafka-producer-perf-test.sh --topic my-topic --record-size 1000 --num-records 12000000 \
+$ kubectl-kafka bin/kafka-producer-perf-test.sh --topic my-topic --record-size 1000 --num-records 11000000 \
   --throughput -1 --producer-props acks=1 bootstrap.servers=my-cluster-kafka-bootstrap:9092
 287699 records sent, 57528.3 records/sec (54.86 MB/sec), 144.6 ms avg latency, 455.0 ms max latency.
 309618 records sent, 61923.6 records/sec (59.05 MB/sec), 29.1 ms avg latency, 132.0 ms max latency.
@@ -108,11 +108,11 @@ my-cluster-kafka-2                            1/1     Running   0             4m
 ---
 ### Example: no space left on device WITHOUT volume expansion
 
-This procedure is complicated, and has many tricky steps highlighted in bold, where you need to be extra careful to avoid losing data.
+This procedure has some tricky steps highlighted in bold, where you need to be extra careful to avoid losing data.
 **Don't use Minikube for this example, as it doesn't have full support for volumes.**
 
-First, we [deploy the Strimzi Cluster Operator and Kafka cluster](/sessions/001).
-When the cluster is ready, we break it by sending 11 GiB of data to a topic, which exceeds the disk capacity of 10 GiB.
+First, [deploy the Strimzi Cluster Operator and Kafka cluster](/sessions/001).
+When the cluster is ready, break it by sending 11 GiB of data to a topic, which exceeds the disk capacity of 10 GiB.
 
 ```sh
 $ CLUSTER_NAME="my-cluster" \
@@ -147,16 +147,16 @@ $ kubectl logs $CLUSTER_NAME-kafka-0 | grep "No space left on device" | tail -n1
 java.io.IOException: No space left on device
 ```
 
-Even if not all pods failed, like in this case, we still need to increase the volume size of all brokers because the storage configuration is shared.
-**Make sure that the delete claim storage configuration is set to false in Kafka resource, and only then delete the Kafka cluster.**
+Even if not all pods are failed, we still need to increase the volume size of all brokers because the storage configuration is shared.
+**Before deleting the Kafka cluster, make sure that delete claim storage configuration is set to false in Kafka resource.**
 
 ```sh
 $ if [[ $(kubectl get k $CLUSTER_NAME -o yaml | yq .spec.kafka.storage.deleteClaim) == "false" ]]; then kubectl delete k $CLUSTER_NAME; fi
 kafka.kafka.strimzi.io "my-cluster" deleted
 ```
 
-Create new bigger volumes for our brokers (10Gi -> 20Gi).
-Here we simply create new PVCs and volumes are created automatically, but you may need to do it manually.
+Create new and bigger volumes for our brokers.
+In this case, volumes are created automatically, but you may need to create them manually.
 
 ```sh
 $ for pod in $KAFKA_PODS; do
@@ -205,8 +205,8 @@ pvc-a148ee8b-2eef-422b-a35e-b71714b1ef85   10Gi       RWO            Retain     
 pvc-ca348d35-f466-446e-9f93-e3c15722d214   20Gi       RWO            Retain           Bound    test/data-my-cluster-kafka-2-new                                     ocs-external-storagecluster-ceph-rbd            44s
 ```
 
-Copy all broker data from the old volumes to the new volumes using a maintenance pod.
-Note that these commands may take some time, depending on the amount of data to copy.
+Copy all broker data from the old volumes to the new volumes spinning up a maintenance pod.
+Note that the following commands may take some time, depending on the amount of data they have to copy.
 
 ```sh
 $ for pod in $KAFKA_PODS; do
@@ -257,14 +257,13 @@ data-my-cluster-kafka-1   Bound    pvc-0bd38196-2f5b-4a05-8917-b43bd2dde50b   20
 data-my-cluster-kafka-2   Bound    pvc-ca348d35-f466-446e-9f93-e3c15722d214   20Gi       RWO            ocs-external-storagecluster-ceph-rbd   5s
 ```
 
-Deploy the Kafka cluster with our brand new volumes, and check that it runs fine.
-**Don't forget to adjust the storage size in Kafka resource and enable unclean leader election.**
-We need unclean leader election in case of partitions with only one ISR, that would block broker pods rolling.
+Deploy the Kafka cluster with our brand new volumes, and then try to consume some data.
+**Don't forget to adjust the storage size in Kafka custom resource.**
+Note that cluster deploy may take some time, because segments need to be recovered, and partitions need to sync.
 
 ```sh
 $ cat sessions/001/resources/000-my-cluster.yaml \
   | yq '.spec.kafka.storage.size = "20Gi"' \
-  | yq ".spec.kafka.config.\"unclean.leader.election.enable\" = true" \
   | kubectl create -f -
 kafka.kafka.strimzi.io/my-cluster created
 
@@ -286,16 +285,9 @@ OAPJJFCTIWBLZMWUVMWRSGJQMXVLATYRECKCHDEIHYOMLCLKAULDWNSRIXKVWSNHLJUADUZNUMCJQYAS
 ^CProcessed a total of 3 messages
 ```
 
-Finally, we disable unclean leader election, delete the old volumes to reclaim some space, and set volumes' retain policy back to Delete.
+Finally, we delete the old volumes to reclaim some space, and set the retain policy back to Delete on the new volumes.
 
 ```sh
-$ kubectl patch k $CLUSTER_NAME --type merge -p '
-    spec:
-      kafka:
-        config:
-          unclean.leader.election.enable: false'
-kafka.kafka.strimzi.io/my-cluster patched
-
 $ kubectl delete pv $(kubectl get pv | grep Available | awk '{print $1}')
 persistentvolume "pvc-04b55551-fe7f-4662-9955-5e4baaf4df57" deleted
 persistentvolume "pvc-18280833-16a8-4cd5-8c6f-eb764acd3ce9" deleted
