@@ -63,7 +63,9 @@ spec:
   logging:
     type: inline
     loggers:
-      connect.root.logger.level: "INFO"
+      connect.root.logger.level: INFO
+      log4j.logger.org.apache.kafka.connect.runtime.WorkerSourceTask: INFO
+      log4j.logger.org.apache.kafka.connect.runtime.WorkerSinkTask: INFO
   resources:
     limits:
       cpu: 3000m

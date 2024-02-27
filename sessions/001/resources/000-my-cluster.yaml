@@ -29,7 +29,10 @@ spec:
     logging:
       type: inline
       loggers:
-        kafka.root.logger.level: "INFO"
+        kafka.root.logger.level: INFO
+        log4j.logger.kafka.coordinator.transaction: INFO
+        log4j.logger.kafka.log.LogCleanerManager: INFO
+        log4j.logger.kafka.request.logger: INFO
     resources:
       # set requests==limits to have Guaranteed QoS
       limits:
@@ -39,7 +42,7 @@ spec:
         cpu: 2000m
         memory: 2Gi
     jvmOptions:
-      # limit the JVM memory to reserve space for the page cache
+      # limit the JVM memory to reserve space for page cache
       -Xms: 1024m
       -Xmx: 1024m
     storage:
@@ -60,7 +63,8 @@ spec:
     logging:
       type: inline
       loggers:
-        zookeeper.root.logger: "INFO"
+        zookeeper.root.logger: INFO
+        log4j.logger.org.apache.zookeeper.server.ZooKeeperServer: INFO
     resources:
       limits:
         cpu: 500m
@@ -83,7 +87,9 @@ spec:
       logging:
         type: inline
         loggers:
-          rootLogger.level: "INFO"
+          rootLogger.level: INFO
+          logger.top.name: io.strimzi.operator.topic
+          logger.top.level: INFO
       resources:
         limits:
           cpu: 500m
@@ -101,7 +107,9 @@ spec:
       logging:
         type: inline
         loggers:
-          rootLogger.level: "INFO"
+          rootLogger.level: INFO
+          logger.uop.name: io.strimzi.operator.user
+          logger.uop.level: INFO
       resources:
         limits:
           cpu: 500m
