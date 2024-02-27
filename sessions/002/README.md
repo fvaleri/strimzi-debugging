@@ -52,11 +52,11 @@ kafkauser.kafka.strimzi.io/my-user created
 kafka.kafka.strimzi.io/my-cluster patched
 ```
 
-The previous command adds a new authentication element to the external listener, which is the endpoint used by clients connecting from outside OpenShift using TLS.
+The previous command adds a new authentication element to the external listener, which is the endpoint used by clients connecting from outside using TLS.
 It also creates a Kafka user resource with a matching configuration.
 
 ```sh
-$ kubectl get k my-cluster -o yaml | yq '.spec.kafka.listeners[0]'
+$ kubectl get k my-cluster -o yaml | yq .spec.kafka.listeners[0]
 authentication:
   type: tls
 name: external
@@ -64,11 +64,12 @@ port: 9094
 tls: true
 type: route
 
-$ kubectl get ku my-user -o yaml | yq '.spec'
+$ kubectl get ku my-user -o yaml | yq .spec
 authentication:
   type: tls
 ```
 
+Wait some time for the Kafka brokers to be rolled.
 The external clients have to retrieve the bootstrap URL from the passthrough route, configure their keystore and truststore.
 Then, we can try to send some messages in a secure way.
 
@@ -79,13 +80,11 @@ $ BOOTSTRAP_SERVERS=$(kubectl get routes my-cluster-kafka-bootstrap -o jsonpath=
   ; kubectl get secret my-user -o jsonpath="{.data['user\.p12']}" | base64 -d > $KEYSTORE_LOCATION \
   && kubectl get secret my-cluster-cluster-ca-cert -o jsonpath="{.data['ca\.p12']}" | base64 -d > $TRUSTSTORE_LOCATION
   
-$ cat <<EOF >/tmp/client.properties
-security.protocol = SSL
+$ echo -e "security.protocol = SSL
 ssl.keystore.location = $KEYSTORE_LOCATION
 ssl.keystore.password = $KEYSTORE_PASSWORD
 ssl.truststore.location = $TRUSTSTORE_LOCATION
-ssl.truststore.password = $TRUSTSTORE_PASSWORD
-EOF
+ssl.truststore.password = $TRUSTSTORE_PASSWORD" >/tmp/client.properties
 
 $ $KAFKA_HOME/bin/kafka-console-producer.sh --producer.config /tmp/client.properties --bootstrap-server $BOOTSTRAP_SERVERS --topic my-topic
 >hello
@@ -186,7 +185,7 @@ commonName=my-cluster
 [ext]
 subjectAltName=@san
 [san]
-DNS.1=$(kubectl get route my-cluster-kafka-bootstrap -o yaml | yq '.status.ingress.[0].routerCanonicalHostname' | sed "s#router-default#*#")
+DNS.1=$(kubectl get route my-cluster-kafka-bootstrap -o yaml | yq .status.ingress.[0].routerCanonicalHostname | sed "s#router-default#*#")
 " && openssl genrsa -out /tmp/listener.key 2048 && openssl req -new -x509 -days 3650 -key /tmp/listener.key -out /tmp/bundle.crt -config <(echo "$CONFIG")
 
 $ openssl crl2pkcs7 -nocrl -certfile /tmp/bundle.crt | openssl pkcs7 -print_certs -text -noout | grep DNS
@@ -217,7 +216,7 @@ $ kubectl patch k my-cluster --type merge -p '
               key: listener.key'
 kafka.kafka.strimzi.io/my-cluster patched
 
-$ kubectl get k my-cluster -o yaml | yq '.spec.kafka.listeners[0]'
+$ kubectl get k my-cluster -o yaml | yq .spec.kafka.listeners[0]
 configuration:
   brokerCertChainAndKey:
     certificate: bundle.crt

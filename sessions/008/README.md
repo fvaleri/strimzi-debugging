@@ -46,7 +46,7 @@ We run the transactional application included in this example on a different ter
 [Look at the code](/sessions/008/kafka-txn/src/main/java/it/fvaleri/example/Main.java) to see how the low-level transaction API is used.
 
 ```sh
-$ export BOOTSTRAP_SERVERS="localhost:9092" INSTANCE_ID="kafka-txn-0" \
+$ export KAFKA_VERSION BOOTSTRAP_SERVERS="localhost:9092" INSTANCE_ID="kafka-txn-0" \
   GROUP_ID="my-group" INPUT_TOPIC="input-topic" OUTPUT_TOPIC="output-topic"
 
 $ mvn clean compile exec:java -f sessions/008/kafka-txn/pom.xml -q

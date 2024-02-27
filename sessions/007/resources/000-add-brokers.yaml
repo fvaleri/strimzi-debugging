@@ -3,8 +3,9 @@ kind: KafkaRebalance
 metadata:
   name: add-brokers
   labels:
+    # must match the cluster name
     strimzi.io/cluster: my-cluster
-# using default goals
 spec:
+  # using default goals
   mode: add-brokers
   brokers: [3]

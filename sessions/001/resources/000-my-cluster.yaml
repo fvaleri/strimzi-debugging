@@ -6,17 +6,16 @@ spec:
   kafka:
     replicas: 3
     # set the kafka version
-    #version: 3.5.1
+    #version: x.x.x
     config:
       # set lowest protocol version (downgrade is not supported)
-      #inter.broker.protocol.version: "3.5"
+      #inter.broker.protocol.version: "x.x"
       num.partitions: 3
       default.replication.factor: 3
       min.insync.replicas: 2
       offsets.topic.replication.factor: 3
       transaction.state.log.replication.factor: 3
       transaction.state.log.min.isr: 2
-      auto.create.topics.enable: false
     listeners:
       - name: plain
         port: 9092

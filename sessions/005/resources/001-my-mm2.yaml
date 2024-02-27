@@ -4,17 +4,18 @@ metadata:
   name: my-mm2
 spec:
   replicas: 0
-  version: 3.5.1
+  # set the kafka version
+  #version: x.x.x
   connectCluster: my-cluster-tgt
   clusters:
     - alias: my-cluster
-      bootstrapServers: my-cluster-kafka-bootstrap.SED_SOURCE.svc:9093
+      bootstrapServers: my-cluster-kafka-bootstrap.SOURCE_NS.svc:9093
       tls:
         trustedCertificates:
           - certificate: ca.crt
             secretName: my-cluster-cluster-ca-cert
     - alias: my-cluster-tgt
-      bootstrapServers: my-cluster-tgt-kafka-bootstrap.SED_TARGET.svc:9093
+      bootstrapServers: my-cluster-tgt-kafka-bootstrap.TARGET_NS.svc:9093
       tls:
         trustedCertificates:
           - certificate: ca.crt

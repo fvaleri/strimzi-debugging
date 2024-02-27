@@ -66,13 +66,10 @@ It downloads Kafka to localhost and initializes the Kubernetes cluster installin
 
 ```sh
 $ source init.sh
-Configuring Kafka on localhost
-Getting Kafka from /tmp
-Kafka home: /tmp/kafka.9aqqP7a
+Downloading Kafka to /tmp/kafka-test
 Done
 Configuring Kafka on Kubernetes
 namespace/test created
-namespace/test-tgt created
 Done
 
 $ $KAFKA_HOME/bin/zookeeper-server-start.sh -daemon $KAFKA_HOME/config/zookeeper.properties \
@@ -188,13 +185,10 @@ In this example, we deploy a Kafka cluster to a Kubernetes cluster using the ope
 
 ```sh
 $ source init.sh
-Configuring Kafka on localhost
-Getting Kafka from /tmp
-Kafka home: /tmp/kafka.9aqqP7a
+Reusing Kafka in /tmp/kafka-test
 Done
 Configuring Kafka on Kubernetes
 namespace/test created
-namespace/test-tgt created
 Done
 ```
 
@@ -241,7 +235,7 @@ $ kubectl-kafka bin/kafka-console-producer.sh --bootstrap-server my-cluster-kafk
 >^C
 
 $ kubectl-kafka bin/kafka-console-consumer.sh --bootstrap-server my-cluster-kafka-bootstrap:9092 \
-  --topic my-topic --group my-group --from-beginning
+  --topic my-topic --group my-group --from-beginning --max-messages 2
 world
 hello
 ^CProcessed a total of 2 messages

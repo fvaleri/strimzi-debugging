@@ -51,32 +51,27 @@ kafka.kafka.strimzi.io/my-cluster patched
 
 $ for f in sessions/003/resources/*.yaml; do sed "s/namespace: .*/namespace: $NAMESPACE/g" $f \
   | kubectl create -f - --dry-run=client -o yaml | kubectl replace --force -f -; done
-clusterrole.rbac.authorization.k8s.io "apicurioregistry-editor-role" deleted
-clusterrole.rbac.authorization.k8s.io "apicurioregistry-viewer-role" deleted
-clusterrole.rbac.authorization.k8s.io "apicurio-registry-operator-role" deleted
-clusterrolebinding.rbac.authorization.k8s.io "apicurio-registry-operator-rolebinding" deleted
+customresourcedefinition.apiextensions.k8s.io/apicurioregistries.registry.apicur.io replaced
 serviceaccount/apicurio-registry-operator replaced
-clusterrole.rbac.authorization.k8s.io/apicurioregistry-editor-role replaced
-clusterrole.rbac.authorization.k8s.io/apicurioregistry-viewer-role replaced
-clusterrole.rbac.authorization.k8s.io/apicurio-registry-operator-role replaced
 role.rbac.authorization.k8s.io/apicurio-registry-operator-leader-election-role replaced
-clusterrolebinding.rbac.authorization.k8s.io/apicurio-registry-operator-rolebinding replaced
+clusterrole.rbac.authorization.k8s.io/apicurio-registry-operator-role replaced
 rolebinding.rbac.authorization.k8s.io/apicurio-registry-operator-leader-election-rolebinding replaced
+clusterrolebinding.rbac.authorization.k8s.io/apicurio-registry-operator-rolebinding replaced
 deployment.apps/apicurio-registry-operator replaced
 apicurioregistry.registry.apicur.io/my-registry replaced
 
 $ kubectl get po
 NAME                                          READY   STATUS    RESTARTS   AGE
-apicurio-registry-operator-767ff9ffff-bq5l8   1/1     Running   0          5m31s
-my-cluster-entity-operator-6d4d7b6fff-d2x7z   3/3     Running   0          83s
-my-cluster-kafka-0                            1/1     Running   0          2m45s
-my-cluster-kafka-1                            1/1     Running   0          2m45s
-my-cluster-kafka-2                            1/1     Running   0          2m45s
-my-cluster-zookeeper-0                        1/1     Running   0          4m7s
-my-cluster-zookeeper-1                        1/1     Running   0          4m7s
-my-cluster-zookeeper-2                        1/1     Running   0          4m7s
-my-registry-deployment-6fd6645b7d-k9v26       1/1     Running   0          5m22s
-strimzi-cluster-operator-7b6bfcc96c-srsdt     1/1     Running   0          8m5s
+apicurio-registry-operator-6c87ccb8fb-tgd59   1/1     Running   0          64s
+my-cluster-entity-operator-7766bb8469-vnvbs   3/3     Running   0          16m
+my-cluster-kafka-0                            1/1     Running   0          15m
+my-cluster-kafka-1                            1/1     Running   0          14m
+my-cluster-kafka-2                            1/1     Running   0          13m
+my-cluster-zookeeper-0                        1/1     Running   0          20m
+my-cluster-zookeeper-1                        1/1     Running   0          20m
+my-cluster-zookeeper-2                        1/1     Running   0          20m
+my-registry-deployment-bfbbc68b6-9dmlt        1/1     Running   0          39s
+strimzi-cluster-operator-95d88f6b5-rwh8b      1/1     Running   0          21m
 ```
 
 Now, we just need to tell our client application where it can find the Kafka cluster by setting the bootstrap URL and the schema registry REST endpoint.
@@ -86,7 +81,7 @@ We also need to provide the truststore location and password because we are conn
 $ kubectl get secret my-cluster-cluster-ca-cert -o jsonpath="{.data['ca\.p12']}" | base64 -d > /tmp/truststore.p12 \
   && export BOOTSTRAP_SERVERS=$(kubectl get routes my-cluster-kafka-bootstrap -o jsonpath="{.status.ingress[0].host}"):443 \
   REGISTRY_URL=http://$(kubectl get apicurioregistries my-registry -o jsonpath="{.status.info.host}")/apis/registry/v2 \
-  TOPIC_NAME="my-topic" ARTIFACT_GROUP="default" SSL_TRUSTSTORE_LOCATION="/tmp/truststore.p12" \
+  KAFKA_VERSION TOPIC_NAME="my-topic" ARTIFACT_GROUP="default" SSL_TRUSTSTORE_LOCATION="/tmp/truststore.p12" \
   SSL_TRUSTSTORE_PASSWORD=$(kubectl get secret my-cluster-cluster-ca-cert -o jsonpath="{.data['ca\.password']}" | base64 -d)
 
 $ mvn clean compile exec:java -f sessions/003/kafka-avro/pom.xml -q

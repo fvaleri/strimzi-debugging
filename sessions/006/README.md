@@ -156,6 +156,7 @@ kafka.kafka.strimzi.io "my-cluster" deleted
 ```
 
 Create new bigger volumes for our brokers (10Gi -> 20Gi).
+Here we simply create new PVCs and volumes are created automatically, but you may need to do it manually.
 
 ```sh
 $ for pod in $KAFKA_PODS; do
@@ -183,14 +184,6 @@ data-my-cluster-kafka-2-new   Bound    pvc-ca348d35-f466-446e-9f93-e3c15722d214 
 **Set the persistent volume reclaim policy to Retain to avoid losing broker data when deleting kafka PVCs.**
 
 ```sh
-$ kubectl get pv | grep $CLUSTER_NAME-kafka
-pvc-04b55551-fe7f-4662-9955-5e4baaf4df57   10Gi       RWO            Delete           Bound    test/data-my-cluster-kafka-0                                         ocs-external-storagecluster-ceph-rbd            6m24s
-pvc-0bd38196-2f5b-4a05-8917-b43bd2dde50b   20Gi       RWO            Delete           Bound    test/data-my-cluster-kafka-1-new                                     ocs-external-storagecluster-ceph-rbd            21s
-pvc-18280833-16a8-4cd5-8c6f-eb764acd3ce9   10Gi       RWO            Delete           Bound    test/data-my-cluster-kafka-1                                         ocs-external-storagecluster-ceph-rbd            6m24s
-pvc-1a66039a-14e7-4416-9319-6d6437543c02   20Gi       RWO            Delete           Bound    test/data-my-cluster-kafka-0-new                                     ocs-external-storagecluster-ceph-rbd            21s
-pvc-a148ee8b-2eef-422b-a35e-b71714b1ef85   10Gi       RWO            Delete           Bound    test/data-my-cluster-kafka-2                                         ocs-external-storagecluster-ceph-rbd            6m24s
-pvc-ca348d35-f466-446e-9f93-e3c15722d214   20Gi       RWO            Delete           Bound    test/data-my-cluster-kafka-2-new                                     ocs-external-storagecluster-ceph-rbd            20s
-
 $ for pv in $(kubectl get pv | grep $CLUSTER_NAME-kafka | awk '{print $1}'); do
   kubectl patch pv $pv --type merge -p '
     spec:
@@ -265,8 +258,8 @@ data-my-cluster-kafka-2   Bound    pvc-ca348d35-f466-446e-9f93-e3c15722d214   20
 ```
 
 Deploy the Kafka cluster with our brand new volumes, and check that it runs fine.
-**Don't forget to adjust the storage size in Kafka resource.**
-To let the cluster operator roll the broker pods, we have to temporary enable unclean leader election.
+**Don't forget to adjust the storage size in Kafka resource and enable unclean leader election.**
+We need unclean leader election in case of partitions with only one ISR, that would block broker pods rolling.
 
 ```sh
 $ cat sessions/001/resources/000-my-cluster.yaml \

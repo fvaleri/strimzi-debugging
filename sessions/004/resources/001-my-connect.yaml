@@ -7,7 +7,7 @@ metadata:
 spec:
   replicas: 1
   # set the kafka version
-  #version: 3.5.1
+  #version: x.x.x
   bootstrapServers: my-cluster-kafka-bootstrap:9093
   tls:
     trustedCertificates:
@@ -50,5 +50,5 @@ spec:
     plugins:
       - name: debezium-mysql
         artifacts:
-          - type: zip
-            url: https://maven.repository.redhat.com/ga/io/debezium/debezium-connector-mysql/1.9.7.Final-redhat-00003/debezium-connector-mysql-1.9.7.Final-redhat-00003-plugin.zip
+          - type: tgz
+            url: https://repo1.maven.org/maven2/io/debezium/debezium-connector-mysql/2.3.7.Final/debezium-connector-mysql-2.3.7.Final-plugin.tar.gz

@@ -55,13 +55,13 @@ The change event contains elements that can be used to identify and filter out d
 First, we [deploy the Strimzi Cluster Operator and Kafka cluster](/sessions/001).
 When the cluster is ready, we deploy a MySQL instance (the external system) and Kafka Connect cluster.
 Note that we are also initializing the database.
-The Kafka Connect image uses an internal component (kaniko) to build a custom image containing the configured MySQL connector.
+The Kafka Connect image uses an internal component (Kaniko) to build a custom image containing the configured MySQL connector.
+That said, you can also build and use your own Connect image derived from Strimzi one.
 
 ```sh
-# use your image name
-$ for f in sessions/004/resources/*.yaml; do sed "s#SED_IMAGE#quay.io/fvaleri/my-connect:latest#g" $f | kubectl create -f -; done \
+$ kubectl create -f sessions/004/resources \
   && kubectl wait --for=condition=Ready pod -l app=my-connect-mysql --timeout=300s \
-  && kubectl exec my-connect-mysql-0 -- bash -c 'mysql -u root < /tmp/sql/initdb.sql'
+  && kubectl exec my-connect-mysql-0 -- sh -c 'mysql -u root < /tmp/sql/initdb.sql'
 persistentvolumeclaim/my-connect-mysql-data created
 configmap/my-connect-mysql-cfg created
 configmap/my-connect-mysql-env created
@@ -102,7 +102,7 @@ As you may have guessed at this point, we are going to emit MySQL row changes an
 Let's check if the connector and its tasks are running fine by using the `KafkaConnector` resource, which is easier than interacting via REST requests.
 
 ```sh
-$ kubectl get kctr mysql-source -o yaml | yq '.status'
+$ kubectl get kctr mysql-source -o yaml | yq .status
 conditions:
   - lastTransitionTime: "2022-09-15T07:56:48.585862Z"
     status: "True"
@@ -129,11 +129,11 @@ The value of `server_id` must be unique for each server and replication client i
 In this case, the MySQL user must have appropriate permissions on all databases for which the connector captures changes.
 
 ```sh
-$ kubectl get cm my-connect-mysql-cfg -o yaml | yq '.data'
+$ kubectl get cm my-connect-mysql-cfg -o yaml | yq .data
 my.cnf: |
   !include /etc/my.cnf
   [mysqld]
-  server_id = 224466
+  server_id = 111111  
   log_bin = mysql-bin
   binlog_format = ROW
   binlog_row_image = FULL
@@ -142,7 +142,7 @@ my.cnf: |
   gtid_mode = ON
   enforce_gtid_consistency = ON
 
-$ kubectl get cm my-connect-mysql-init -o yaml | yq '.data'
+$ kubectl get cm my-connect-mysql-init -o yaml | yq .data
 initdb.sql: |
   use testdb;
     CREATE TABLE IF NOT EXISTS customers (
@@ -155,31 +155,6 @@ initdb.sql: |
   CREATE USER IF NOT EXISTS 'debezium'@'%' IDENTIFIED WITH caching_sha2_password BY 'changeit';
   GRANT SELECT, RELOAD, SHOW DATABASES, REPLICATION SLAVE, REPLICATION CLIENT ON *.* TO 'debezium'@'%';
   FLUSH PRIVILEGES;
-
-$ kubectl get kc my-connect -o yaml | yq '.spec.build.plugins'
-- artifacts:
-    - type: zip
-      url: https://maven.repository.redhat.com/ga/io/debezium/debezium-connector-mysql/1.9.5.Final-redhat-00001/debezium-connector-mysql-1.9.5.Final-redhat-00001-plugin.zip
-  name: debezium-mysql
-
-$ kubectl get kctr mysql-source -o yaml | yq '.spec'
-class: io.debezium.connector.mysql.MySqlConnector
-config:
-  database.allowPublicKeyRetrieval: true
-  database.dbname: testdb
-  database.history.kafka.bootstrap.servers: my-cluster-kafka-bootstrap:9092
-  database.history.kafka.topic: testdb.history
-  database.hostname: my-connect-mysql-svc
-  database.include.list: testdb
-  database.password: changeit
-  database.port: 3306
-  database.server.id: "222222"
-  database.server.name: my-connect-mysql
-  database.user: debezium
-  heartbeat.interval.ms: 10000
-  snapshot.mode: when_needed
-  table.include.list: testdb.customers
-tasksMax: 1
 ```
 
 Enough with describing the configuration, now let's create some changes using good old SQL.
@@ -201,7 +176,7 @@ It's interesting to look at some record properties: `op` is the change type (c=c
 
 ```sh
 $ kubectl-kafka bin/kafka-console-consumer.sh --bootstrap-server my-cluster-kafka-bootstrap:9092 \
-  --topic my-connect-mysql.testdb.customers --from-beginning --timeout-ms 5000
+  --topic my-mysql.testdb.customers --from-beginning --timeout-ms 5000
 Struct{after=Struct{id=2,first_name=Dylan,last_name=Dog,email=ddog@example.com},source=Struct{version=1.9.5.Final-redhat-00001,connector=mysql,name=my-connect-mysql,ts_ms=1663228576000,db=testdb,table=customers,server_id=224466,gtid=1c90a695-34cb-11ed-aba8-0a580a810216:16,file=mysql-bin.000002,pos=2585,row=0,thread=67},op=c,ts_ms=1663228576092}
 Struct{after=Struct{id=1,first_name=John,last_name=Doe,email=jdoe@example.com},source=Struct{version=1.9.5.Final-redhat-00001,connector=mysql,name=my-connect-mysql,ts_ms=1663228576000,db=testdb,table=customers,server_id=224466,gtid=1c90a695-34cb-11ed-aba8-0a580a810216:14,file=mysql-bin.000002,pos=1690,row=0,thread=67},op=c,ts_ms=1663228576088}
 Struct{before=Struct{id=1,first_name=John,last_name=Doe,email=jdoe@example.com},after=Struct{id=1,first_name=Jane,last_name=Doe,email=jdoe@example.com},source=Struct{version=1.9.5.Final-redhat-00001,connector=mysql,name=my-connect-mysql,ts_ms=1663228576000,db=testdb,table=customers,server_id=224466,gtid=1c90a695-34cb-11ed-aba8-0a580a810216:15,file=mysql-bin.000002,pos=2103,row=0,thread=67},op=u,ts_ms=1663228576091}

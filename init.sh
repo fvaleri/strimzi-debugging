@@ -1,8 +1,8 @@
 #!/usr/bin/env bash
 
 NAMESPACE="test"
-KAFKA_VERSION="3.5.1"
-STRIMZI_VERSION="0.37.0"
+KAFKA_VERSION="3.6.0"
+STRIMZI_VERSION="0.38.0"
 
 if [[ "${BASH_SOURCE[0]}" -ef "$0" ]]; then
   echo "Source this script, not execute it"; exit 1
@@ -18,10 +18,10 @@ get-kafka() {
   KAFKA_HOME="/tmp/kafka-test" && mkdir -p "$KAFKA_HOME" && export KAFKA_HOME
   local version && version="$("$KAFKA_HOME"/bin/kafka-topics.sh --version 2>/dev/null |awk '{print $1}')"
   if [[ $version == "$KAFKA_VERSION" ]]; then
-    echo "Reusing Kafka from $KAFKA_HOME"
+    echo "Reusing Kafka in $KAFKA_HOME"
     return
   fi
-  echo "Download Kafka into $KAFKA_HOME"
+  echo "Downloading Kafka to $KAFKA_HOME"
   curl -sLk "https://archive.apache.org/dist/kafka/$KAFKA_VERSION/kafka_2.13-$KAFKA_VERSION.tgz" \
     | tar xz -C "$KAFKA_HOME" --strip-components 1
 }

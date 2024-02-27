@@ -14,12 +14,12 @@
         <java.source.version>17</java.source.version>
         <java.target.version>17</java.target.version>
         <main.class>it.fvaleri.example.Main</main.class>
-        <kafka.version>${env.INIT_KAFKA_VERSION}</kafka.version>
-        <apicurio.registry.version>2.4.5.Final</apicurio.registry.version>
-        <jackson.databind.version>2.15.2</jackson.databind.version>
-        <slf4j.version>1.7.36</slf4j.version>
-        <plugin.compiler.version>3.11.0</plugin.compiler.version>
-        <plugin.exec.version>3.1.0</plugin.exec.version>
+        <kafka.version>${env.KAFKA_VERSION}</kafka.version>
+        <apicurio.registry.version>2.4.12.Final</apicurio.registry.version>
+        <jackson.databind.version>2.16.1</jackson.databind.version>
+        <slf4j.version>2.0.12</slf4j.version>
+        <plugin.compiler.version>3.12.1</plugin.compiler.version>
+        <plugin.exec.version>3.2.0</plugin.exec.version>
     </properties>
 
     <dependencies>
@@ -42,6 +42,11 @@
             <groupId>com.fasterxml.jackson.core</groupId>
             <artifactId>jackson-databind</artifactId>
             <version>${jackson.databind.version}</version>
+        </dependency>
+        <dependency>
+            <groupId>org.slf4j</groupId>
+            <artifactId>slf4j-api</artifactId>  
+            <version>${slf4j.version}</version>
         </dependency>
         <dependency>
             <groupId>org.slf4j</groupId>
