@@ -37,12 +37,6 @@ spec:
     requests:
       cpu: 1000m
       memory: 1Gi
-  readinessProbe:
-    initialDelaySeconds: 60
-    timeoutSeconds: 10
-  livenessProbe:
-    initialDelaySeconds: 60
-    timeoutSeconds: 10
   build:
     output:
       type: docker

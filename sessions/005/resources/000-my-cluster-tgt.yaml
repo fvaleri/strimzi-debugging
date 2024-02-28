@@ -28,22 +28,10 @@ spec:
       requests:
         cpu: 2000m
         memory: 2Gi
-    jvmOptions:
-      -Xms: 1024m
-      -Xmx: 1024m
     storage:
       size: 10Gi
       type: persistent-claim
       deleteClaim: false
-    readinessProbe:
-      initialDelaySeconds: 60
-      timeoutSeconds: 10
-    livenessProbe:
-      initialDelaySeconds: 60
-      timeoutSeconds: 10
-    template:
-      pod:
-        terminationGracePeriodSeconds: 60
   zookeeper:
     replicas: 3
     resources:
@@ -57,9 +45,3 @@ spec:
       size: 5Gi
       type: persistent-claim
       deleteClaim: false
-    readinessProbe:
-      initialDelaySeconds: 60
-      timeoutSeconds: 10
-    livenessProbe:
-      initialDelaySeconds: 60
-      timeoutSeconds: 10
