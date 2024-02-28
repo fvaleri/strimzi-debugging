@@ -214,6 +214,7 @@ $ for pod in $KAFKA_PODS; do
     | yq ".spec.volumes[0].persistentVolumeClaim.claimName = \"data-$pod\", .spec.volumes[1].persistentVolumeClaim.claimName = \"data-$pod-new\"" \
     | yq -p yaml -o json)"
 done
+...
 ```
 
 After that, we need to create the conditions for them to be reattached by the Kafka cluster.
