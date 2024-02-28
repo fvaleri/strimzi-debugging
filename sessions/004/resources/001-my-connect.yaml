@@ -1,7 +1,7 @@
 apiVersion: kafka.strimzi.io/v1beta2
 kind: KafkaConnect
 metadata:
-  name: my-connect
+  name: my-connect-cluster
   annotations:
     strimzi.io/use-connector-resources: "true"
 spec:
@@ -14,7 +14,7 @@ spec:
       - secretName: my-cluster-cluster-ca-cert
         certificate: ca.crt
   config:
-    group.id: my-connect
+    group.id: my-connect-cluster
     offset.storage.topic: connect-cluster-offsets
     config.storage.topic: connect-cluster-configs
     status.storage.topic: connect-cluster-status

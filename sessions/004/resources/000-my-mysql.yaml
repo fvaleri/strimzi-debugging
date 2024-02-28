@@ -1,7 +1,7 @@
 apiVersion: v1
 kind: PersistentVolumeClaim
 metadata:
-  name: my-connect-mysql-data
+  name: my-mysql-data
 spec:
   accessModes:
     - ReadWriteOnce
@@ -12,7 +12,7 @@ spec:
 apiVersion: v1
 kind: ConfigMap
 metadata:
-  name: my-connect-mysql-cfg
+  name: my-mysql-cfg
 data:
   # the server_id must be unique for each server or replication client
   my.cnf: |
@@ -30,7 +30,7 @@ data:
 apiVersion: v1
 kind: Secret
 metadata:
-  name: my-connect-mysql-env
+  name: my-mysql-env
 type: Opaque
 stringData:
   MYSQL_DEFAULTS_FILE: /config/configdb.d/my.cnf
@@ -42,7 +42,7 @@ stringData:
 apiVersion: v1
 kind: ConfigMap
 metadata:
-  name: my-connect-mysql-init
+  name: my-mysql-init
 data:
   initdb.sql: |
     use testdb;
@@ -60,17 +60,17 @@ data:
 apiVersion: apps/v1
 kind: StatefulSet
 metadata:
-  name: my-connect-mysql
+  name: my-mysql
 spec:
   replicas: 1
-  serviceName: my-connect-mysql
+  serviceName: my-mysql
   selector:
     matchLabels:
-      app: my-connect-mysql
+      app: my-mysql
   template:
     metadata:
       labels:
-        app: my-connect-mysql
+        app: my-mysql
     spec:
       containers:
         - name: mysql
@@ -80,16 +80,16 @@ spec:
               memory: 1Gi
           envFrom:
             - secretRef:
-                name: my-connect-mysql-env
+                name: my-mysql-env
           ports:
             - containerPort: 3306
               protocol: TCP
           volumeMounts:
-            - name: my-connect-mysql-data
+            - name: my-mysql-data
               mountPath: /var/lib/mysql
-            - name: my-connect-mysql-cfg
+            - name: my-mysql-cfg
               mountPath: /config/configdb.d
-            - name: my-connect-mysql-init
+            - name: my-mysql-init
               mountPath: /tmp/sql
           readinessProbe:
             exec:
@@ -102,20 +102,20 @@ spec:
             initialDelaySeconds: 60
             timeoutSeconds: 10
       volumes:
-        - name: my-connect-mysql-data
+        - name: my-mysql-data
           persistentVolumeClaim:
-            claimName: my-connect-mysql-data
-        - name: my-connect-mysql-cfg
+            claimName: my-mysql-data
+        - name: my-mysql-cfg
           configMap:
-            name: my-connect-mysql-cfg
-        - name: my-connect-mysql-init
+            name: my-mysql-cfg
+        - name: my-mysql-init
           configMap:
-            name: my-connect-mysql-init
+            name: my-mysql-init
 ---
 apiVersion: v1
 kind: Service
 metadata:
-  name: my-connect-mysql-svc
+  name: my-mysql-svc
 spec:
   ports:
     - name: mysql
@@ -123,5 +123,5 @@ spec:
       protocol: TCP
       targetPort: 3306
   selector:
-    app: my-connect-mysql
+    app: my-mysql
 ---
