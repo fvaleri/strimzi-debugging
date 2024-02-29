@@ -355,7 +355,7 @@ When the cluster is ready, break it by sending 110 MiB of data to a topic, which
 
 ```sh
 $ CLUSTER_NAME="my-cluster" \
-  ZK_PODS="$(kubectl get po -l strimzi.io/name=my-cluster-kafka --no-headers -o custom-columns=':metadata.name')" \
+  ZK_PODS="$(kubectl get po -l strimzi.io/name=my-cluster-zookeeper --no-headers -o custom-columns=':metadata.name')" \
   NEW_PV_CLASS="$(kubectl get pv | grep my-cluster-zookeeper-0 | awk '{print $7}')" \
   NEW_PV_SIZE="100Mi"
 
