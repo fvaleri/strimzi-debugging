@@ -41,7 +41,7 @@ Volumes with either `persistentVolumeReclaimPolicy: Retain`, or using a storage 
 <br/>
 
 ---
-### Example: no space left on device WITH volume expansion
+### Example: no space left on device WITH volume expansion (online recovery)
 
 First, [deploy the Strimzi Cluster Operator and Kafka cluster](/sessions/001).
 When the cluster is ready, break it by sending 11 GiB of data to a topic, which exceeds the disk capacity of 10 GiB.
@@ -106,7 +106,7 @@ my-cluster-kafka-2                            1/1     Running   0             4m
 <br>
 
 ---
-### Example: no space left on device WITHOUT volume expansion
+### Example: no space left on device WITHOUT volume expansion (offline recovery)
 
 This procedure has some tricky steps highlighted in bold, where you need to be extra careful to avoid losing data.
 **Don't use Minikube for this example, as it doesn't have full volume support.**
