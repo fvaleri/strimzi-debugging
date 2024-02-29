@@ -594,7 +594,7 @@ $ kubectl create -f sessions/001/resources/001-my-topic.yaml
 kafkatopic.kafka.strimzi.io/my-topic created
 ```
 
-When the cluster is ready, break it by sending 110 MiB of data to a topic, which exceeds the disk capacity of 100 MiB.
+When the cluster is ready, break the zookeeper by creating 3 topics and 1000 partitions per topic, which exceeds the disk capacity of 1 MiB.
 
 ```sh
 $ CLUSTER_NAME="my-cluster" \
@@ -769,35 +769,38 @@ my-cluster-zookeeper-0                        1/1     Running   0          6m14s
 my-cluster-zookeeper-1                        1/1     Running   0          6m14s
 my-cluster-zookeeper-2                        1/1     Running   0          6m14s
 
-$ kubectl-kafka bin/kafka-topics.sh --bootstrap.servers=$CLUSTER_NAME-kafka-bootstrap:9092 --topic t0 --describe
-Topic: t0	TopicId: O_jLcdCZQuyNgxSGNOZDHg	PartitionCount: 500	ReplicationFactor: 3	Configs: min.insync.replicas=2,message.format.version=3.0-IV1
+$ kubectl-kafka bin/kafka-topics.sh --bootstrap-server $CLUSTER_NAME-kafka-bootstrap:9092 --topic t0 --describe
+Topic: t0	TopicId: O_jLcdCZQuyNgxSGNOZDHg	PartitionCount: 1000	ReplicationFactor: 3	Configs: min.insync.replicas=2,message.format.version=3.0-IV1
 	Topic: t0	Partition: 0	Leader: 1	Replicas: 1,2,0	Isr: 1,0,2
 	Topic: t0	Partition: 1	Leader: 1	Replicas: 0,1,2	Isr: 1,0,2
 	Topic: t0	Partition: 2	Leader: 1	Replicas: 2,0,1	Isr: 1,0,2
 	Topic: t0	Partition: 3	Leader: 1	Replicas: 1,0,2	Isr: 1,0,2
-	Topic: t0	Partition: 4	Leader: 1	Replicas: 0,2,1	Isr: 1,0,2
-	Topic: t0	Partition: 5	Leader: 1	Replicas: 2,1,0	Isr: 1,0,2
-	Topic: t0	Partition: 6	Leader: 1	Replicas: 1,2,0	Isr: 1,0,2
-	Topic: t0	Partition: 7	Leader: 1	Replicas: 0,1,2	Isr: 1,0,2
-	Topic: t0	Partition: 8	Leader: 1	Replicas: 2,0,1	Isr: 1,0,2
-	Topic: t0	Partition: 9	Leader: 1	Replicas: 1,0,2	Isr: 1,0,2
+	...
+	Topic: t0	Partition: 999	Leader: 1	Replicas: 0,1,2	Isr: 1,0,2
 
-kubectl-kafka bin/kafka-topics.sh --bootstrap.servers=$CLUSTER_NAME-kafka-bootstrap:9092 --topic t1 --describe
+kubectl-kafka bin/kafka-topics.sh --bootstrap-server $CLUSTER_NAME-kafka-bootstrap:9092 --topic t1 --describe
 Topic: t1	TopicId: Zz3T1a_hQiGvHv8LLK7H9Q	PartitionCount: 1000	ReplicationFactor: 3	Configs: min.insync.replicas=2,message.format.version=3.0-IV1
 	Topic: t1	Partition: 0	Leader: 1	Replicas: 1,0,2	Isr: 1,0,2
 	Topic: t1	Partition: 1	Leader: 1	Replicas: 0,2,1	Isr: 1,0,2
 	Topic: t1	Partition: 2	Leader: 1	Replicas: 2,1,0	Isr: 1,0,2
 	Topic: t1	Partition: 3	Leader: 1	Replicas: 1,2,0	Isr: 1,0,2
-	Topic: t1	Partition: 4	Leader: 1	Replicas: 0,1,2	Isr: 1,0,2
-	Topic: t1	Partition: 5	Leader: 1	Replicas: 2,0,1	Isr: 1,0,2
-	Topic: t1	Partition: 6	Leader: 1	Replicas: 1,0,2	Isr: 1,0,2
-	Topic: t1	Partition: 7	Leader: 1	Replicas: 0,2,1	Isr: 1,0,2
-	Topic: t1	Partition: 8	Leader: 1	Replicas: 2,1,0	Isr: 1,0,2
-	Topic: t1	Partition: 9	Leader: 1	Replicas: 1,2,0	Isr: 1,0,2
-	Topic: t1	Partition: 10	Leader: 1	Replicas: 0,1,2	Isr: 1,0,2
 	...
 	Topic: t1	Partition: 999	Leader: 1	Replicas: 0,1,2	Isr: 1,0,2
 ```
+We can also get the topic t2's information even though it caused disk full when creating topic t2.
+If this command didn't show expected results, try to run the command later since zookeeper also needs time to do data recovery.
+
+```
+kubectl-kafka bin/kafka-topics.sh --bootstrap-server $CLUSTER_NAME-kafka-bootstrap:9092 --describe --topic t2
+Topic: t2	TopicId: LCYz44eWSYmMA1xhY9BpdQ	PartitionCount: 1000	ReplicationFactor: 3	Configs: min.insync.replicas=2,message.format.version=3.0-IV1
+	Topic: t2	Partition: 0	Leader: 0	Replicas: 1,0,2	Isr: 0,1,2
+	Topic: t2	Partition: 1	Leader: 0	Replicas: 0,2,1	Isr: 0,1,2
+	Topic: t2	Partition: 2	Leader: 0	Replicas: 2,1,0	Isr: 0,1,2
+	Topic: t2	Partition: 3	Leader: 0	Replicas: 1,2,0	Isr: 0,1,2
+	...
+	Topic: t2	Partition: 999	Leader: 0	Replicas: 1,2,0	Isr: 0,1,2
+```
+
 
 Finally, we delete the old volumes to reclaim some space, and optionally set the retain policy back to Delete on new volumes.
 
