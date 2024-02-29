@@ -326,3 +326,253 @@ pvc-0bd38196-2f5b-4a05-8917-b43bd2dde50b   20Gi       RWO            Delete     
 pvc-1a66039a-14e7-4416-9319-6d6437543c02   20Gi       RWO            Delete           Bound    test/data-my-cluster-kafka-0                                         ocs-external-storagecluster-ceph-rbd            18m
 pvc-ca348d35-f466-446e-9f93-e3c15722d214   20Gi       RWO            Delete           Bound    test/data-my-cluster-kafka-2                                         ocs-external-storagecluster-ceph-rbd            18m
 ```
+
+
+=====
+
+### ZOOKEEPER
+
+---
+### Example: no space left on device WITHOUT volume expansion
+
+This procedure has some tricky steps highlighted in bold, where you need to be extra careful to avoid losing data.
+**Don't use Minikube for this example, as it doesn't have full volume support.**
+
+First, [deploy the Strimzi Cluster Operator](/sessions/001).
+For the sake of this example, we deploy the Kafka cluster reducing the disk size.
+
+```sh
+$ cat sessions/001/resources/000-my-cluster.yaml \
+    | yq ".spec.zookeeper.storage.size = \"1Mi\"" \
+    | kubectl create -f -
+kafka.kafka.strimzi.io/my-cluster created
+
+$ kubectl create -f sessions/001/resources/001-my-topic.yaml
+kafkatopic.kafka.strimzi.io/my-topic created
+```
+
+When the cluster is ready, break it by sending 110 MiB of data to a topic, which exceeds the disk capacity of 100 MiB.
+
+```sh
+$ CLUSTER_NAME="my-cluster" \
+  ZK_PODS="$(kubectl get po -l strimzi.io/name=my-cluster-kafka --no-headers -o custom-columns=':metadata.name')" \
+  NEW_PV_CLASS="$(kubectl get pv | grep my-cluster-zookeeper-0 | awk '{print $7}')" \
+  NEW_PV_SIZE="100Mi"
+
+$ kubectl get pvc -l strimzi.io/name=$CLUSTER_NAME-zookeeper
+NAME                          STATUS   VOLUME                                     CAPACITY   ACCESS MODES   STORAGECLASS                           AGE
+data-my-cluster-zookeeper-0   Bound    pvc-7979a0d6-17e3-4ccc-adf5-72fd033073ee   1Mi        RWO            ocs-external-storagecluster-ceph-rbd   6m
+data-my-cluster-zookeeper-1   Bound    pvc-787734b0-c3e4-4068-a964-dc56802ccb65   1Mi        RWO            ocs-external-storagecluster-ceph-rbd   6m
+data-my-cluster-zookeeper-2   Bound    pvc-2250763e-0d8c-4e78-9c3b-5e00ec40970a   1Mi        RWO            ocs-external-storagecluster-ceph-rbd   6m
+
+
+$ kubectl-kafka bin/kafka-topics.sh --bootstrap-server $CLUSTER_NAME-kafka-bootstrap:9092 --topic t0 --create --partitions 1000 && \
+kubectl-kafka bin/kafka-topics.sh --bootstrap-server $CLUSTER_NAME-kafka-bootstrap:9092 --topic t1 --create --partitions 1000 && \
+kubectl-kafka bin/kafka-topics.sh --bootstrap-server $CLUSTER_NAME-kafka-bootstrap:9092 --topic t2 --create --partitions 1000
+Created topic t0.
+Created topic t1.
+Error while executing topic command : The request timed out.
+[2024-02-29 09:42:21,758] ERROR org.apache.kafka.common.errors.TimeoutException: The request timed out.
+ (kafka.admin.TopicCommand$)
+
+$ kubectl get po -l strimzi.io/name=$CLUSTER_NAME-zookeeper
+NAME                     READY   STATUS             RESTARTS        AGE
+my-cluster-zookeeper-0   0/1     CrashLoopBackOff   5 (2m16s ago)   16m
+my-cluster-zookeeper-1   0/1     CrashLoopBackOff   5 (2m24s ago)   16m
+my-cluster-zookeeper-2   1/1     Running            0               16m
+
+$ kubectl logs $CLUSTER_NAME-zoookeeper-0 | grep "No space left on device" | tail -n1
+java.io.IOException: No space left on device
+```
+
+Even if not all pods are failed, we still need to increase the volume size of all brokers because the storage configuration is shared.
+**Before deleting the Kafka cluster, make sure that delete claim storage configuration is set to false in Kafka resource.**
+
+```sh
+$ if [[ $(kubectl get k $CLUSTER_NAME -o yaml | yq .spec.zookeeper.storage.deleteClaim) == "false" ]]; then kubectl delete k $CLUSTER_NAME; fi
+kafka.kafka.strimzi.io "my-cluster" deleted
+```
+
+Create new and bigger volumes for our brokers.
+In this case, volumes are created automatically, but you may need to create them manually.
+
+```sh
+$ for pod in $ZK_PODS; do
+  cat sessions/006/resources/pvc-new.yaml \
+    | yq ".metadata.name = \"data-$pod-new\" \
+      | .metadata.labels.\"strimzi.io/name\" = \"$CLUSTER_NAME-zookeeper\" \
+      | .spec.storageClassName = \"$NEW_PV_CLASS\" \
+      | .spec.resources.requests.storage = \"$NEW_PV_SIZE\"" \
+    | kubectl create -f -
+done
+persistentvolumeclaim/data-my-cluster-zookeeper-0-new created
+persistentvolumeclaim/data-my-cluster-zookeeper-1-new created
+persistentvolumeclaim/data-my-cluster-zookeeper-2-new created
+
+
+$ kubectl get pvc -l strimzi.io/name=$CLUSTER_NAME-zookeeper
+NAME                              STATUS   VOLUME                                     CAPACITY   ACCESS MODES   STORAGECLASS                           AGE
+data-my-cluster-zookeeper-0       Bound    pvc-7979a0d6-17e3-4ccc-adf5-72fd033073ee   1Mi        RWO            ocs-external-storagecluster-ceph-rbd   19m
+data-my-cluster-zookeeper-0-new   Bound    pvc-609ec479-4e6a-483d-8f3c-7c10841a41b2   100Mi      RWO            ocs-external-storagecluster-ceph-rbd   26s
+data-my-cluster-zookeeper-1       Bound    pvc-787734b0-c3e4-4068-a964-dc56802ccb65   1Mi        RWO            ocs-external-storagecluster-ceph-rbd   19m
+data-my-cluster-zookeeper-1-new   Bound    pvc-7f462f51-f32b-4d17-a05d-af6497e5940e   100Mi      RWO            ocs-external-storagecluster-ceph-rbd   24s
+data-my-cluster-zookeeper-2       Bound    pvc-2250763e-0d8c-4e78-9c3b-5e00ec40970a   1Mi        RWO            ocs-external-storagecluster-ceph-rbd   19m
+data-my-cluster-zookeeper-2-new   Bound    pvc-ddb39dbe-3e15-4757-9af8-fc3c498a01ab   100Mi      RWO            ocs-external-storagecluster-ceph-rbd   23s
+
+```
+
+**Set the persistent volume reclaim policy to Retain, in order to avoid losing broker data when deleting Kafka PVCs.**
+
+```sh
+$ for pv in $(kubectl get pv | grep $CLUSTER_NAME-zookeeper | awk '{print $1}'); do
+  kubectl patch pv $pv --type merge -p '
+    spec:
+      persistentVolumeReclaimPolicy: Retain'
+done
+persistentvolume/pvc-2250763e-0d8c-4e78-9c3b-5e00ec40970a patched
+persistentvolume/pvc-609ec479-4e6a-483d-8f3c-7c10841a41b2 patched
+persistentvolume/pvc-787734b0-c3e4-4068-a964-dc56802ccb65 patched
+persistentvolume/pvc-7979a0d6-17e3-4ccc-adf5-72fd033073ee patched
+persistentvolume/pvc-7f462f51-f32b-4d17-a05d-af6497e5940e patched
+persistentvolume/pvc-ddb39dbe-3e15-4757-9af8-fc3c498a01ab patched
+
+$ kubectl get pv | grep $CLUSTER_NAME-zookeeper
+pvc-2250763e-0d8c-4e78-9c3b-5e00ec40970a   1Mi        RWO            Retain           Bound    test/data-my-cluster-zookeeper-2                                     ocs-external-storagecluster-ceph-rbd            20m
+pvc-609ec479-4e6a-483d-8f3c-7c10841a41b2   100Mi      RWO            Retain           Bound    test/data-my-cluster-zookeeper-0-new                                 ocs-external-storagecluster-ceph-rbd            99s
+pvc-787734b0-c3e4-4068-a964-dc56802ccb65   1Mi        RWO            Retain           Bound    test/data-my-cluster-zookeeper-1                                     ocs-external-storagecluster-ceph-rbd            20m
+pvc-7979a0d6-17e3-4ccc-adf5-72fd033073ee   1Mi        RWO            Retain           Bound    test/data-my-cluster-zookeeper-0                                     ocs-external-storagecluster-ceph-rbd            20m
+pvc-7f462f51-f32b-4d17-a05d-af6497e5940e   100Mi      RWO            Retain           Bound    test/data-my-cluster-zookeeper-1-new                                 ocs-external-storagecluster-ceph-rbd            98s
+pvc-ddb39dbe-3e15-4757-9af8-fc3c498a01ab   100Mi      RWO            Retain           Bound    test/data-my-cluster-zookeeper-2-new                                 ocs-external-storagecluster-ceph-rbd            96s
+```
+
+Copy all broker data from the old volumes to the new volumes spinning up a maintenance pod.
+Note that the following commands may take some time, depending on the amount of data they have to copy.
+
+```sh
+$ for pod in $ZK_PODS; do
+  kubectl run kubectl-copy-$pod -itq --rm --restart "Never" --image "foo" --overrides "$(cat sessions/006/resources/patch.yaml \
+    | yq ".spec.volumes[0].persistentVolumeClaim.claimName = \"data-$pod\", .spec.volumes[1].persistentVolumeClaim.claimName = \"data-$pod-new\"" \
+    | yq -p yaml -o json)"
+done
+'/old/data/myid' -> '/new/data/myid'
+'/old/data/version-2/currentEpoch' -> '/new/data/version-2/currentEpoch'
+'/old/data/version-2/log.200000001' -> '/new/data/version-2/log.200000001'
+'/old/data/version-2/acceptedEpoch' -> '/new/data/version-2/acceptedEpoch'
+'/old/data/version-2/snapshot.0' -> '/new/data/version-2/snapshot.0'
+'/old/data/version-2' -> '/new/data/version-2'
+'/old/data' -> '/new/data'
+'/old/logs' -> '/new/logs'
+'/old/lost+found' -> '/new/lost+found'
+...
+```
+
+After that, we need to create the conditions for them to be reattached by the Kafka cluster.
+Delete the all Kafka PVCs and PV claim references, just before creating the final PVCs with the new storage size.
+
+```sh
+$ for pod in $ZK_PODS; do
+  PVC_NAMES="$(kubectl get pvc | grep data-$pod | awk '{print $1}')"
+  kubectl delete pvc $PVC_NAMES
+  PV_NAMES="$(kubectl get pv | grep data-$pod | awk '{print $1}')"
+  NEW_PV_NAME="$(kubectl get pv | grep data-$pod-new | awk '{print $1}')"
+  kubectl patch pv $PV_NAMES --type json -p '[{"op":"remove","path":"/spec/claimRef"}]'
+  cat sessions/006/resources/pvc.yaml \
+    | yq ".metadata.name = \"data-$pod\" \
+      | .metadata.labels.\"strimzi.io/name\" = \"$CLUSTER_NAME-zookeeper\" \
+      | .spec.storageClassName = \"$NEW_PV_CLASS\" \
+      | .spec.volumeName = \"$NEW_PV_NAME\" \
+      | .spec.resources.requests.storage = \"$NEW_PV_SIZE\"" \
+    | kubectl create -f -
+done
+persistentvolumeclaim "data-my-cluster-zookeeper-0" deleted
+persistentvolumeclaim "data-my-cluster-zookeeper-0-new" deleted
+persistentvolume/pvc-609ec479-4e6a-483d-8f3c-7c10841a41b2 patched
+persistentvolume/pvc-7979a0d6-17e3-4ccc-adf5-72fd033073ee patched
+persistentvolumeclaim/data-my-cluster-zookeeper-0 created
+persistentvolumeclaim "data-my-cluster-zookeeper-1" deleted
+persistentvolumeclaim "data-my-cluster-zookeeper-1-new" deleted
+persistentvolume/pvc-787734b0-c3e4-4068-a964-dc56802ccb65 patched
+persistentvolume/pvc-7f462f51-f32b-4d17-a05d-af6497e5940e patched
+persistentvolumeclaim/data-my-cluster-zookeeper-1 created
+persistentvolumeclaim "data-my-cluster-zookeeper-2" deleted
+persistentvolumeclaim "data-my-cluster-zookeeper-2-new" deleted
+persistentvolume/pvc-2250763e-0d8c-4e78-9c3b-5e00ec40970a patched
+persistentvolume/pvc-ddb39dbe-3e15-4757-9af8-fc3c498a01ab patched
+persistentvolumeclaim/data-my-cluster-zookeeper-2 created
+
+$ kubectl get pvc -l strimzi.io/name=$CLUSTER_NAME-zookeeper
+NAME                          STATUS   VOLUME                                     CAPACITY   ACCESS MODES   STORAGECLASS                           AGE
+data-my-cluster-zookeeper-0   Bound    pvc-609ec479-4e6a-483d-8f3c-7c10841a41b2   100Mi      RWO            ocs-external-storagecluster-ceph-rbd   29s
+data-my-cluster-zookeeper-1   Bound    pvc-7f462f51-f32b-4d17-a05d-af6497e5940e   100Mi      RWO            ocs-external-storagecluster-ceph-rbd   22s
+data-my-cluster-zookeeper-2   Bound    pvc-ddb39dbe-3e15-4757-9af8-fc3c498a01ab   100Mi      RWO            ocs-external-storagecluster-ceph-rbd   15s
+```
+
+Deploy the Kafka cluster with our brand new volumes, and then try to consume some data.
+**Don't forget to adjust the storage size in Zookeeper custom resource.**
+
+```sh
+$ cat sessions/001/resources/000-my-cluster.yaml \
+  | yq ".spec.zookeeper.storage.size = \"100Mi\"" \
+  | kubectl create -f -
+kafka.kafka.strimzi.io/my-cluster created
+
+$ kubectl get po -l strimzi.io/cluster=$CLUSTER_NAME
+NAME                                          READY   STATUS    RESTARTS   AGE
+my-cluster-entity-operator-7d6d6bd454-sh7rc   3/3     Running   0          96s
+my-cluster-kafka-0                            1/1     Running   0          5m9s
+my-cluster-kafka-1                            1/1     Running   0          5m9s
+my-cluster-kafka-2                            1/1     Running   0          5m9s
+my-cluster-zookeeper-0                        1/1     Running   0          6m14s
+my-cluster-zookeeper-1                        1/1     Running   0          6m14s
+my-cluster-zookeeper-2                        1/1     Running   0          6m14s
+
+$ kubectl-kafka bin/kafka-topics.sh --bootstrap.servers=$CLUSTER_NAME-kafka-bootstrap:9092 --topic t0 --describe
+Topic: t0	TopicId: O_jLcdCZQuyNgxSGNOZDHg	PartitionCount: 500	ReplicationFactor: 3	Configs: min.insync.replicas=2,message.format.version=3.0-IV1
+	Topic: t0	Partition: 0	Leader: 1	Replicas: 1,2,0	Isr: 1,0,2
+	Topic: t0	Partition: 1	Leader: 1	Replicas: 0,1,2	Isr: 1,0,2
+	Topic: t0	Partition: 2	Leader: 1	Replicas: 2,0,1	Isr: 1,0,2
+	Topic: t0	Partition: 3	Leader: 1	Replicas: 1,0,2	Isr: 1,0,2
+	Topic: t0	Partition: 4	Leader: 1	Replicas: 0,2,1	Isr: 1,0,2
+	Topic: t0	Partition: 5	Leader: 1	Replicas: 2,1,0	Isr: 1,0,2
+	Topic: t0	Partition: 6	Leader: 1	Replicas: 1,2,0	Isr: 1,0,2
+	Topic: t0	Partition: 7	Leader: 1	Replicas: 0,1,2	Isr: 1,0,2
+	Topic: t0	Partition: 8	Leader: 1	Replicas: 2,0,1	Isr: 1,0,2
+	Topic: t0	Partition: 9	Leader: 1	Replicas: 1,0,2	Isr: 1,0,2
+
+kubectl-kafka bin/kafka-topics.sh --bootstrap.servers=$CLUSTER_NAME-kafka-bootstrap:9092 --topic t1 --describe
+Topic: t1	TopicId: Zz3T1a_hQiGvHv8LLK7H9Q	PartitionCount: 1000	ReplicationFactor: 3	Configs: min.insync.replicas=2,message.format.version=3.0-IV1
+	Topic: t1	Partition: 0	Leader: 1	Replicas: 1,0,2	Isr: 1,0,2
+	Topic: t1	Partition: 1	Leader: 1	Replicas: 0,2,1	Isr: 1,0,2
+	Topic: t1	Partition: 2	Leader: 1	Replicas: 2,1,0	Isr: 1,0,2
+	Topic: t1	Partition: 3	Leader: 1	Replicas: 1,2,0	Isr: 1,0,2
+	Topic: t1	Partition: 4	Leader: 1	Replicas: 0,1,2	Isr: 1,0,2
+	Topic: t1	Partition: 5	Leader: 1	Replicas: 2,0,1	Isr: 1,0,2
+	Topic: t1	Partition: 6	Leader: 1	Replicas: 1,0,2	Isr: 1,0,2
+	Topic: t1	Partition: 7	Leader: 1	Replicas: 0,2,1	Isr: 1,0,2
+	Topic: t1	Partition: 8	Leader: 1	Replicas: 2,1,0	Isr: 1,0,2
+	Topic: t1	Partition: 9	Leader: 1	Replicas: 1,2,0	Isr: 1,0,2
+	Topic: t1	Partition: 10	Leader: 1	Replicas: 0,1,2	Isr: 1,0,2
+	...
+	Topic: t1	Partition: 999	Leader: 1	Replicas: 0,1,2	Isr: 1,0,2
+```
+
+Finally, we delete the old volumes to reclaim some space, and optionally set the retain policy back to Delete on new volumes.
+
+```sh
+$ kubectl delete pv $(kubectl get pv | grep Available | awk '{print $1}')
+persistentvolume "pvc-04b55551-fe7f-4662-9955-5e4baaf4df57" deleted
+persistentvolume "pvc-18280833-16a8-4cd5-8c6f-eb764acd3ce9" deleted
+persistentvolume "pvc-a148ee8b-2eef-422b-a35e-b71714b1ef85" deleted
+
+$ kubectl patch pv $(kubectl get pv | grep "$CLUSTER_NAME-zookeeper" | awk '{print $1}') --type merge -p '
+    spec:
+      persistentVolumeReclaimPolicy: Delete'
+persistentvolume/pvc-0bd38196-2f5b-4a05-8917-b43bd2dde50b patched
+persistentvolume/pvc-1a66039a-14e7-4416-9319-6d6437543c02 patched
+persistentvolume/pvc-ca348d35-f466-446e-9f93-e3c15722d214 patched
+
+$ kubectl get pv | grep $CLUSTER_NAME-zookeeper
+pvc-0bd38196-2f5b-4a05-8917-b43bd2dde50b   20Gi       RWO            Delete           Bound    test/data-my-cluster-zookeeper-1                                         ocs-external-storagecluster-ceph-rbd            18m
+pvc-1a66039a-14e7-4416-9319-6d6437543c02   20Gi       RWO            Delete           Bound    test/data-my-cluster-zookeeper-0                                         ocs-external-storagecluster-ceph-rbd            18m
+pvc-ca348d35-f466-446e-9f93-e3c15722d214   20Gi       RWO            Delete           Bound    test/data-my-cluster-zookeeper-2                                         ocs-external-storagecluster-ceph-rbd            18m
+```
