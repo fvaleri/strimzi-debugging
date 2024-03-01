@@ -6,7 +6,7 @@ Hostname verification using a common name (CN) or subject alternative name (SAN)
 
 A TLS certificate contains the public key along with the ownership data and expiration date.
 A self-signed certificate (Issuer == Subject) is secure enough, but only if it is trusted upfront by the application.
-It is also possible to create a wildcard certificate (e.g. `commonName=*.example.com`), that can be used by all applications running in a specific subdomain (e.g. an OpenShift cluster).
+It is also possible to create a wildcard certificate (e.g. `commonName=*.example.com`), that can be used by all applications running in a specific subdomain.
 Cipher suites contain algorithms for key exchange, encryption and authentication.
 
 A public key infrastructure (PKI) is an arrangement that binds public keys with respective identities, such as organizations, people, or applications.
@@ -20,7 +20,7 @@ Two self-signed CAs are automatically generated and used to sign all cluster (cl
 
 The server name indication (SNI) extension allows a client to indicate which hostname it is trying to connect to at the start of the TLS handshake.
 The server can present multiple certificates on the same IP address and port number.
-For example, it is used by OpenShift to route external connections to the right pod when having passthrough routes, and also allows a TCP tunnel through the HTTP reverse proxy.
+For example, it is used to route external connections to the right pod when having pass-through routes, and also allows a TCP tunnel through the HTTP reverse proxy.
 
 Kafka clients don't need to trust TLS certificates when they are signed by a well-known CA that is already included in the system truststore (e.g. `$JAVA_HOME/jre/lib/security/cacerts`).
 When enabling TLS mutual authentication (mTLS), the server should also support the certificate CN mapping to the user identity.
@@ -32,7 +32,7 @@ Almost all authentication problems occur within this initial handshake.
 ---
 ### Example: TLS authentication (mTLS) using an external listener
 
-First, [deploy the Strimzi Cluster Operator and Kafka cluster](/sessions/001), and set the external listener (we run on OpenShift here, but you need to use `type: ingress` on Kubernetes).
+First, [deploy the Strimzi Cluster Operator and Kafka cluster](/sessions/001), and set the external listener (if route is not supported, you can use type ingress).
 Then, we apply the configuration changes to enable TLS authentication and wait for the Cluster Operator to restart all pods one by one (rolling update).
 If the Kafka cluster is operating correctly, it is possible to update the configuration with zero downtime.
 

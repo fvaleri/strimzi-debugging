@@ -1,4 +1,4 @@
-## Kafka Connect and change data capture
+## Data integration and Kafka Connect
 
 Kafka Connect is a configuration-driven fault-tolerant integration platform based on Kafka client APIs, which runs in standalone or distributed mode (cluster of workers).
 The platform can be extended by using connector, converter, and transformation plugins that implement the connect API interfaces.

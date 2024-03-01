@@ -1,83 +1,166 @@
-## Storage requirements and volume recovery
+## Storage requirements and recovery
 
 Kafka requires low latency storage for both broker commit logs and ZooKeeper data.
-The block storage type offers greater efficiency and faster performance than file and object storage types, which is why it is often recommended for Kafka.
-That said, Kafka does NOT directly use raw block devices, but instead writes to segment files that are stored on a standard file system.
+Block storage type (e.g. SSD, NVMe, AWS EBS) is recommended because it offers greater efficiency and faster performance compared to file and object storage types.
+That said, Kafka doesn't use raw block devices, but instead writes data to segment files that are stored on a standard file system.
 These segment files are memory mapped for improved performance, which enables zero-copy optimization when TLS is not configured.
-There is no hard dependency on a specific file system, although XFS is recommended.
-NFS is known to cause problems when renaming files.
+NFS is not supported, because it causes problems when renaming files.
 
-When the producer and consumer are fast enough, disk usage is not necessary, but it is required when old data needs to be read or when the operating system needs to flush dirty pages. 
-In these scenarios, disk speed and latency are important factors, including tail latencies (such as p95 and p99) if there are end-to-end message latency requirements.
-The specific characteristics of the storage system depend on the particular use case. 
-It may be helpful to compare against local storage options such as SSD or NVMe, or to consider a shared storage environment such as NVMe-oF or NVMe/TCP.
+Disk usage is not necessary when producer and consumer are fast, but it is required when old data needs to be read, or when the Operating System needs to flush dirty pages.
+If there are end-to-end message latency requirements, disk speed and latency, including tail latencies, are important factors.
+An easy optimization is to disable the last access time file attribute (`noatime`), so that the system can avoid unnecessary disk I/O operations.
 
-Both Kafka and Zookeeper have built-in data replication, so they do not need replicated storage to ensure data availability, which would only add network overhead.
-You can also use JBOD (just a bunch of disks), which gives good performance when using multiple disks in parallel.
-An easy optimization to improve performance is to disable the last access time file attribute (`noatime`).
-By disabling `noatime`, the system can avoid unnecessary disk I/O operations and reduce the overall overhead of file system access.
+Both Kafka and Zookeeper have built-in data replication, so they do not need a replicated storage to ensure data availability, which would only add network overhead.
+Kafka supports JBOD (just a bunch of disks), which gives some felxibility with storage resizing, and good performance when using multiple disks in parallel.
+When removing a disk with JBOD, all data needs to be migrated to other disks upfront, for example using Cruise Control.
 
-Ideally, when provisioning a new Kafka cluster or topic, the retention policy should be set properly based on requirements and expected throughput (MB/s).
-Log segments become inactive after a period of time determined by `segment.ms`, or after reaching a certain size determined by `segment.bytes`.
-By default and if you don't set your own, the record's time is set by the producer application with the current time of its system clock.
-If only one record is not yet eligible for deletion based on `retention.ms` or `retention.bytes`, the broker retains the entire segment file.
-For this reason, it is usually recommended to set both time and size based retention, and you can also set `log.message.timestamp.type=LogAppendTime`.
-Deletion timing also depends on the cluster load and how many `background.threads` are available for normal topics, and `log.cleaner.threads` for compacted topics.
+Ideally, when creating a new topic, the retention policy should be set based on the storage size, the expected throughput, and the required retention time.
 The required storage capacity can be  estimated based on the calculation from message write rate and the retention policy.
 
 - Time based storage capacity (MB) = retention_sec * topic_write_rate (MB/s) * replication_factor
 - Size based storage capacity (MB) = retention_mb * replication_factor
 
-When very old segments are not deleted in your cluster, you should confirm that there are future timestamps by consuming all records or using the dump tool.
+A Kafka topic is made of one or more partitions, where each partition is stored as a set of segment files on the same disk.
+Segments become inactive and eligible for deletion or compaction after a period of time determined by `segment.ms`, or after reaching a certain size determined by `segment.bytes`.
+If only one record is not yet eligible for deletion based on `retention.ms` or `retention.bytes` policies, the broker retains the entire segment file, so it is usually recommended to set both.
+Segments deletion or compaction happens asynchronously, so the timing depends on cluster load and how many threads are available (`background.threads` for normal topics, `log.cleaner.threads` for compacted topics).
+When very old segments are not deleted in your cluster, you can confirm that there are creation timestamps in the future by consuming or dumping all records.
 If there are some, you can fix the issue by adding the size based retention configuration, taking care of not deleting good data.
-Additionally, you can also set `log.message.timestamp.type=LogAppendTime` at the broker level.
 
-In OpenShift, a persistent volume (PV) lives outside any namespace, and it is claimed by using a persistent volume claim (PVC).
-You can specify the storage class (SC) used for provisioning directly in the Kafka CR.
-Only volumes created and managed by a SC with `allowVolumeExpansion: true` can be increased, but not decreased.
-When using JBOD, you can also remove a volume, but data needs to be migrated to other volumes upfront.
-Volumes with either `persistentVolumeReclaimPolicy: Retain`, or using a storage class with `reclaimPolicy: Retain` are retained when the Kafka cluster is deleted.
+An invalid retention configuration, cluster imbalance, a sudden increase in incoming traffic, a rogue or buggy application are the most common causes for running out of disk space.
+When a log directory becomes full, the broker is terminated forcefully and it is not able to restart, because it needs space for log recovery and topic synchronization.
+In order to mitigate this risk, you can enforce per-broker quotas to control the resources used by clients, and use tiered storage to offload old data to a remote storage.
+Using tiered storage requires expertise to ensure that the rate of archival from local to remote storage is higher or equal to the rate at which data is written to local storage.
 
-<br/>
+In Kubernetes, a PersistentVolume (PV) is a piece of storage in the cluster that has been created by a storage provider with a specific StorageClass (SC).
+Storage classes differentiate by quality-of-service levels, or other policies, and allow size increase only when `allowVolumeExpansion` is true.
+A volume is requested and mounted into a Pod using a PersistentVolumeClaim (PVC) resource (provisioning can be static or dynamic).
+Some Kubernetes distributions support VolumeSnaphost (VS), which can be use to take periodic backups of your data.
+
+A PVC to PV binding is a one-to-one mapping, using a ClaimRef which is a bi-directional binding between the PV and the PVC.
+A PV can be in one of the following phases:
+
+- Available: a free resource that is not yet bound to a claim.
+- Bound: the volume is bound to a claim.
+- Released: the claim has been deleted, but the associated storage resource is not yet reclaimed by the cluster.
+- Failed: the volume has failed its (automated) reclamation.
+
+The reclaim policy (Retain or Delete) for a PV tells the cluster what to do with the volume after it has been released of its claim.
+To avoid losing your volumes when the Kafka cluster is deleted, you can set `.spec.kafka.storage.deleteClaim: false` (default) in your Kafka resource.
+To avoid losing your volumes when someone deletes the PVCs, you can set `persistentVolumeReclaimPolicy: Retain` at the volume level, or `reclaimPolicy: Retain` at the storage class level.
+
+<br>
 
 ---
-### Example: no space left on device WITH volume expansion (online recovery)
+### Example: avoid running out of Kafka disk space using the Strimzi quota plugin
+
+**Don't use Minikube for this example, as it doesn't have full volume support.**
 
 First, [deploy the Strimzi Cluster Operator and Kafka cluster](/sessions/001).
-When the cluster is ready, break it by sending 11 GiB of data to a topic, which exceeds the disk capacity of 10 GiB.
+
+Only network bandwidth and request rate quotas are supported by the default Kafka quota plugin. 
+Instead, the [Strimzi quota plugin](https://github.com/strimzi/kafka-quotas-plugin) allows to set total quota independent of the number of clients.
+In this case, we are interested in the storage limits configuration, with the objective to avoid disk space exhaustion in the first place.
+
+Fortunately, the Strimzi Kafka images already contains this plugin, otherwise you would have to build your own custom Kafka image including the plugin's JAR in `/opt/kafka/libs`.
+With the following configuration, clients will be throttled to 0 when any volume in the cluster has <= 5GiB available bytes.
 
 ```sh
-$ kubectl get pv | grep kafka
-pvc-2e3c7665-2b92-4376-bb1d-22b1d23fcc6a   10Gi       RWO            Delete           Bound    test/data-my-cluster-kafka-2       gp2                     4m1s
-pvc-b1e5e0a3-ab83-487f-9b81-c38e1badfccc   10Gi       RWO            Delete           Bound    test/data-my-cluster-kafka-0       gp2                     4m1s
-pvc-e66030cd-3992-4adc-9d94-d9d4ab164a45   10Gi       RWO            Delete           Bound    test/data-my-cluster-kafka-1       gp2                     4m1s
+$ kubectl patch k my-cluster --type merge -p '
+  spec:
+    kafka:
+      config:
+        client.quota.callback.class: io.strimzi.kafka.quotas.StaticQuotaCallback
+        client.quota.callback.static.kafka.admin.bootstrap.servers: my-cluster-kafka-bootstrap:9092
+        # check storage usage every 5 seconds
+        client.quota.callback.static.storage.check-interval: 5
+        # clients will be throttled to 0 when any volume in the cluster has <= 5GiB available bytes
+        client.quota.callback.static.storage.soft: 5368709120
+        client.quota.callback.static.storage.hard: 5368709120'
+```
+
+Wait for brokers restart, and then try to break the cluster by sending 11 GiB of data to a topic, which exceeds the disk capacity of 10 GiB.
+
+```sh
+$ kubectl get pv | grep my-cluster-kafka
+pvc-19579600-f93d-4f7a-aaef-4999eaad6582   10Gi       RWO            Delete           Bound    test/data-my-cluster-kafka-1                                         ocs-external-storagecluster-ceph-rbd            15h
+pvc-3f24427e-2787-4460-96eb-df0605c3c3c8   10Gi       RWO            Delete           Bound    test/data-my-cluster-kafka-2                                         ocs-external-storagecluster-ceph-rbd            15h
+pvc-f7cf0cbb-2cc6-479e-85e1-31eacfc1df0f   10Gi       RWO            Delete           Bound    test/data-my-cluster-kafka-0                                         ocs-external-storagecluster-ceph-rbd            15h
 
 $ kubectl-kafka bin/kafka-producer-perf-test.sh --topic my-topic --record-size 1000 --num-records 11000000 \
   --throughput -1 --producer-props acks=1 bootstrap.servers=my-cluster-kafka-bootstrap:9092
-287699 records sent, 57528.3 records/sec (54.86 MB/sec), 144.6 ms avg latency, 455.0 ms max latency.
-309618 records sent, 61923.6 records/sec (59.05 MB/sec), 29.1 ms avg latency, 132.0 ms max latency.
-301344 records sent, 60268.8 records/sec (57.48 MB/sec), 53.2 ms avg latency, 361.0 ms max latency.
+210209 records sent, 42041.8 records/sec (40.09 MB/sec), 519.2 ms avg latency, 4510.0 ms max latency.
+302960 records sent, 60592.0 records/sec (57.79 MB/sec), 553.2 ms avg latency, 4591.0 ms max latency.
+340048 records sent, 68009.6 records/sec (64.86 MB/sec), 480.4 ms avg latency, 3425.0 ms max latency.
 ...
-[2022-10-14 15:14:26,695] WARN [Producer clientId=perf-producer-client] Connection to node 2 (my-cluster-kafka-2.my-cluster-kafka-brokers.test.svc/10.128.2.32:9092) could not be established. Broker may not be available. (org.apache.kafka.clients.NetworkClient)
-[2022-10-14 15:14:26,885] WARN [Producer clientId=perf-producer-client] Connection to node 0 (my-cluster-kafka-0.my-cluster-kafka-brokers.test.svc/10.129.2.59:9092) could not be established. Broker may not be available. (org.apache.kafka.clients.NetworkClient)
-[2022-10-14 15:14:27,036] WARN [Producer clientId=perf-producer-client] Connection to node 1 (my-cluster-kafka-1.my-cluster-kafka-brokers.test.svc/10.131.0.37:9092) could not be established. Broker may not be available. (org.apache.kafka.clients.NetworkClient)
+org.apache.kafka.common.errors.TimeoutException: Expiring 16 record(s) for my-topic-2:120010 ms has passed since batch creation
+org.apache.kafka.common.errors.TimeoutException: Expiring 16 record(s) for my-topic-2:120010 ms has passed since batch creation
+org.apache.kafka.common.errors.TimeoutException: Expiring 16 record(s) for my-topic-2:120010 ms has passed since batch creation
+^C
+```
+
+At some point, the perf client can't send data anymore, but the cluster is still healthy.
+
+```sh
+$ kubectl exec my-cluster-kafka-0 -- df -h | grep /var/lib/kafka/data \
+  && kubectl exec my-cluster-kafka-1 -- df -h | grep /var/lib/kafka/data \
+  && kubectl exec my-cluster-kafka-2 -- df -h | grep /var/lib/kafka/data
+/dev/rbd1       9.8G  7.3G  2.5G  75% /var/lib/kafka/data
+/dev/rbd0       9.8G  7.3G  2.5G  75% /var/lib/kafka/data
+/dev/rbd1       9.8G  7.3G  2.5G  75% /var/lib/kafka/data
+```
+
+<br>
+
+---
+### Example: online Kafka volume recovery using expansion support
+
+**Don't use Minikube for this example, as it doesn't have full volume support.**
+
+First, [deploy the Strimzi Cluster Operator](/sessions/001).
+For the sake of this example, we deploy the Kafka cluster reducing the disk size.
+
+```sh
+$ cat sessions/001/resources/000-my-cluster.yaml \
+  | yq ".spec.kafka.storage.size = \"100Mi\"" \
+  | kubectl create -f - \
+  && kubectl create -f sessions/001/resources/001-my-topic.yaml
+kafka.kafka.strimzi.io/my-cluster created
+kafkatopic.kafka.strimzi.io/my-topic created
+
+$ kubectl get pv | grep my-cluster-kafka
+pvc-7c71f9b5-4045-42cf-93ad-37f364cbd84e   100Mi       RWO            Delete           Bound    test/data-my-cluster-kafka-0                                         ocs-external-storagecluster-ceph-rbd            5s
+pvc-bd02c930-2366-4bc7-a7e6-aa8e0199bcfc   100Mi       RWO            Delete           Bound    test/data-my-cluster-kafka-1                                         ocs-external-storagecluster-ceph-rbd            5s
+pvc-eeb4de90-3b11-4f31-bfb4-e1bb32bc658f   100Mi       RWO            Delete           Bound    test/data-my-cluster-kafka-2                                         ocs-external-storagecluster-ceph-rbd            5s
+```
+
+When the cluster is ready, break it by sending 110 MiB of data to a topic, which exceeds the disk capacity of 100 MiB.
+
+```sh
+$ kubectl-kafka bin/kafka-producer-perf-test.sh --topic my-topic --record-size 1000 --num-records 110000 \
+  --throughput -1 --producer-props acks=all bootstrap.servers=my-cluster-kafka-bootstrap:9092
+13713 records sent, 2738.8 records/sec (2.61 MB/sec), 2535.7 ms avg latency, 4416.0 ms max latency.
+20848 records sent, 4159.6 records/sec (3.97 MB/sec), 6712.5 ms avg latency, 9238.0 ms max latency.
+16528 records sent, 3301.6 records/sec (3.15 MB/sec), 8261.6 ms avg latency, 10919.0 ms max latency.
+...
+[2024-03-03 17:05:32,605] WARN [Producer clientId=perf-producer-client] Connection to node 0 (my-cluster-kafka-0.my-cluster-kafka-brokers.test.svc/10.135.0.68:9092) could not be established. Broker may not be available. (org.apache.kafka.clients.NetworkClient)
 ^C
 
-$ kubectl get po | grep kafka
-my-cluster-kafka-0                            0/1     CrashLoopBackOff   3 (26s ago)   15m
-my-cluster-kafka-1                            0/1     CrashLoopBackOff   3 (26s ago)   15m
-my-cluster-kafka-2                            0/1     CrashLoopBackOff   3 (20s ago)   15m
+$ kubectl get po | grep my-cluster-kafka
+my-cluster-kafka-0                            0/1     CrashLoopBackOff   3 (14s ago)   4m52s
+my-cluster-kafka-1                            1/1     Running            0             4m52s
+my-cluster-kafka-2                            1/1     Running            0             4m52s
 
 $ kubectl logs my-cluster-kafka-0 | grep "No space left on device" | tail -n1
 java.io.IOException: No space left on device
 ```
 
 Even if not all pods failed, like in this case, we still need to increase the volume size of all brokers because the storage configuration is shared.
-If volume expansion is supported, you can simply edit the Kafka Custom Resource (CR) to specify the desired disk size increase, and the operator will handle the rest of the process. 
-However, it's important to note that the expansion process may take some time to complete, depending on the size of the volume and the available resources in the cluster.
+If volume expansion is supported on the storage class, you can simply increase the storage size in the Kafka resource, and the operator will take care of it. 
+Note that the expansion operation may take some time to complete, depending on the size of the volume and the available resources in the cluster.
 
 ```sh
-$ kubectl get sc $(kubectl get pv | grep data-my-cluster-kafka-0 | awk '{print $7}') -o yaml | yq '.allowVolumeExpansion'
+$ kubectl get sc $(kubectl get pv | grep data-my-cluster-kafka-0 | awk '{print $7}') -o yaml | yq .allowVolumeExpansion
 true
 
 $ kubectl patch k my-cluster --type merge -p '
@@ -88,27 +171,26 @@ $ kubectl patch k my-cluster --type merge -p '
 kafka.kafka.strimzi.io/my-cluster patched
 
 $ kubectl logs $(kubectl get po | grep cluster-operator | cut -d" " -f1) | grep "Resizing"
-2022-09-21 16:21:44 INFO  KafkaAssemblyOperator:2915 - Reconciliation #1(watch) Kafka(test/my-cluster): Resizing PVC data-my-cluster-kafka-0 from 10 to 20Gi.
-2022-09-21 16:21:44 INFO  KafkaAssemblyOperator:2915 - Reconciliation #1(watch) Kafka(test/my-cluster): Resizing PVC data-my-cluster-kafka-1 from 10 to 20Gi.
-2022-09-21 16:21:44 INFO  KafkaAssemblyOperator:2915 - Reconciliation #1(watch) Kafka(test/my-cluster): Resizing PVC data-my-cluster-kafka-2 from 10 to 20Gi.
+2024-03-03 11:23:38 INFO  PvcReconciler:140 - Reconciliation #59(watch) Kafka(test/my-cluster): Resizing PVC data-my-cluster-kafka-0 from 10 to 20Gi.
+2024-03-03 11:23:38 INFO  PvcReconciler:140 - Reconciliation #59(watch) Kafka(test/my-cluster): Resizing PVC data-my-cluster-kafka-1 from 10 to 20Gi.
+2024-03-03 11:23:38 INFO  PvcReconciler:140 - Reconciliation #59(watch) Kafka(test/my-cluster): Resizing PVC data-my-cluster-kafka-2 from 10 to 20Gi.
 
-$ kubectl get pv | grep kafka
-pvc-2e3c7665-2b92-4376-bb1d-22b1d23fcc6a   20Gi       RWO            Delete           Bound    test/data-my-cluster-kafka-2       gp2                     30m
-pvc-b1e5e0a3-ab83-487f-9b81-c38e1badfccc   20Gi       RWO            Delete           Bound    test/data-my-cluster-kafka-0       gp2                     30m
-pvc-e66030cd-3992-4adc-9d94-d9d4ab164a45   20Gi       RWO            Delete           Bound    test/data-my-cluster-kafka-1       gp2                     30m
+$ kubectl get pv | grep my-cluster-kafka
+pvc-7c71f9b5-4045-42cf-93ad-37f364cbd84e   20Gi       RWO            Delete           Bound    test/data-my-cluster-kafka-0                                         ocs-external-storagecluster-ceph-rbd            6m16s
+pvc-bd02c930-2366-4bc7-a7e6-aa8e0199bcfc   20Gi       RWO            Delete           Bound    test/data-my-cluster-kafka-1                                         ocs-external-storagecluster-ceph-rbd            6m16s
+pvc-eeb4de90-3b11-4f31-bfb4-e1bb32bc658f   20Gi       RWO            Delete           Bound    test/data-my-cluster-kafka-2                                         ocs-external-storagecluster-ceph-rbd            6m16s
 
-$ kubectl get po | grep kafka
-my-cluster-kafka-0                            1/1     Running   0             2m22s
-my-cluster-kafka-1                            1/1     Running   0             3m37s
-my-cluster-kafka-2                            1/1     Running   0             4m53s
+$ kubectl get po | grep my-cluster-kafka
+my-cluster-kafka-0                            1/1     Running   5 (2m20s ago)   7m56s
+my-cluster-kafka-1                            1/1     Running   0               7m56s
+my-cluster-kafka-2                            1/1     Running   0               7m56s   
 ```
 
 <br>
 
 ---
-### Example: no space left on device WITHOUT volume expansion (offline recovery)
+### Example: offline Kafka volume recovery using snapshot support
 
-This procedure has some tricky steps highlighted in bold, where you need to be extra careful to avoid losing data.
 **Don't use Minikube for this example, as it doesn't have full volume support.**
 
 First, [deploy the Strimzi Cluster Operator](/sessions/001).
@@ -116,28 +198,177 @@ For the sake of this example, we deploy the Kafka cluster reducing the disk size
 
 ```sh
 $ cat sessions/001/resources/000-my-cluster.yaml \
-    | yq ".spec.kafka.storage.size = \"100Mi\"" \
-    | kubectl create -f -
+  | yq ".spec.kafka.storage.size = \"100Mi\"" \
+  | kubectl create -f - \
+  && kubectl create -f sessions/001/resources/001-my-topic.yaml
 kafka.kafka.strimzi.io/my-cluster created
-
-$ kubectl create -f sessions/001/resources/001-my-topic.yaml
 kafkatopic.kafka.strimzi.io/my-topic created
+
+$ CLUSTER_NAME="my-cluster" \
+  SNAPSHOT_CLASS="ocs-external-storagecluster-rbdplugin-snapclass" \
+  KAFKA_PODS="$(kubectl get po -l strimzi.io/name=my-cluster-kafka --no-headers -o custom-columns=':metadata.name')" \
+  VOLUME_CLASS="$(kubectl get pv | grep my-cluster-kafka-0 | awk '{print $7}')" \
+  NEW_VOLUME_SIZE="20Gi"
+
+$ kubectl get pv | grep my-cluster-kafka
+pvc-7c71f9b5-4045-42cf-93ad-37f364cbd84e   100Mi       RWO            Delete           Bound    test/data-my-cluster-kafka-0                                         ocs-external-storagecluster-ceph-rbd            5s
+pvc-bd02c930-2366-4bc7-a7e6-aa8e0199bcfc   100Mi       RWO            Delete           Bound    test/data-my-cluster-kafka-1                                         ocs-external-storagecluster-ceph-rbd            5s
+pvc-eeb4de90-3b11-4f31-bfb4-e1bb32bc658f   100Mi       RWO            Delete           Bound    test/data-my-cluster-kafka-2                                         ocs-external-storagecluster-ceph-rbd            5s
 ```
 
 When the cluster is ready, break it by sending 110 MiB of data to a topic, which exceeds the disk capacity of 100 MiB.
 
 ```sh
+$ kubectl-kafka bin/kafka-producer-perf-test.sh --topic my-topic --record-size 1000 --num-records 110000 \
+  --throughput -1 --producer-props acks=all bootstrap.servers=$CLUSTER_NAME-kafka-bootstrap:9092
+13713 records sent, 2738.8 records/sec (2.61 MB/sec), 2535.7 ms avg latency, 4416.0 ms max latency.
+20848 records sent, 4159.6 records/sec (3.97 MB/sec), 6712.5 ms avg latency, 9238.0 ms max latency.
+16528 records sent, 3301.6 records/sec (3.15 MB/sec), 8261.6 ms avg latency, 10919.0 ms max latency.
+...
+[2024-03-03 17:05:32,605] WARN [Producer clientId=perf-producer-client] Connection to node 0 (my-cluster-kafka-0.my-cluster-kafka-brokers.test.svc/10.135.0.68:9092) could not be established. Broker may not be available. (org.apache.kafka.clients.NetworkClient)
+[2024-03-03 17:05:32,662] WARN [Producer clientId=perf-producer-client] Connection to node 1 (my-cluster-kafka-1.my-cluster-kafka-brokers.test.svc/10.134.0.32:9092) could not be established. Broker may not be available. (org.apache.kafka.clients.NetworkClient)
+[2024-03-03 17:05:33,263] WARN [Producer clientId=perf-producer-client] Connection to node 2 (my-cluster-kafka-2.my-cluster-kafka-brokers.test.svc/10.132.2.29:9092) could not be established. Broker may not be available. (org.apache.kafka.clients.NetworkClient)
+^C
+
+$ kubectl get po | grep $CLUSTER_NAME-kafka
+my-cluster-kafka-0                            0/1     CrashLoopBackOff   2 (25s ago)   2m13s
+my-cluster-kafka-1                            0/1     CrashLoopBackOff   2 (18s ago)   2m13s
+my-cluster-kafka-2                            0/1     CrashLoopBackOff   2 (22s ago)   2m13s
+
+$ kubectl logs $CLUSTER_NAME-kafka-0 | grep "No space left on device" | tail -n1
+java.io.IOException: No space left on device
+```
+
+Even if not all pods failed, we still need to increase the volume size of all brokers because the storage configuration is shared.
+**Before deleting the Kafka cluster, make sure that delete claim storage configuration is set to false in Kafka resource.**
+
+```sh
+$ if [[ $(kubectl get k $CLUSTER_NAME -o yaml | yq .spec.kafka.storage.deleteClaim) == "false" ]]; then kubectl delete k $CLUSTER_NAME; fi
+kafka.kafka.strimzi.io "my-cluster" deleted
+```
+
+If volume snapshot is supported, we can take Kafka volume backups and restore them on bigger volumes.
+Note that snapshot operations may take some time to complete, depending on the size of the volume and the available resources in the cluster.
+
+```sh
+$ for pod in $KAFKA_PODS; do
+echo -e "apiVersion: snapshot.storage.k8s.io/v1                                                 
+kind: VolumeSnapshot
+metadata:
+  name: data-$pod-snapshot
+spec:
+  volumeSnapshotClassName: $SNAPSHOT_CLASS
+  source:
+    persistentVolumeClaimName: data-$pod" | kubectl create -f -
+done
+volumesnapshot.snapshot.storage.k8s.io/data-my-cluster-kafka-0-snapshot created
+volumesnapshot.snapshot.storage.k8s.io/data-my-cluster-kafka-1-snapshot created
+volumesnapshot.snapshot.storage.k8s.io/data-my-cluster-kafka-2-snapshot created
+
+$ kubectl get vs | grep $CLUSTER_NAME-kafka
+data-my-cluster-kafka-0-snapshot   true         data-my-cluster-kafka-0                           100Mi         ocs-external-storagecluster-rbdplugin-snapclass   snapcontent-136a0dd1-4702-4d2c-9298-3fa28f066b58   8s             9s
+data-my-cluster-kafka-1-snapshot   true         data-my-cluster-kafka-1                           100Mi         ocs-external-storagecluster-rbdplugin-snapclass   snapcontent-55463fd4-6212-4641-ae40-e6eaaa56eac8   7s             8s
+data-my-cluster-kafka-2-snapshot   true         data-my-cluster-kafka-2                           100Mi         ocs-external-storagecluster-rbdplugin-snapclass   snapcontent-3bcb8990-2783-4d47-8c82-1655e5a446ba   6s             7s
+```
+
+Once they are ready, we can delete the old PVCs, and recreate them with bigger size from the snapshots.
+Note that restore operations may take some time to complete, depending on the size of the volume and the available resources in the cluster.
+
+```sh
+$ for pod in $KAFKA_PODS; do
+kubectl delete pvc $(kubectl get pvc | grep data-$pod | awk '{print $1}')
+echo -e "apiVersion: v1
+kind: PersistentVolumeClaim
+metadata:
+  name: data-$pod
+spec:
+  storageClassName: $VOLUME_CLASS
+  dataSource:
+    name: data-$pod-snapshot
+    kind: VolumeSnapshot
+    apiGroup: snapshot.storage.k8s.io
+  accessModes:
+    - ReadWriteOnce
+  resources:
+    requests:
+      storage: $NEW_VOLUME_SIZE" | kubectl create -f -
+done
+persistentvolumeclaim "data-my-cluster-kafka-0" deleted
+persistentvolumeclaim/data-my-cluster-kafka-0 created
+persistentvolumeclaim "data-my-cluster-kafka-1" deleted
+persistentvolumeclaim/data-my-cluster-kafka-1 created
+persistentvolumeclaim "data-my-cluster-kafka-2" deleted
+persistentvolumeclaim/data-my-cluster-kafka-2 created
+
+$ kubectl get pv | grep $CLUSTER_NAME-kafka
+pvc-64a90b4c-4861-4dbd-b3f0-62c4106b41fd   20Gi       RWO            Delete           Bound    test/data-my-cluster-kafka-1                                         ocs-external-storagecluster-ceph-rbd            9s
+pvc-82696438-d8d1-457e-a788-bf0910ba5ad3   20Gi       RWO            Delete           Bound    test/data-my-cluster-kafka-2                                         ocs-external-storagecluster-ceph-rbd            7s
+pvc-e87b8ef9-ffc4-4434-933f-ee444c9b914b   20Gi       RWO            Delete           Bound    test/data-my-cluster-kafka-0                                         ocs-external-storagecluster-ceph-rbd            11s
+```
+
+Finally, start the Kafka cluster and check your data.
+**Don't forget to adjust the storage size in Kafka custom resource.**
+To help speed up log recovery and partition synchronization, we can bump `num.recovery.threads.per.data.dir` and `num.replica.fetchers`.
+
+```sh
+$ cat sessions/001/resources/000-my-cluster.yaml \
+  | yq ".spec.kafka.config.\"num.recovery.threads.per.data.dir\" = 5" \
+  | yq ".spec.kafka.config.\"num.replica.fetchers\" = 5" \
+  | yq ".spec.kafka.storage.size = \"20Gi\"" \
+  | kubectl create -f -
+kafka.kafka.strimzi.io/my-cluster created
+
+$ kubectl get po -l strimzi.io/cluster=$CLUSTER_NAME
+NAME                                          READY   STATUS    RESTARTS   AGE
+my-cluster-entity-operator-7d6d6bd454-sh7rc   3/3     Running   0          96s
+my-cluster-kafka-0                            1/1     Running   0          5m9s
+my-cluster-kafka-1                            1/1     Running   0          5m9s
+my-cluster-kafka-2                            1/1     Running   0          5m9s
+my-cluster-zookeeper-0                        1/1     Running   0          6m14s
+my-cluster-zookeeper-1                        1/1     Running   0          6m14s
+my-cluster-zookeeper-2                        1/1     Running   0          6m14s
+
+$ kubectl-kafka bin/kafka-console-consumer.sh --bootstrap-server $CLUSTER_NAME-kafka-bootstrap:9092 \
+  --topic my-topic --from-beginning --max-messages 3
+FHBQCYJJXEDISRBBOAKYFHTLDAJABMKLWHLRSBWBUSGRIBKSWWZQZHPHWQWZPVHLYBDVYNNOMLSAXDZSDGGQXVDETEXXEXTVNJTNOVJIYIDAFEPCIRHMQJMCRCGNVNIPISAPPHKTVRVF...
+MYVZNMKXIYVTRGXHNLAXSIISAKQSPQIJKJMVYXFQVTXJVNPRZILRJKMIEBDWGCRKXFUSMWBLCVCDVXEBMXSLVXZSCPQVRNZTHKGFIBZBCOURYJEGKPJACEXCSQDFBCWXGNYERXKOHJAA...
+RHTSTTCCIQLHFTWTCEUZJHADNDIYHMXSCUFDMIQXGISLNYVGNZKIJFDFQJVRWDLUNUTXNLCKSQOZNEYLRAGPFPUQSQWNJWUXLWWCLOHASOMJKNZRYSRXGIWWFTEUWVBIITCFUANCCTNT...
+^CProcessed a total of 3 messages
+```
+
+<br/>
+
+---
+### Example: offline Kafka volume recovery with no expansion and snapshot support
+
+**Don't use Minikube for this example, as it doesn't have full volume support.**
+
+First, [deploy the Strimzi Cluster Operator](/sessions/001).
+For the sake of this example, we deploy the Kafka cluster reducing the disk size.
+
+```sh
+$ cat sessions/001/resources/000-my-cluster.yaml \
+  | yq ".spec.kafka.storage.size = \"100Mi\"" \
+  | kubectl create -f - \
+  && kubectl create -f sessions/001/resources/001-my-topic.yaml
+kafka.kafka.strimzi.io/my-cluster created
+kafkatopic.kafka.strimzi.io/my-topic created
+
 $ CLUSTER_NAME="my-cluster" \
   KAFKA_PODS="$(kubectl get po -l strimzi.io/name=my-cluster-kafka --no-headers -o custom-columns=':metadata.name')" \
-  NEW_PV_CLASS="$(kubectl get pv | grep my-cluster-kafka-0 | awk '{print $7}')" \
-  NEW_PV_SIZE="20Gi"
+  VOLUME_CLASS="$(kubectl get pv | grep my-cluster-kafka-0 | awk '{print $7}')" \
+  NEW_VOLUME_SIZE="20Gi"
   
 $ kubectl get pvc -l strimzi.io/name=$CLUSTER_NAME-kafka
 NAME                      STATUS   VOLUME                                     CAPACITY   ACCESS MODES   STORAGECLASS                           AGE
 data-my-cluster-kafka-0   Bound    pvc-04b55551-fe7f-4662-9955-5e4baaf4df57   100Mi      RWO            ocs-external-storagecluster-ceph-rbd   106s
 data-my-cluster-kafka-1   Bound    pvc-18280833-16a8-4cd5-8c6f-eb764acd3ce9   100Mi      RWO            ocs-external-storagecluster-ceph-rbd   106s
 data-my-cluster-kafka-2   Bound    pvc-a148ee8b-2eef-422b-a35e-b71714b1ef85   100Mi      RWO            ocs-external-storagecluster-ceph-rbd   106s
+```
 
+When the cluster is ready, break it by sending 110 MiB of data to a topic, which exceeds the disk capacity of 100 MiB.
+
+```sh
 $ kubectl-kafka bin/kafka-producer-perf-test.sh --topic my-topic --record-size 1000 --num-records 110000 \
   --throughput -1 --producer-props acks=all bootstrap.servers=$CLUSTER_NAME-kafka-bootstrap:9092
 12689 records sent, 2514.7 records/sec (2.40 MB/sec), 2329.9 ms avg latency, 4480.0 ms max latency.
@@ -175,8 +406,8 @@ $ for pod in $KAFKA_PODS; do
   cat sessions/006/resources/pvc-new.yaml \
     | yq ".metadata.name = \"data-$pod-new\" \
       | .metadata.labels.\"strimzi.io/name\" = \"$CLUSTER_NAME-kafka\" \
-      | .spec.storageClassName = \"$NEW_PV_CLASS\" \
-      | .spec.resources.requests.storage = \"$NEW_PV_SIZE\"" \
+      | .spec.storageClassName = \"$VOLUME_CLASS\" \
+      | .spec.resources.requests.storage = \"$NEW_VOLUME_SIZE\"" \
     | kubectl create -f -
 done
 persistentvolumeclaim/data-my-cluster-kafka-0-new created
@@ -236,7 +467,7 @@ done
 ```
 
 After that, we need to create the conditions for them to be reattached by the Kafka cluster.
-Delete the all Kafka PVCs and PV claim references, just before creating the final PVCs with the new storage size.
+Delete all Kafka PVCs and PV claim references, just before creating the final PVCs with the new storage size.
 
 ```sh
 $ for pod in $KAFKA_PODS; do
@@ -248,9 +479,9 @@ $ for pod in $KAFKA_PODS; do
   cat sessions/006/resources/pvc.yaml \
     | yq ".metadata.name = \"data-$pod\" \
       | .metadata.labels.\"strimzi.io/name\" = \"$CLUSTER_NAME-kafka\" \
-      | .spec.storageClassName = \"$NEW_PV_CLASS\" \
+      | .spec.storageClassName = \"$VOLUME_CLASS\" \
       | .spec.volumeName = \"$NEW_PV_NAME\" \
-      | .spec.resources.requests.storage = \"$NEW_PV_SIZE\"" \
+      | .spec.resources.requests.storage = \"$NEW_VOLUME_SIZE\"" \
     | kubectl create -f -
 done
 persistentvolumeclaim "data-my-cluster-kafka-0" deleted

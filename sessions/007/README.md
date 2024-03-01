@@ -1,4 +1,4 @@
-## Cruise Control and unbalanced clusters
+## Unbalanced clusters and Cruise Control
 
 By default, Kafka tries to distribute the load evenly across all brokers.
 This is achieved through the concept of the preferred replica, which is the first replica created for a new topic.

@@ -7,9 +7,9 @@ It is best suited when you have a high throughput of relatively small messages t
 
 Kafka provides two main layers that can scale independently: the storage layer, which stores messages efficiently in a cluster of brokers, and the compute layer which is built on top of the producer and consumer APIs.
 There are also two higher level APIs: the connect API for integration with external systems and the streams API for stream processing.
-Within a cluster, the control plane handles cluster metadata and the data plane handles user data.
+Within a cluster, the control plane handles cluster metadata, while the data plane handles user data.
 A broker in a cluster is elected as controller, which has the additional responsibility of managing the states of data partitions and replicas and for performing administrative tasks like reassigning partitions.
-In ZooKeeper mode there is only one elected controller, while in the new KRaft mode we have a quorum of controllers. One broker is active at any time, while the others are ready to take over in case of failure.
+In ZooKeeper mode there is only one elected controller, while in the new KRaft mode we have a quorum of controllers, where only one is active at any time, while the others are ready to take over in case of failure.
 
 <p align="center"><img src="images/cluster.png" height=250/></p>
 
@@ -181,7 +181,7 @@ baseOffset: 15 lastOffset: 17 count: 3 baseSequence: 0 lastSequence: 2 producerI
 
 In this example, we deploy a Kafka cluster to a Kubernetes cluster using the operator.
 
-**Login first if you are running on OpenShift or authentication is required.**
+**Login first if your Kubernetes cluster requires authentication.**
 
 ```sh
 $ source init.sh
