@@ -327,6 +327,7 @@ pvc-1a66039a-14e7-4416-9319-6d6437543c02   20Gi       RWO            Delete     
 pvc-ca348d35-f466-446e-9f93-e3c15722d214   20Gi       RWO            Delete           Bound    test/data-my-cluster-kafka-2                                         ocs-external-storagecluster-ceph-rbd            18m
 ```
 <br/>
+
 ---
 ### Example: ZooKeeper storage failure with lost quorum (offline recovery)
 
