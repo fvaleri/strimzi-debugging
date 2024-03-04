@@ -1,30 +1,35 @@
 ## Disaster recovery and Mirror Maker
 
-A disaster recovery (DR) plan needs to consider the recovery point objective (RPO), which is the maximum amount of data you are willing to risk losing, and the recovery time objective (RTO), which is the maximum amount of downtime that your system can have.
-Zero RPO requires a really good infrastructure, which is also expensive, but there are cheaper alternatives if you can relax this objective.
-RTO depends on your tooling and failover procedures, since failing over applications is not a system responsibility.
-A solid monitoring system can help with failure detection and to know what you have restored and what you might be missing.
+Disaster Recovery (DR) planning is essential for maintaining operational resilience in the face of unforeseen events.
+Key components of this strategy include defining the Recovery Point Objective (RPO) and Recovery Time Objective (RTO).
 
-A data corruption due to a human error or a bug would also be replicated in MirrorMaker, so having periodic backups from which you can restore the cluster at a specific point in time is a must in every case.
-One strategy here is to backup the full cluster configuration, while also taking disk/volume snapshots.
+The RPO delineates the acceptable level of data loss, while the RTO specifies the tolerable duration of system downtime.
+Achieving a zero RPO necessitates robust infrastructure, albeit at a higher cost.
+However, cost-effective alternatives are available if flexibility regarding this objective is feasible.
 
-Assuming you have set up your replication configuration correctly, the only way to have zero RPO is to setup a stretch Kafka cluster, which is one that evenly spans across multiple data centers (DCs) with synchronous replication.
-To make this work reliably, you need at least three DCs with guaranteed low latency (you cannot have a stretch cluster across continents).
-If your Kubernetes distribution supports multi-site clusters, you can simply deploy Strimzi on top of that, and use affinities rules to achieve the desired topology.
-In this case, you also need to set rack awareness to ensure that replicas are distributed evenly across DCs, and deploy Cruise Control to make sure that replicas remain distributed across different racks.
+The RTO is contingent upon the efficacy of tools and failover protocols.
+Application failover management lies beyond the system's responsibility and requires meticulous planning.
+Implementing a comprehensive monitoring system aids in promptly detecting failures and assessing the completeness of restoration efforts.
+
+To mitigate risks of data corruption resulting from human error or software bugs, periodic cluster configuration and data backups are also imperative.
+These backups should enable cluster restoration to specific points in time.
+
+For achieving a zero RPO, deploying a stretch Kafka cluster across multiple data centers with synchronous replication is paramount.
+This approach mandates a minimum of three data centers with low latency guarantees.
+Leveraging Kubernetes distributions supporting multi-site clusters facilitates the deployment of Strimzi, with affinity rules ensuring desired topologies.
+Rack awareness and Cruise Control deployment further optimize replica distribution.
 
 <p align="center"><img src="images/stretch.png" height=350/></p>
 
-The cheaper alternative to the stretch cluster is using MirrorMaker 2 (MM2), where a passive/backup cluster is continuously kept in-sync, including consumer group offsets and topic ACLs.
-You can also have active/active replication using MM2, which means your clients are distributed between two Kafka clusters resulting in a much more complex architecture.
-This also works across regions, but you can't completely avoid message duplication and data loss, because the replication is asynchronous with no transactions support (KIP-656).
-This means that producers should be able to re-send missing data, which means storing the latest sent messages somewhere, while consumers should be idempotent, so that they can tolerate some duplicates.
-In case of disaster, the amount of data that may be lost depends on the latency of the MM2 connectors, so you should carefully monitor MM2 metrics and set alerts.
+Alternatively, MirrorMaker 2 (MM2) offers a cost-effective solution by continuously synchronizing passive/backup clusters.
+MM2 supports active/active replication, albeit with increased complexity and potential for data duplication and loss.
+Asynchronous replication necessitates robust producer strategies for data resend and consumer idempotence to manage duplicates.
+Rigorous monitoring of MM2 metrics and timely alerts are imperative for disaster readiness.
 Virtual hosts or a cluster proxy are two common strategies that allow to switch all clients at once from a central place in case of disaster.
 
 <p align="center"><img src="images/mm2.png" height=200/></p>
 
-It is possible to combine stretch clusters and mirroring using MirrorMaker 2 to create a multi-region or even multi-cloud disaster recovery plan, where the service can survive a cloud outage (yes, a region can fail!).
+Combining stretch clusters and mirroring via MM2 enables the creation of comprehensive multi-region or multi-cloud disaster recovery plans.
 After the failover phase, you can fail back once the original region is back online, or fail forward selecting another region as the new backup cluster (this is faster).
 All disaster recovery procedures should be documented in detail and periodically tested, simulating all possible scenarios such as partial failures.
 

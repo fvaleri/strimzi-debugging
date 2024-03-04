@@ -1,30 +1,32 @@
 ## Kafka introduction and deployments
 
-[Apache Kafka](https://kafka.apache.org) is a distributed streaming platform that lets you read, write, store, and process messages across many machines.
-The [CNCF Strimzi](https://strimzi.io) project includes a set of operators, which help in deploying and manging Kafka clusters on Kubernetes.
-Not every use case justifies the additional complexity that Kafka brings to the table.
-It is best suited when you have a high throughput of relatively small messages that traditional message brokers struggle to manage, or you have near realtime stream processing requirements.
+[Apache Kafka](https://kafka.apache.org) stands as a distributed streaming platform, enabling the seamless reading, writing, storage, and processing of messages across numerous machines.
 
-Kafka provides two main layers that can scale independently: the storage layer, which stores messages efficiently in a cluster of brokers, and the compute layer which is built on top of the producer and consumer APIs.
-There are also two higher level APIs: the connect API for integration with external systems and the streams API for stream processing.
-Within a cluster, the control plane handles cluster metadata, while the data plane handles user data.
-A broker in a cluster is elected as controller, which has the additional responsibility of managing the states of data partitions and replicas and for performing administrative tasks like reassigning partitions.
-In ZooKeeper mode there is only one elected controller, while in the new KRaft mode we have a quorum of controllers, where only one is active at any time, while the others are ready to take over in case of failure.
+The [CNCF Strimzi](https://strimzi.io) project encompasses a suite of operators designed to streamline the deployment and management of Kafka clusters within Kubernetes environments.
+
+However, it's crucial to acknowledge that not every scenario warrants the added intricacy Kafka introduces.
+It is best suited when handling a high volume of relatively small messages, a task traditional message brokers struggle with, or when faced with near real-time stream processing needs.
+
+Kafka functions on two primary layers capable of independent scaling: the storage layer, efficiently storing messages within a broker cluster, and the compute layer, built atop producer and consumer APIs.
+Additionally, it offers two higher-level APIs: the Connect API for seamless integration with external systems and the Streams API tailored for stream processing tasks.
+
+Within a cluster, the control plane manages cluster metadata, while the data plane handles user data.
+A broker within the cluster assumes the role of controller, bearing the additional responsibility of overseeing data partition and replica states, along with executing administrative duties like partition reassignment.
+In ZooKeeper mode, a singular controller is elected, while the newer KRaft mode operates with a quorum of controllers, ensuring one active controller at any given time with the others ready to take over in the event of a failure.
 
 <p align="center"><img src="images/cluster.png" height=250/></p>
 
-Kafka uses a binary communication protocol over TCP (KRPC).
-The protocol defines APIs as request/response message pairs and includes both the message format and error codes.
-Clients send messages in the exact same binary format that brokers write to disk.
-The protocol is backwards and forwards compatible, however there can be issues in case of message format changes.
+Kafka employs a binary communication protocol over TCP (KRPC), delineating APIs into request/response message pairs inclusive of message formats and error codes.
+Clients transmit messages mirroring the exact binary format brokers utilize for disk writing.
+While the protocol remains both backward and forward compatible, changes in the message format can pose potential issues.
 This hasn't happened for a long time, but there is no guarantee.
 Typically, every client opens N+1 connections, where N is the number of brokers in the cluster and 1 connection is for metadata updates.
 Client requests are processed in the same order they are sent.
 
-Each message is modeled as a record with timestamp, key, value, and optional headers.
-Key and value are just byte arrays, which gives you the flexibility to encode the data in whatever format you want using your favorite serializer.
-The timestamp is always present, but it can be set by the application when it sends (default), or by the Kafka runtime when it receives.
-Whenever possible, records are buffered and sent in batches (a single request can include multiple batches, one for each partition).
+Each message is represented as a record featuring a timestamp, key, value, and optional headers.
+The key and value are byte arrays, affording flexibility in data encoding via preferred serializers.
+While the timestamp is consistently present, its establishment can be either by the application during transmission (default) or by the Kafka runtime upon receipt.
+Where possible, records are buffered and dispatched in batches, facilitating efficient processing.
 
 Messages are stored in a topic, which is further divided into one or more partitions, distributed evenly across the brokers.
 Each partition is stored on disk as a series of fixed-size commit logs called segments.
@@ -33,24 +35,23 @@ Message ordering is only guaranteed at the partition level.
 If this is a requirement, you can create a single-partition topic or use the same key for sending all related events, so that they always land in the same partition.
 Beware that increasing topic partitions may break ordering.
 
-The partition replication protocol is fundamental to Kafka.
-By default, when a new batch of records arrives, it is firstly written into the Operating System's page cache, and only flushed to disk asynchronously.
-If the Kafka JVM crashes for whatever reason, recent messages are still in the page cache, and will be flushed by the Operating System.
-However, this doesn't protect from data loss when the machine crashes.
-This is why enabling topic replication is important: having multiple replicas means data loss is only possible if multiple brokers can crash simultaneously.
-To further improve fault tolerance, a rack-aware Kafka cluster can be used to distribute topic replicas evenly across data centers in the same geographic region.
+The partition replication protocol lies at the core of Kafka's functionality.
+By default, upon the arrival of new record batches, they are initially inscribed into the operating system's page cache before asynchronous disk flushing.
+While this mechanism preserves recent messages in the page cache in the event of a Kafka JVM crash, it doesn't safeguard against data loss during machine crashes.
+Hence, enabling topic replication is paramount, mitigating data loss by accommodating multiple broker crashes simultaneously.
+Additionally, employing a rack-aware Kafka cluster facilitates even distribution of topic replicas across data centers within the same geographic region, further fortifying fault tolerance.
 
 <p align="center"><img src="images/replicas.png" height=450/></p>
 
-One of the partition replicas is elected as the leader that gets all messages from producers, while the others are followers and can be read by consumers.
-If you set a topic replication factor of N, the system can tolerate N-1 broker failures.
-The last committed offset of a partition is called the high watermark (HW).
+Within a Kafka cluster, one partition replica is designated as the leader, receiving all producer messages, while the remaining replicas function as followers accessible to consumers.
+A topic replication factor of N ensures the system's resilience to N-1 broker failures.
+The high watermark (HW) designates the last committed offset of a partition.
 
-When sending messages, a producer with `acks=all` configuration (now default) will not get a send acknowledgement until all `min.insync.replicas` (ISR) have replicated the message.
-At any time, the ISR only includes replicas that are up to date.
-Multiple consumers with the same `group.id` form a consumer group and partitions are distributed among them using a partition assignor (that makes use of parallelism).
-Within a consumer group, a partition is assigned to exactly one consumer to not break ordering, but that consumer can handle multiple partitions.
-Each consumer periodically or manually commits its position (the next offsets to read) to an internal topic called `__consumer_offsets`.
+When sending messages, a producer configured with acks=all (default) awaits send acknowledgment until all `min.insync.replicas` (minISR) have replicated the messages.
+The ISR exclusively includes up-to-date replicas at any given time.
+Multiple consumers sharing the same `group.id` form a consumer group, with partitions distributed among them via a partition assignor, facilitating parallelism.
+Within a consumer group, each partition is assigned to precisely one consumer to uphold ordering, albeit a consumer may handle multiple partitions.
+Periodically or manually, each consumer commits its position (the next offsets to read) to an internal topic named `__consumer_offsets`.
 
 <br/>
 

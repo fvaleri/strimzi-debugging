@@ -1,20 +1,24 @@
 ## TLS authentication and custom certificates
 
-The TLS encryption protocol provides communications security over a computer network.
-Encryption without proper identification is insecure.
-Hostname verification using a common name (CN) or subject alternative name (SAN) in a TLS certificate protects against man-in-the-middle attacks, so it should never be disabled in production.
+The Transport Layer Security (TLS) encryption protocol serves as a pivotal component in ensuring the security of communications across computer networks.
+However, if encryption is implemented without proper identification mechanisms (CN and SAN), can expose vulnerabilities.
 
-A TLS certificate contains the public key along with the ownership data and expiration date.
-A self-signed certificate (Issuer == Subject) is secure enough, but only if it is trusted upfront by the application.
-It is also possible to create a wildcard certificate (e.g. `commonName=*.example.com`), that can be used by all applications running in a specific subdomain.
-Cipher suites contain algorithms for key exchange, encryption and authentication.
+Host verification, facilitated through validation of the Common Name (CN) or Subject Alternative Name (SAN) within a TLS certificate, stands as a crucial safeguard against potential man-in-the-middle attacks.
+Consequently, this feature should remain enabled without exception in production environments.
 
-A public key infrastructure (PKI) is an arrangement that binds public keys with respective identities, such as organizations, people, or applications.
-The binding is established through a process of registration and issuance of certificates by a certificate authority (CA).
+A TLS certificate encapsulates not only the public key but also essential ownership metadata and expiration details.
+While a self-signed certificate (where the issuer matches the subject) can offer a baseline level of security, its efficacy hinges on upfront trust establishment by the application.
+Furthermore, the creation of wildcard certificates, exemplified by CN formats such as `*.example.com`, provides a means for universal application across specific subdomains.
 
-Within a Kafka cluster, in addition to the client-server communication, inter-cluster communication must be protected and certificates renewed when they expire.
-All of this work is done by the Strimzi Cluster Operator, which is a great example of how the operator pattern simplifies cluster management.
-Two self-signed CAs are automatically generated and used to sign all cluster (cluster CA) and user (clients CA) certificates.
+Cipher suites, comprising algorithms for key exchange, encryption, and authentication, play an integral role in bolstering the security posture of TLS implementations.
+
+Public Key Infrastructure (PKI) frameworks facilitate the binding of public keys with corresponding identities, ranging from organizations to individuals or applications.
+This binding process is formalized through registration and certificate issuance, typically overseen by a Certificate Authority (CA).
+
+Within a Kafka cluster, safeguarding both client-server and inter-cluster communications is imperative.
+This entails proactive certificate renewal upon expiration, a responsibility adeptly managed by the Strimzi Cluster Operator.
+Notably, this operator exemplifies the efficacy of the operator pattern in streamlining cluster management tasks.
+The Cluster Operator automates the generation and utilization of two self-signed CAs: one for signing all cluster certificates (cluster CA) and another for user certificates (clients CA).
 
 <p align="center"><img src="images/network.png" height=350/></p>
 
@@ -22,17 +26,23 @@ The server name indication (SNI) extension allows a client to indicate which hos
 The server can present multiple certificates on the same IP address and port number.
 For example, it is used to route external connections to the right pod when having pass-through routes, and also allows a TCP tunnel through the HTTP reverse proxy.
 
-Kafka clients don't need to trust TLS certificates when they are signed by a well-known CA that is already included in the system truststore (e.g. `$JAVA_HOME/jre/lib/security/cacerts`).
-When enabling TLS mutual authentication (mTLS), the server should also support the certificate CN mapping to the user identity.
-Before the encryption starts, the peers agree to the protocol version and cipher suite to be used, exchange certificates and share encryption keys (connection overhead).
-Almost all authentication problems occur within this initial handshake.
+The Server Name Indication (SNI) extension empowers clients to specify the intended hostname during the TLS handshake initiation.
+Leveraging SNI, servers can present multiple certificates on a single IP address and port, facilitating effective routing of external connections to the appropriate Pod.
+Additionally, SNI enables TCP tunneling through HTTP reverse proxies.
+
+In Kafka deployments, client-side trust in TLS certificates is unnecessary when they are signed by a well-known CA already included in the system's truststore (e.g., `$JAVA_HOME/jre/lib/security/cacerts`).
+In configurations implementing TLS mutual authentication (mTLS), it is imperative for servers to support certificate-to-user identity mapping.
+Notably, prior to encryption initiation, peers engage in negotiation concerning protocol version and cipher suite selection, followed by certificate exchange and encryption key sharing, albeit incurring connection overhead.
+It is during this initial handshake phase that the bulk of authentication-related issues manifest.
 
 <br/>
 
 ---
 ### Example: TLS authentication (mTLS) using an external listener
 
-First, [deploy the Strimzi Cluster Operator and Kafka cluster](/sessions/001), and set the external listener (if route is not supported, you can use type ingress).
+First, [deploy the Strimzi Cluster Operator and Kafka cluster](/sessions/001).
+We also add an external listener (if route is not supported, you can use ingress type).
+
 Then, we apply the configuration changes to enable TLS authentication and wait for the Cluster Operator to restart all pods one by one (rolling update).
 If the Kafka cluster is operating correctly, it is possible to update the configuration with zero downtime.
 

@@ -1,51 +1,54 @@
 ## Data integration and Kafka Connect
 
-Kafka Connect is a configuration-driven fault-tolerant integration platform based on Kafka client APIs, which runs in standalone or distributed mode (cluster of workers).
-The platform can be extended by using connector, converter, and transformation plugins that implement the connect API interfaces.
-The recommended way to add them is by using the `plugin.path` property, which provides some level of isolation.
+Kafka Connect stands as a versatile, fault-tolerant integration platform, driven by configurations and based in Kafka client APIs.
+Operating either in standalone or distributed mode, forming a cluster of workers, it extends its functionality through connector, converter, and transformation plugins, adhering to the Connect API interfaces.
+These plugins can be seamlessly incorporated using the `plugin.path property`, ensuring a degree of isolation.
 
-There are two kinds of connectors: 
+Connectors within Kafka Connect come in two distinct forms:
 
- - Source connector: Imports data from an external system to Kafka  
- - Sink connector: Exports data from Kafka to an external system.
+- Source connectors: Responsible for importing data from external systems into Kafka.
+- Sink connectors: Dedicated to exporting data from Kafka to external systems.
 
-Only a few connectors are officially part of the Kafka solution, but there are many others available on GitHub or on public registries like the Confluent Hub.
+While only a handful of connectors are officially part of the Kafka ecosystem, a plethora of others can be found on platforms like GitHub or public registries such as the Confluent Hub.
 
-Connectors use converters to serialize and deserialize data when communicating with the Kafka cluster.
-For light modifications, such as filters, mappings, and replacements, transformations (also called Single Message Transformations) can be applied at the record level.
-However, for complex transformations such as aggregations, joins, and external service calls, it's recommended to use a stream processing library like Kafka Streams.
+Converters play a pivotal role in serializing and deserializing data during communication with the Kafka cluster.
+For lightweight transformations such as filtering, mapping, or replacing, the Single Message Transformations can be applied at the record level.
+However, for complex transformations such as aggregations, joins, or external service calls, leveraging a stream processing library like Kafka Streams is recommended.
 
 <p align="center"><img src="images/pipeline.png" height=450/></p>
 
-Each connector job is split into a number of single thread tasks which run on worker nodes.
-You can configure the maximum number of tasks created by setting the `maxTasks` at the connector configuration level, but the actual number of tasks depends on the specific connector and, for sink connectors, on how many input partitions.
+Each connector job is divided into a series of single-threaded tasks, executed on worker nodes.
+The maximum number of tasks can be configured using the `maxTasks` property at the connector configuration level, although the actual number tasks depends on the specific connector and, for sink connectors, on how many input partitions.
 
-Task rebalancing happens when a worker fails, a new connector is added, or there is a configuration change, but not when a task fails.
-Configurations and other metadata are stored inside internal Kafka topics so that they can be easily recovered in case of worker crash.
+Task rebalancing occurs in the event of worker failures, addition of new connectors, or configuration changes, but not when individual tasks fail.
+Configurations and other metadata are stored within internal topics, ensuring easy recovery in the event of worker crashes.
 
-- `offset.storage.topic`: The name of the compacted topic where source connector offsets are stored.
-  Sink connectors store the offset inside `__consumer_offsets` like normal consumer groups.
-- `config.storage.topic`: The name of the compacted topic where connector configurations are stored.
-- `status.storage.topic`: The name of the compacted topic where connector and task states are stored.
+Key internal topics include:
 
-The change data capture (CDC) pattern describes a system that captures and emits data changes, so that other applications can respond to those events.
-[Debezium](https://debezium.io) is a CDC engine that works best when deployed on top of Kafka Connect.
-It is actually a collection of source connectors that can be used to create data pipelines to bridge traditional data stores with Kafka.
+- `offset.storage.topic`: Compacted topic where source connector offsets are stored.
+  Sink connectors store the offsets inside `__consumer_offsets` like normal consumer groups.
+- `config.storage.topic`: Compacted topic where connector configurations are stored.
+- `status.storage.topic`: Compacted topic where connector and task states are stored.
 
-The connector produces change events by performing an initial snapshot and then reads the internal transaction log from the point at which the snapshot was made.
-There is also the possibility to configure incremental snapshots.
-The main disadvantage of using Debezium is that every connector requires a specific configuration to enable access to the transaction log.
-If you are fine with that, the advantages over a poll-based connector or application are significant:
+The Change Data Capture (CDC) pattern describes a system that captures and emits data changes, enabling other applications to react to these events.
+[Debezium](https://debezium.io), a CDC engine, thrives when deployed atop Kafka Connect.
+It encompasses a suite of source connectors, facilitating the creation of data pipelines bridging traditional data stores with Kafka.
 
-- Low overhead: Near real-time reaction to data changes avoids increased CPU load due to frequent polling.
-- No lost changes: Using a poll loop you may miss intermediary changes between two runs (updates, deletes).
-- No data model impact: No need for timestamp columns to determine the last update of data.
+Debezium generates change events by executing an initial snapshot and subsequently reading the internal transaction log from the snapshot's point onward.
+Incremental snapshots can also be configured.
+However, employing Debezium necessitates specific configurations for each connector to enable access to the transaction log.
 
-Debezium change events are self contained because each message includes the JSON schema, so that they are always consumed even if the data source schema changes over time.
-In the case of Kafka or external system failure, the Debezium connector reconnects and resumes once they are restored.
-If the connector stops for too long and the transaction log is purged, then the connector loses its position and performs another initial snapshot.
-By default, Debezium provides at-least-once semantics, which means duplicates can arise in failure scenarios.
-The change event contains elements that can be used to identify and filter out duplicates.
+Despite this drawback, Debezium offers numerous advantages over poll-based connectors or applications:
+
+- Low overhead: Near real-time reaction to data changes avoids increased CPU load from frequent polling.
+- No lost changes: Unlike poll loops, which may overlook intermediary changes between runs (e.g., updates, deletes).
+- No data model impact: Eliminates the need for timestamp columns to determine the last data update.
+
+Debezium's change events are self-contained, with each message encompassing the JSON schema, ensuring consumption even as the data source schema evolves over time.
+In case of Kafka or external system failure, the Debezium connector seamlessly reconnects and resumes operation upon restoration.
+However, if the connector remains inactive for an extended period, resulting in transaction log purging, it loses its position, necessitating another initial snapshot.
+By default, Debezium provides at-least-once semantics, potentially leading to duplicate events in failure scenarios.
+Yet, the change event incorporates elements for identifying and filtering out duplicates.
 
 <br/>
 
@@ -54,6 +57,7 @@ The change event contains elements that can be used to identify and filter out d
 
 First, [deploy the Strimzi Cluster Operator and Kafka cluster](/sessions/001).
 When the cluster is ready, we deploy a MySQL instance (the external system) and Kafka Connect cluster.
+
 Note that we are also initializing the database.
 The Kafka Connect image uses an internal component (Kaniko) to build a custom image containing the configured MySQL connector.
 That said, you can also build and use your own Connect image derived from Strimzi one.

@@ -1,53 +1,44 @@
 ## Storage requirements and recovery
 
-Kafka requires low latency storage for both broker commit logs and ZooKeeper data.
-Block storage type (e.g. SSD, NVMe, AWS EBS) is recommended because it offers greater efficiency and faster performance compared to file and object storage types.
-That said, Kafka doesn't use raw block devices, but instead writes data to segment files that are stored on a standard file system.
-These segment files are memory mapped for improved performance, which enables zero-copy optimization when TLS is not configured.
-NFS is not supported, because it causes problems when renaming files.
+Kafka and ZooKeeper require low-latency storage.
+The recommended storage type is block storage (e.g. SSD, NVMe, AWS EBS), as it offers superior efficiency and faster performance compared to file and object storage types.
+However, Kafka doesn't directly utilize raw block devices; instead, it writes data to segment files stored on a standard file system.
+These segment files are memory-mapped for enhanced performance, enabling zero-copy optimization when TLS is not configured.
+NFS is not supported due to issues it causes when renaming files.
 
-Disk usage is not necessary when producer and consumer are fast, but it is required when old data needs to be read, or when the Operating System needs to flush dirty pages.
-If there are end-to-end message latency requirements, disk speed and latency, including tail latencies, are important factors.
-An easy optimization is to disable the last access time file attribute (`noatime`), so that the system can avoid unnecessary disk I/O operations.
+While disk isn't used when both producer and consumer operations are swift, it becomes necessary when accessing old data or when the Operating System needs to flush dirty pages.
+For systems with end-to-end message latency requirements, disk speed and latency, including tail latencies, are crucial factors.
+An easy optimization is to disable the last access time file attribute (noatime) to prevent unnecessary disk I/O operations.
 
-Both Kafka and Zookeeper have built-in data replication, so they do not need a replicated storage to ensure data availability, which would only add network overhead.
-Kafka supports JBOD (just a bunch of disks), which gives some felxibility with storage resizing, and good performance when using multiple disks in parallel.
-When removing a disk with JBOD, all data needs to be migrated to other disks upfront, for example using Cruise Control.
+Kafka and Zookeeper feature built-in data replication, obviating the need for replicated storage, which would only introduce network overhead.
+Kafka supports JBOD (just a bunch of disks), providing flexibility in storage resizing and optimal performance when using multiple disks.
+Before removing a disk with JBOD, data migration to other disks is necessary, and Cruise Control can make this task easy.
 
-Ideally, when creating a new topic, the retention policy should be set based on the storage size, the expected throughput, and the required retention time.
-The required storage capacity can be  estimated based on the calculation from message write rate and the retention policy.
+For optimal topic creation, the retention policy should be set based on storage size, expected throughput, and required retention time.
+Storage capacity estimation can be calculated based on message write rate and retention policy:
 
-- Time based storage capacity (MB) = retention_sec * topic_write_rate (MB/s) * replication_factor
-- Size based storage capacity (MB) = retention_mb * replication_factor
+- Time-based storage capacity (MB) = retention_sec * topic_write_rate (MB/s) * replication_factor
+- Size-based storage capacity (MB) = retention_mb * replication_factor
 
-A Kafka topic is made of one or more partitions, where each partition is stored as a set of segment files on the same disk.
-Segments become inactive and eligible for deletion or compaction after a period of time determined by `segment.ms`, or after reaching a certain size determined by `segment.bytes`.
-If only one record is not yet eligible for deletion based on `retention.ms` or `retention.bytes` policies, the broker retains the entire segment file, so it is usually recommended to set both.
-Segments deletion or compaction happens asynchronously, so the timing depends on cluster load and how many threads are available (`background.threads` for normal topics, `log.cleaner.threads` for compacted topics).
-When very old segments are not deleted in your cluster, you can confirm that there are creation timestamps in the future by consuming or dumping all records.
-If there are some, you can fix the issue by adding the size based retention configuration, taking care of not deleting good data.
+A Kafka topic consists of one or more partitions, where each partition is stored as a set of segment files on the same disk.
+Segments become inactive and eligible for deletion or compaction based on `segment.ms` or `segment.bytes` configurations.
+It's recommended to set both `retention.ms` and `retention.bytes` to avoid retaining entire segments because of few unexpired records.
+Deletion and compaction of segments happen asynchronously, with timing dependent on cluster load and available threads.
 
-An invalid retention configuration, cluster imbalance, a sudden increase in incoming traffic, a rogue or buggy application are the most common causes for running out of disk space.
-When a log directory becomes full, the broker is terminated forcefully and it is not able to restart, because it needs space for log recovery and topic synchronization.
-In order to mitigate this risk, you can enforce per-broker quotas to control the resources used by clients, and use tiered storage to offload old data to a remote storage.
-Using tiered storage requires expertise to ensure that the rate of archival from local to remote storage is higher or equal to the rate at which data is written to local storage.
+Common causes for running out of disk space are invalid retention configurations, cluster imbalance, sudden increase in incoming traffic, malfunctioning applications.
+When a log directory becomes full, the broker may terminate forcefully and fail to restart due to insufficient space for log recovery and topic synchronization.
+To mitigate this risk, per-broker quotas can be enforced to control client resource usage, and tiered storage can be utilized to offload old data to remote storage.
+However, expertise is required to ensure timely archival from local to remote storage.
 
-In Kubernetes, a PersistentVolume (PV) is a piece of storage in the cluster that has been created by a storage provider with a specific StorageClass (SC).
-Storage classes differentiate by quality-of-service levels, or other policies, and allow size increase only when `allowVolumeExpansion` is true.
-A volume is requested and mounted into a Pod using a PersistentVolumeClaim (PVC) resource (provisioning can be static or dynamic).
-Some Kubernetes distributions support VolumeSnaphost (VS), which can be use to take periodic backups of your data.
+In Kubernetes, a PersistentVolume (PV) is a storage piece in the cluster created by a storage provider with a specific StorageClass (SC).
+Storage classes differentiate based on quality-of-service levels or other policies and allow size increase only when allowVolumeExpansion is true.
+Volumes are requested and mounted into a Pod using a PersistentVolumeClaim (PVC) resource, with provisioning being static or dynamic.
+Some Kubernetes distributions support VolumeSnapshot (VS) for taking volume backups.
 
-A PVC to PV binding is a one-to-one mapping, using a ClaimRef which is a bi-directional binding between the PV and the PVC.
-A PV can be in one of the following phases:
-
-- Available: a free resource that is not yet bound to a claim.
-- Bound: the volume is bound to a claim.
-- Released: the claim has been deleted, but the associated storage resource is not yet reclaimed by the cluster.
-- Failed: the volume has failed its (automated) reclamation.
-
-The reclaim policy (Retain or Delete) for a PV tells the cluster what to do with the volume after it has been released of its claim.
-To avoid losing your volumes when the Kafka cluster is deleted, you can set `.spec.kafka.storage.deleteClaim: false` (default) in your Kafka resource.
-To avoid losing your volumes when someone deletes the PVCs, you can set `persistentVolumeReclaimPolicy: Retain` at the volume level, or `reclaimPolicy: Retain` at the storage class level.
+PVC to PV binding involves a one-to-one mapping using a ClaimRef, which is a bi-directional binding between the PV and the PVC.
+PVs can be in several phases: Available (unbound), Bound (bound to a claim), Released (claim deleted, but storage not yet reclaimed), or Failed (reclamation failure).
+The reclaim policy (Retain or Delete) for a PV dictates cluster behavior after release.
+To prevent data loss, set `persistentVolumeReclaimPolicy` to Retain in the SC, and `.spec.kafka.storage.deleteClaim` to false in Kafka resource.
 
 <br>
 
@@ -308,9 +299,9 @@ pvc-a31b9572-5e52-4ef8-907e-d019db262c85   20Gi       RWO            Delete     
 pvc-e7146aa1-9947-4c78-bb4d-ca8b465b7729   20Gi       RWO            Delete           Bound    test/data-my-cluster-kafka-0                                         ocs-external-storagecluster-ceph-rbd            15s
 ```
 
-Finally, start the Kafka cluster and check your data.
+Deploy the Kafka cluster with our brand new volumes, wait for the cluster to be ready, and try to consume some data.
 **Don't forget to adjust the storage size in Kafka custom resource.**
-To help speed up log recovery and partition synchronization, we can bump `num.recovery.threads.per.data.dir` and `num.replica.fetchers`.
+To speed up log recovery and partition synchronization, we can bump `num.recovery.threads.per.data.dir` and `num.replica.fetchers`.
 
 ```sh
 $ cat sessions/001/resources/000-my-cluster.yaml \
@@ -510,9 +501,9 @@ data-my-cluster-kafka-1   Bound    pvc-0bd38196-2f5b-4a05-8917-b43bd2dde50b   20
 data-my-cluster-kafka-2   Bound    pvc-ca348d35-f466-446e-9f93-e3c15722d214   20Gi       RWO            ocs-external-storagecluster-ceph-rbd   5s
 ```
 
-Deploy the Kafka cluster with our brand new volumes, and then try to consume some data.
+Deploy the Kafka cluster with our brand new volumes, wait for the cluster to be ready, and try to consume some data.
 **Don't forget to adjust the storage size in Kafka custom resource.**
-To help speed up log recovery and partition synchronization, we can bump `num.recovery.threads.per.data.dir` and `num.replica.fetchers`.
+To speed up log recovery and partition synchronization, we can bump `num.recovery.threads.per.data.dir` and `num.replica.fetchers`.
 
 ```sh
 $ cat sessions/001/resources/000-my-cluster.yaml \
