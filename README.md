@@ -2,7 +2,7 @@
 
 This project contains a series of debugging sessions for Strimzi and Kafka.
 They assume user level knowledge about Kubernetes and Kafka.
-You can use Minikube to try the example, but a real Kubernetes cluster is recommended.
+You can use Minikube to try most examples, but a real Kubernetes cluster is recommended.
 Any feedback or contribution is appreciated.
 
 1. [Kafka introduction and deployments](/sessions/001)

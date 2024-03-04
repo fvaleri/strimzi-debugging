@@ -60,7 +60,7 @@ First, [deploy the Strimzi Cluster Operator and Kafka cluster](/sessions/001).
 
 Only network bandwidth and request rate quotas are supported by the default Kafka quota plugin. 
 Instead, the [Strimzi quota plugin](https://github.com/strimzi/kafka-quotas-plugin) allows to set total quota independent of the number of clients.
-In this case, we are interested in the storage limits configuration, with the objective to avoid disk space exhaustion in the first place.
+In this case, we are interested in the storage limits configuration, with the objective to avoid running out of disk space.
 
 Fortunately, the Strimzi Kafka images already contains this plugin, otherwise you would have to build your own custom Kafka image including the plugin's JAR in `/opt/kafka/libs`.
 With the following configuration, clients will be throttled to 0 when any volume in the cluster has <= 5GiB available bytes.
@@ -118,7 +118,7 @@ $ kubectl exec my-cluster-kafka-0 -- df -h | grep /var/lib/kafka/data \
 **Don't use Minikube for this example, as it doesn't have full volume support.**
 
 First, [deploy the Strimzi Cluster Operator](/sessions/001).
-For the sake of this example, we deploy the Kafka cluster reducing the disk size.
+For the sake of this example, we deploy the Kafka cluster reducing the volume size.
 
 ```sh
 $ cat sessions/001/resources/000-my-cluster.yaml \
@@ -129,9 +129,9 @@ kafka.kafka.strimzi.io/my-cluster created
 kafkatopic.kafka.strimzi.io/my-topic created
 
 $ kubectl get pv | grep my-cluster-kafka
-pvc-7c71f9b5-4045-42cf-93ad-37f364cbd84e   100Mi       RWO            Delete           Bound    test/data-my-cluster-kafka-0                                         ocs-external-storagecluster-ceph-rbd            5s
-pvc-bd02c930-2366-4bc7-a7e6-aa8e0199bcfc   100Mi       RWO            Delete           Bound    test/data-my-cluster-kafka-1                                         ocs-external-storagecluster-ceph-rbd            5s
-pvc-eeb4de90-3b11-4f31-bfb4-e1bb32bc658f   100Mi       RWO            Delete           Bound    test/data-my-cluster-kafka-2                                         ocs-external-storagecluster-ceph-rbd            5s
+pvc-4bfda7c0-0613-4b29-acad-a53627af6406   100Mi      RWO            Delete           Bound    test/data-my-cluster-kafka-2                                         ocs-external-storagecluster-ceph-rbd            118s
+pvc-8648e0ea-c995-4cf8-8cc4-aaaaf207b443   100Mi      RWO            Delete           Bound    test/data-my-cluster-kafka-0                                         ocs-external-storagecluster-ceph-rbd            118s
+pvc-ac74c7cf-291a-474f-a691-f5d09513ec11   100Mi      RWO            Delete           Bound    test/data-my-cluster-kafka-1                                         ocs-external-storagecluster-ceph-rbd            118s
 ```
 
 When the cluster is ready, break it by sending 110 MiB of data to a topic, which exceeds the disk capacity of 100 MiB.
@@ -139,51 +139,52 @@ When the cluster is ready, break it by sending 110 MiB of data to a topic, which
 ```sh
 $ kubectl-kafka bin/kafka-producer-perf-test.sh --topic my-topic --record-size 1000 --num-records 110000 \
   --throughput -1 --producer-props acks=all bootstrap.servers=my-cluster-kafka-bootstrap:9092
-13713 records sent, 2738.8 records/sec (2.61 MB/sec), 2535.7 ms avg latency, 4416.0 ms max latency.
-20848 records sent, 4159.6 records/sec (3.97 MB/sec), 6712.5 ms avg latency, 9238.0 ms max latency.
-16528 records sent, 3301.6 records/sec (3.15 MB/sec), 8261.6 ms avg latency, 10919.0 ms max latency.
+6497 records sent, 1296.0 records/sec (1.24 MB/sec), 2479.4 ms avg latency, 4609.0 ms max latency.
+12256 records sent, 2443.9 records/sec (2.33 MB/sec), 6940.7 ms avg latency, 9567.0 ms max latency.
+14944 records sent, 2987.0 records/sec (2.85 MB/sec), 11662.5 ms avg latency, 14529.0 ms max latency
 ...
-[2024-03-03 17:05:32,605] WARN [Producer clientId=perf-producer-client] Connection to node 0 (my-cluster-kafka-0.my-cluster-kafka-brokers.test.svc/10.135.0.68:9092) could not be established. Broker may not be available. (org.apache.kafka.clients.NetworkClient)
+[2024-03-04 08:19:07,027] WARN [Producer clientId=perf-producer-client] Connection to node 0 (my-cluster-kafka-0.my-cluster-kafka-brokers.test.svc/10.135.0.26:9092) could not be established. Broker may not be available. (org.apache.kafka.clients.NetworkClient)
+[2024-03-04 08:19:07,334] WARN [Producer clientId=perf-producer-client] Connection to node 2 (my-cluster-kafka-2.my-cluster-kafka-brokers.test.svc/10.132.2.20:9092) could not be established. Broker may not be available. (org.apache.kafka.clients.NetworkClient)
+[2024-03-04 08:19:07,428] WARN [Producer clientId=perf-producer-client] Connection to node 1 (my-cluster-kafka-1.my-cluster-kafka-brokers.test.svc/10.134.0.19:9092) could not be established. Broker may not be available. (org.apache.kafka.clients.NetworkClient)
 ^C
 
 $ kubectl get po | grep my-cluster-kafka
-my-cluster-kafka-0                            0/1     CrashLoopBackOff   3 (14s ago)   4m52s
-my-cluster-kafka-1                            1/1     Running            0             4m52s
-my-cluster-kafka-2                            1/1     Running            0             4m52s
+my-cluster-kafka-0                            0/1     CrashLoopBackOff   2 (21s ago)   3m44s
+my-cluster-kafka-1                            1/1     Running            2 (44s ago)   3m44s
+my-cluster-kafka-2                            0/1     CrashLoopBackOff   2 (14s ago)   3m44s
 
 $ kubectl logs my-cluster-kafka-0 | grep "No space left on device" | tail -n1
 java.io.IOException: No space left on device
 ```
 
-Even if not all pods failed, like in this case, we still need to increase the volume size of all brokers because the storage configuration is shared.
+Even if not all pods failed, we still need to increase the volume size of all brokers because the storage configuration is shared.
 If volume expansion is supported on the storage class, you can simply increase the storage size in the Kafka resource, and the operator will take care of it. 
 Note that the expansion operation may take some time to complete, depending on the size of the volume and the available resources in the cluster.
 
 ```sh
-$ kubectl get sc $(kubectl get pv | grep data-my-cluster-kafka-0 | awk '{print $7}') -o yaml | yq .allowVolumeExpansion
-true
-
-$ kubectl patch k my-cluster --type merge -p '
-  spec:
-    kafka:
-      storage:
-        size: 20Gi'
+if [[ $(kubectl get sc $(kubectl get pv | grep data-my-cluster-kafka-0 | awk '{print $7}') -o yaml | yq .allowVolumeExpansion) == "false" ]]; then 
+  kubectl patch k my-cluster --type merge -p '
+    spec:
+      kafka:
+        storage:
+          size: 20Gi'
+fi
 kafka.kafka.strimzi.io/my-cluster patched
 
-$ kubectl logs $(kubectl get po | grep cluster-operator | cut -d" " -f1) | grep "Resizing"
-2024-03-03 11:23:38 INFO  PvcReconciler:140 - Reconciliation #59(watch) Kafka(test/my-cluster): Resizing PVC data-my-cluster-kafka-0 from 10 to 20Gi.
-2024-03-03 11:23:38 INFO  PvcReconciler:140 - Reconciliation #59(watch) Kafka(test/my-cluster): Resizing PVC data-my-cluster-kafka-1 from 10 to 20Gi.
-2024-03-03 11:23:38 INFO  PvcReconciler:140 - Reconciliation #59(watch) Kafka(test/my-cluster): Resizing PVC data-my-cluster-kafka-2 from 10 to 20Gi.
+$ kubectl logs $(kubectl get po | grep cluster-operator | awk '{print $1}') | grep "Resizing"
+2024-03-04 08:25:04 INFO  PvcReconciler:140 - Reconciliation #87(watch) Kafka(test/my-cluster): Resizing PVC data-my-cluster-kafka-0 from 100 to 20Gi.
+2024-03-04 08:25:04 INFO  PvcReconciler:140 - Reconciliation #87(watch) Kafka(test/my-cluster): Resizing PVC data-my-cluster-kafka-1 from 100 to 20Gi.
+2024-03-04 08:25:04 INFO  PvcReconciler:140 - Reconciliation #87(watch) Kafka(test/my-cluster): Resizing PVC data-my-cluster-kafka-2 from 100 to 20Gi.
 
 $ kubectl get pv | grep my-cluster-kafka
-pvc-7c71f9b5-4045-42cf-93ad-37f364cbd84e   20Gi       RWO            Delete           Bound    test/data-my-cluster-kafka-0                                         ocs-external-storagecluster-ceph-rbd            6m16s
-pvc-bd02c930-2366-4bc7-a7e6-aa8e0199bcfc   20Gi       RWO            Delete           Bound    test/data-my-cluster-kafka-1                                         ocs-external-storagecluster-ceph-rbd            6m16s
-pvc-eeb4de90-3b11-4f31-bfb4-e1bb32bc658f   20Gi       RWO            Delete           Bound    test/data-my-cluster-kafka-2                                         ocs-external-storagecluster-ceph-rbd            6m16s
+pvc-4bfda7c0-0613-4b29-acad-a53627af6406   20Gi       RWO            Delete           Bound    test/data-my-cluster-kafka-2                                         ocs-external-storagecluster-ceph-rbd            10m
+pvc-8648e0ea-c995-4cf8-8cc4-aaaaf207b443   20Gi       RWO            Delete           Bound    test/data-my-cluster-kafka-0                                         ocs-external-storagecluster-ceph-rbd            10m
+pvc-ac74c7cf-291a-474f-a691-f5d09513ec11   20Gi       RWO            Delete           Bound    test/data-my-cluster-kafka-1                                         ocs-external-storagecluster-ceph-rbd            10m
 
 $ kubectl get po | grep my-cluster-kafka
-my-cluster-kafka-0                            1/1     Running   5 (2m20s ago)   7m56s
-my-cluster-kafka-1                            1/1     Running   0               7m56s
-my-cluster-kafka-2                            1/1     Running   0               7m56s   
+my-cluster-kafka-0                            1/1     Running   6 (4m26s ago)   10m
+my-cluster-kafka-1                            1/1     Running   3 (71s ago)     10m
+my-cluster-kafka-2                            1/1     Running   6 (4m5s ago)    10m
 ```
 
 <br>
@@ -192,9 +193,10 @@ my-cluster-kafka-2                            1/1     Running   0               
 ### Example: offline Kafka volume recovery using snapshot support
 
 **Don't use Minikube for this example, as it doesn't have full volume support.**
+This procedure works offline because replacing the volume with an online cluster would mean creating a new empty volume and synchronize from scratch, which could take a lot of time.
 
 First, [deploy the Strimzi Cluster Operator](/sessions/001).
-For the sake of this example, we deploy the Kafka cluster reducing the disk size.
+For the sake of this example, we deploy the Kafka cluster reducing the volume size.
 
 ```sh
 $ cat sessions/001/resources/000-my-cluster.yaml \
@@ -211,9 +213,9 @@ $ CLUSTER_NAME="my-cluster" \
   NEW_VOLUME_SIZE="20Gi"
 
 $ kubectl get pv | grep my-cluster-kafka
-pvc-7c71f9b5-4045-42cf-93ad-37f364cbd84e   100Mi       RWO            Delete           Bound    test/data-my-cluster-kafka-0                                         ocs-external-storagecluster-ceph-rbd            5s
-pvc-bd02c930-2366-4bc7-a7e6-aa8e0199bcfc   100Mi       RWO            Delete           Bound    test/data-my-cluster-kafka-1                                         ocs-external-storagecluster-ceph-rbd            5s
-pvc-eeb4de90-3b11-4f31-bfb4-e1bb32bc658f   100Mi       RWO            Delete           Bound    test/data-my-cluster-kafka-2                                         ocs-external-storagecluster-ceph-rbd            5s
+pvc-2d208791-618e-4f9d-9e3d-b9f7e65f3335   100Mi      RWO            Delete           Bound    test/data-my-cluster-kafka-2                                         ocs-external-storagecluster-ceph-rbd            92s
+pvc-8f6a188c-ab52-49ce-a75d-c0edeaaec0d8   100Mi      RWO            Delete           Bound    test/data-my-cluster-kafka-1                                         ocs-external-storagecluster-ceph-rbd            92s
+pvc-9bdb58be-27d3-4be6-b0e8-8531d6958de2   100Mi      RWO            Delete           Bound    test/data-my-cluster-kafka-0                                         ocs-external-storagecluster-ceph-rbd            92s
 ```
 
 When the cluster is ready, break it by sending 110 MiB of data to a topic, which exceeds the disk capacity of 100 MiB.
@@ -221,19 +223,19 @@ When the cluster is ready, break it by sending 110 MiB of data to a topic, which
 ```sh
 $ kubectl-kafka bin/kafka-producer-perf-test.sh --topic my-topic --record-size 1000 --num-records 110000 \
   --throughput -1 --producer-props acks=all bootstrap.servers=$CLUSTER_NAME-kafka-bootstrap:9092
-13713 records sent, 2738.8 records/sec (2.61 MB/sec), 2535.7 ms avg latency, 4416.0 ms max latency.
-20848 records sent, 4159.6 records/sec (3.97 MB/sec), 6712.5 ms avg latency, 9238.0 ms max latency.
-16528 records sent, 3301.6 records/sec (3.15 MB/sec), 8261.6 ms avg latency, 10919.0 ms max latency.
+11105 records sent, 2215.7 records/sec (2.11 MB/sec), 2392.0 ms avg latency, 4559.0 ms max latency.
+17616 records sent, 3521.1 records/sec (3.36 MB/sec), 6932.4 ms avg latency, 9436.0 ms max latency.
+19152 records sent, 3830.4 records/sec (3.65 MB/sec), 9480.6 ms avg latency, 11175.0 ms max latency.
 ...
-[2024-03-03 17:05:32,605] WARN [Producer clientId=perf-producer-client] Connection to node 0 (my-cluster-kafka-0.my-cluster-kafka-brokers.test.svc/10.135.0.68:9092) could not be established. Broker may not be available. (org.apache.kafka.clients.NetworkClient)
-[2024-03-03 17:05:32,662] WARN [Producer clientId=perf-producer-client] Connection to node 1 (my-cluster-kafka-1.my-cluster-kafka-brokers.test.svc/10.134.0.32:9092) could not be established. Broker may not be available. (org.apache.kafka.clients.NetworkClient)
-[2024-03-03 17:05:33,263] WARN [Producer clientId=perf-producer-client] Connection to node 2 (my-cluster-kafka-2.my-cluster-kafka-brokers.test.svc/10.132.2.29:9092) could not be established. Broker may not be available. (org.apache.kafka.clients.NetworkClient)
+[2024-03-04 08:32:01,619] WARN [Producer clientId=perf-producer-client] Connection to node 0 (my-cluster-kafka-0.my-cluster-kafka-brokers.test.svc/10.135.0.31:9092) could not be established. Broker may not be available. (org.apache.kafka.clients.NetworkClient)
+[2024-03-04 08:32:01,639] WARN [Producer clientId=perf-producer-client] Connection to node 1 (my-cluster-kafka-1.my-cluster-kafka-brokers.test.svc/10.134.0.26:9092) could not be established. Broker may not be available. (org.apache.kafka.clients.NetworkClient)
+[2024-03-04 08:32:01,723] WARN [Producer clientId=perf-producer-client] Connection to node 2 (my-cluster-kafka-2.my-cluster-kafka-brokers.test.svc/10.132.2.22:9092) could not be established. Broker may not be available. (org.apache.kafka.clients.NetworkClient)
 ^C
 
 $ kubectl get po | grep $CLUSTER_NAME-kafka
-my-cluster-kafka-0                            0/1     CrashLoopBackOff   2 (25s ago)   2m13s
-my-cluster-kafka-1                            0/1     CrashLoopBackOff   2 (18s ago)   2m13s
-my-cluster-kafka-2                            0/1     CrashLoopBackOff   2 (22s ago)   2m13s
+my-cluster-kafka-0                            0/1     CrashLoopBackOff   2 (25s ago)   3m10s
+my-cluster-kafka-1                            0/1     CrashLoopBackOff   2 (24s ago)   3m10s
+my-cluster-kafka-2                            0/1     CrashLoopBackOff   2 (16s ago)   3m10s
 
 $ kubectl logs $CLUSTER_NAME-kafka-0 | grep "No space left on device" | tail -n1
 java.io.IOException: No space left on device
@@ -266,9 +268,9 @@ volumesnapshot.snapshot.storage.k8s.io/data-my-cluster-kafka-1-snapshot created
 volumesnapshot.snapshot.storage.k8s.io/data-my-cluster-kafka-2-snapshot created
 
 $ kubectl get vs | grep $CLUSTER_NAME-kafka
-data-my-cluster-kafka-0-snapshot   true         data-my-cluster-kafka-0                           100Mi         ocs-external-storagecluster-rbdplugin-snapclass   snapcontent-136a0dd1-4702-4d2c-9298-3fa28f066b58   8s             9s
-data-my-cluster-kafka-1-snapshot   true         data-my-cluster-kafka-1                           100Mi         ocs-external-storagecluster-rbdplugin-snapclass   snapcontent-55463fd4-6212-4641-ae40-e6eaaa56eac8   7s             8s
-data-my-cluster-kafka-2-snapshot   true         data-my-cluster-kafka-2                           100Mi         ocs-external-storagecluster-rbdplugin-snapclass   snapcontent-3bcb8990-2783-4d47-8c82-1655e5a446ba   6s             7s
+data-my-cluster-kafka-0-snapshot   true         data-my-cluster-kafka-0                           100Mi         ocs-external-storagecluster-rbdplugin-snapclass   snapcontent-87790258-665a-4106-896c-9211c0b482c1   13s            14s
+data-my-cluster-kafka-1-snapshot   true         data-my-cluster-kafka-1                           100Mi         ocs-external-storagecluster-rbdplugin-snapclass   snapcontent-59c49c1a-2d65-4d7d-b9a0-9120dbf60c8f   12s            13s
+data-my-cluster-kafka-2-snapshot   true         data-my-cluster-kafka-2                           100Mi         ocs-external-storagecluster-rbdplugin-snapclass   snapcontent-dba158cc-5e88-43fe-b580-e30282b1d8f5   11s            12s
 ```
 
 Once they are ready, we can delete the old PVCs, and recreate them with bigger size from the snapshots.
@@ -301,9 +303,9 @@ persistentvolumeclaim "data-my-cluster-kafka-2" deleted
 persistentvolumeclaim/data-my-cluster-kafka-2 created
 
 $ kubectl get pv | grep $CLUSTER_NAME-kafka
-pvc-64a90b4c-4861-4dbd-b3f0-62c4106b41fd   20Gi       RWO            Delete           Bound    test/data-my-cluster-kafka-1                                         ocs-external-storagecluster-ceph-rbd            9s
-pvc-82696438-d8d1-457e-a788-bf0910ba5ad3   20Gi       RWO            Delete           Bound    test/data-my-cluster-kafka-2                                         ocs-external-storagecluster-ceph-rbd            7s
-pvc-e87b8ef9-ffc4-4434-933f-ee444c9b914b   20Gi       RWO            Delete           Bound    test/data-my-cluster-kafka-0                                         ocs-external-storagecluster-ceph-rbd            11s
+pvc-4bb20d8e-882d-448d-8a05-92f257019214   20Gi       RWO            Delete           Bound    test/data-my-cluster-kafka-1                                         ocs-external-storagecluster-ceph-rbd            12s
+pvc-a31b9572-5e52-4ef8-907e-d019db262c85   20Gi       RWO            Delete           Bound    test/data-my-cluster-kafka-2                                         ocs-external-storagecluster-ceph-rbd            10s
+pvc-e7146aa1-9947-4c78-bb4d-ca8b465b7729   20Gi       RWO            Delete           Bound    test/data-my-cluster-kafka-0                                         ocs-external-storagecluster-ceph-rbd            15s
 ```
 
 Finally, start the Kafka cluster and check your data.
@@ -342,9 +344,10 @@ RHTSTTCCIQLHFTWTCEUZJHADNDIYHMXSCUFDMIQXGISLNYVGNZKIJFDFQJVRWDLUNUTXNLCKSQOZNEYL
 ### Example: offline Kafka volume recovery with no expansion and snapshot support
 
 **Don't use Minikube for this example, as it doesn't have full volume support.**
+This procedure works offline because replacing the volume with an online cluster would mean creating a new empty volume and synchronize from scratch, which could take a lot of time.
 
 First, [deploy the Strimzi Cluster Operator](/sessions/001).
-For the sake of this example, we deploy the Kafka cluster reducing the disk size.
+For the sake of this example, we deploy the Kafka cluster reducing the volume size.
 
 ```sh
 $ cat sessions/001/resources/000-my-cluster.yaml \
