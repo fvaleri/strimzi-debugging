@@ -45,7 +45,8 @@ To prevent data loss, set `persistentVolumeReclaimPolicy` to Retain in the SC, a
 ---
 ### Example: avoid running out of Kafka disk space using the Strimzi quota plugin
 
-**Don't use Minikube for this example, as it doesn't have full volume support.**
+This example has some tricky steps highlighted in bold, where you need to be extra careful to avoid losing data.
+**Don't use Minikube, as it doesn't have full volume support.**
 
 First, [deploy the Strimzi Cluster Operator and Kafka cluster](/sessions/001).
 
@@ -106,7 +107,8 @@ $ kubectl exec my-cluster-kafka-0 -- df -h | grep /var/lib/kafka/data \
 ---
 ### Example: online Kafka volume recovery using expansion support
 
-**Don't use Minikube for this example, as it doesn't have full volume support.**
+This example has some tricky steps highlighted in bold, where you need to be extra careful to avoid losing data.
+**Don't use Minikube, as it doesn't have full volume support.**
 
 First, [deploy the Strimzi Cluster Operator](/sessions/001).
 For the sake of this example, we deploy the Kafka cluster reducing the volume size.
@@ -183,8 +185,9 @@ my-cluster-kafka-2                            1/1     Running   6 (4m5s ago)    
 ---
 ### Example: offline Kafka volume recovery using snapshot support
 
-**Don't use Minikube for this example, as it doesn't have full volume support.**
-This procedure works offline because replacing the volume with an online cluster would mean creating a new empty volume and synchronize from scratch, which could take a lot of time.
+This example has some tricky steps highlighted in bold, where you need to be extra careful to avoid losing data.
+It works offline because copy data while they are being modified can cause tricky problems, especially if transactions are enabled.
+**Don't use Minikube, as it doesn't have full volume support.**
 
 First, [deploy the Strimzi Cluster Operator](/sessions/001).
 For the sake of this example, we deploy the Kafka cluster reducing the volume size.
@@ -334,8 +337,9 @@ RHTSTTCCIQLHFTWTCEUZJHADNDIYHMXSCUFDMIQXGISLNYVGNZKIJFDFQJVRWDLUNUTXNLCKSQOZNEYL
 ---
 ### Example: offline Kafka volume recovery with no expansion and snapshot support
 
-**Don't use Minikube for this example, as it doesn't have full volume support.**
-This procedure works offline because replacing the volume with an online cluster would mean creating a new empty volume and synchronize from scratch, which could take a lot of time.
+This example has some tricky steps highlighted in bold, where you need to be extra careful to avoid losing data.
+It works offline because copy data while they are being modified can cause tricky problems, especially if transactions are enabled.
+**Don't use Minikube, as it doesn't have full volume support.**
 
 First, [deploy the Strimzi Cluster Operator](/sessions/001).
 For the sake of this example, we deploy the Kafka cluster reducing the volume size.
