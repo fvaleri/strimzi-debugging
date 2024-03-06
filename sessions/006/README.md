@@ -833,7 +833,7 @@ We need to remove all servers data from the Zookeeper volumes to allow it get re
 
 ```sh
 $ for pod in $ZK_PODS; do
-  kubectl run kubectl-remove-zookeeper-0 -itq --rm --restart "Never" --image "foo" --overrides "$(cat sessions/006/resources/patch_ZK_online.yaml \
+  kubectl run kubectl-remove-zookeeper-0 -itq --rm --restart "Never" --image "foo" --overrides "$(cat sessions/006/resources/patch-zk.yaml \
     | yq ".spec.volumes[0].persistentVolumeClaim.claimName = \"data-my-cluster-zookeeper-0\"" \
     | yq -p yaml -o json)"
 done
