@@ -554,7 +554,7 @@ pvc-ca348d35-f466-446e-9f93-e3c15722d214   20Gi       RWO            Delete     
 <br/>
 
 ---
-### Example: ZooKeeper storage failure with lost quorum (offline recovery)
+### Example: ZooKeeper storage failure with 1 node having storage (offline recovery)
 
 This procedure has some tricky steps highlighted in bold, where you need to be extra careful to avoid losing data.
 **Don't use Minikube for this example, as it doesn't have full volume support.**
@@ -585,7 +585,6 @@ NAME                          STATUS   VOLUME                                   
 data-my-cluster-zookeeper-0   Bound    pvc-8f3ddfba-e73a-4469-92e1-c8abc62006cc   1Mi        RWO            ocs-external-storagecluster-ceph-rbd   6m45s
 data-my-cluster-zookeeper-1   Bound    pvc-f6b43572-30ff-4423-a2eb-50d6733c55ec   1Mi        RWO            ocs-external-storagecluster-ceph-rbd   6m45s
 data-my-cluster-zookeeper-2   Bound    pvc-90f07fde-7482-4764-b013-a04aac4e41fb   1Mi        RWO            ocs-external-storagecluster-ceph-rbd   6m45s
-
 
 $ kubectl-kafka bin/kafka-topics.sh --bootstrap-server $CLUSTER_NAME-kafka-bootstrap:9092 --create --topic t0 --partitions 1000 \
   && kubectl-kafka bin/kafka-topics.sh --bootstrap-server $CLUSTER_NAME-kafka-bootstrap:9092 --create --topic t1 --partitions 1000 \
@@ -799,25 +798,23 @@ pvc-d33f37a9-de7e-4b6a-8ab1-e0522571ebb1   100Mi      RWO            Delete     
 pvc-e56566de-8b03-4505-8872-f12603dea51f   100Mi      RWO            Delete           Bound    test/data-my-cluster-zookeeper-0                                     ocs-external-storagecluster-ceph-rbd            6m31s
 ```
 
-
 <br/>
 
 ---
-### Example: ZooKeeper storage failure with lost quorum (online recovery)
+### Example: online ZooKeeper recovery from corrupted storage
 
 This procedure has some tricky steps highlighted in bold, where you need to be extra careful to avoid losing data.
 **Don't use Minikube for this example, as it doesn't have full volume support.**
 
-First, [deploy the Strimzi Cluster Operator](/sessions/001).
-
+First, [deploy the Strimzi Cluster Operator and kafka cluster](/sessions/001).
 
 When the cluster is ready, break 1 zookeeper node by writing corrupted data into ZK log.
 
 ```sh
 $ CLUSTER_NAME="my-cluster" \
-  ZK_PODS="$(kubectl get po -l strimzi.io/name=my-cluster-zookeeper --no-headers -o custom-columns=':metadata.name')" \
+  ZK_PODS="$(kubectl get po -l strimzi.io/name=$CLUSTER_NAME-zookeeper --no-headers -o custom-columns=':metadata.name')"
 
-$ kubectl exec -it $CLUSTER_NAME-zookeeper-0 -- bash -c "echo 'test' > /var/lib/zookeeper/data/version-2/log.200000001"
+$ kubectl exec $CLUSTER_NAME-zookeeper-0 -- sh -c "echo 'test' > /var/lib/zookeeper/data/version-2/log.200000001"
 
 $ kubectl delete po $CLUSTER_NAME-zookeeper-0
 pod "my-cluster-zookeeper-0" deleted
@@ -832,39 +829,7 @@ $ kubectl logs $CLUSTER_NAME-zoookeeper-0 | grep "Unable to load database on dis
 2024-03-01 08:53:40,806 ERROR Unable to load database on disk (org.apache.zookeeper.server.quorum.QuorumPeer) [main]
 ```
 
-We need to delete the node to save the storage in the failed node.
-**Before deleting the Kafka cluster, make sure that delete claim storage configuration is set to false in Kafka resource.**
-
-```sh
-$ if [[ $(kubectl get k $CLUSTER_NAME -o yaml | yq .spec.zookeeper.storage.deleteClaim) == "false" ]]; then kubectl delete k $CLUSTER_NAME; fi
-kafka.kafka.strimzi.io "my-cluster" deleted
-```
-
-**Set the persistent volume reclaim policy to Retain, in order to avoid losing broker data when deleting Zookeeper PVCs.**
-
-```sh
-$ for pv in $(kubectl get pv | grep $CLUSTER_NAME-zookeeper | awk '{print $1}'); do
-  kubectl patch pv $pv --type merge -p '
-    spec:
-      persistentVolumeReclaimPolicy: Retain'
-done
-persistentvolume/pvc-62dc40e2-8732-4563-bd9c-97a480f35dbf patched
-persistentvolume/pvc-8f3ddfba-e73a-4469-92e1-c8abc62006cc patched
-persistentvolume/pvc-90f07fde-7482-4764-b013-a04aac4e41fb patched
-persistentvolume/pvc-d33f37a9-de7e-4b6a-8ab1-e0522571ebb1 patched
-persistentvolume/pvc-e56566de-8b03-4505-8872-f12603dea51f patched
-persistentvolume/pvc-f6b43572-30ff-4423-a2eb-50d6733c55ec patched
-
-$ kubectl get pv | grep $CLUSTER_NAME-zookeeper
-pvc-62dc40e2-8732-4563-bd9c-97a480f35dbf   100Mi      RWO            Retain           Bound    test/data-my-cluster-zookeeper-2-new                                 ocs-external-storagecluster-ceph-rbd            47s
-pvc-8f3ddfba-e73a-4469-92e1-c8abc62006cc   1Mi        RWO            Retain           Bound    test/data-my-cluster-zookeeper-0                                     ocs-external-storagecluster-ceph-rbd            11m
-pvc-90f07fde-7482-4764-b013-a04aac4e41fb   1Mi        RWO            Retain           Bound    test/data-my-cluster-zookeeper-2                                     ocs-external-storagecluster-ceph-rbd            11m
-pvc-d33f37a9-de7e-4b6a-8ab1-e0522571ebb1   100Mi      RWO            Retain           Bound    test/data-my-cluster-zookeeper-1-new                                 ocs-external-storagecluster-ceph-rbd            49s
-pvc-e56566de-8b03-4505-8872-f12603dea51f   100Mi      RWO            Retain           Bound    test/data-my-cluster-zookeeper-0-new                                 ocs-external-storagecluster-ceph-rbd            50s
-pvc-f6b43572-30ff-4423-a2eb-50d6733c55ec   1Mi        RWO            Retain           Bound    test/data-my-cluster-zookeeper-1                                     ocs-external-storagecluster-ceph-rbd            11m
-```
-
-Remove all servers data from the Zookeeper volumes to allow it get re-synced with the leader.
+We need to remove all servers data from the Zookeeper volumes to allow it get re-synced with the leader.
 
 ```sh
 $ for pod in $ZK_PODS; do
@@ -878,11 +843,11 @@ removed '/zookeeper/data/version-2/log.200000001'
 removed '/zookeeper/data/version-2/snapshot.0'
 ```
 
-Re-deploy the Kafka cluster.
+Delete the pod to force it restarted. After restarted, it'll become "running" state after syncing up with the leader.
 
 ```sh
-$ kubectl apply -f sessions/001/resources/
-kafka.kafka.strimzi.io/my-cluster created
+$ kubectl delete po $CLUSTER_NAME-zookeeper-0
+pod "my-cluster-zookeeper-0" deleted
 
 $ kubectl get po -l strimzi.io/cluster=$CLUSTER_NAME
 NAME                                          READY   STATUS    RESTARTS   AGE
@@ -901,21 +866,4 @@ Topic: t0	TopicId: 1Sgy6V-CR0K7MMJ9khDuRw	PartitionCount: 3	ReplicationFactor: 3
 	Topic: t0	Partition: 0	Leader: 0	Replicas: 0,2,1	Isr: 0,2,1
 	Topic: t0	Partition: 1	Leader: 2	Replicas: 2,1,0	Isr: 2,1,0
 	Topic: t0	Partition: 2	Leader: 1	Replicas: 1,0,2	Isr: 1,0,2
-```
-
-Finally, we set the retain policy back to Delete on new volumes.
-
-```sh
-$ kubectl patch pv $(kubectl get pv | grep "$CLUSTER_NAME-zookeeper" | awk '{print $1}') --type merge -p '
-    spec:
-      persistentVolumeReclaimPolicy: Delete'
-persistentvolume/pvc-131a97de-2f08-45f6-aba4-e5cd2a75a635 patched
-persistentvolume/pvc-658b8784-9e32-4a64-93c6-f94404ee7c85 patched
-persistentvolume/pvc-a9073ee4-1845-479d-9d1d-42c3e07f2e3d patched
-
-$ kubectl get pv | grep $CLUSTER_NAME-zookeeper
-kubectl get pv | grep $CLUSTER_NAME-zookeeper
-pvc-131a97de-2f08-45f6-aba4-e5cd2a75a635   5Gi        RWO            Delete           Bound    test/data-my-cluster-zookeeper-2                                     ocs-external-storagecluster-ceph-rbd            38m
-pvc-658b8784-9e32-4a64-93c6-f94404ee7c85   5Gi        RWO            Delete           Bound    test/data-my-cluster-zookeeper-1                                     ocs-external-storagecluster-ceph-rbd            38m
-pvc-a9073ee4-1845-479d-9d1d-42c3e07f2e3d   5Gi        RWO            Delete           Bound    test/data-my-cluster-zookeeper-0                                     ocs-external-storagecluster-ceph-rbd            38m
 ```
