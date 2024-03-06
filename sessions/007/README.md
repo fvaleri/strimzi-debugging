@@ -1,28 +1,30 @@
-## Cruise Control and unbalanced clusters
+## Unbalanced clusters and Cruise Control
 
-By default, Kafka tries to distribute the load evenly across all brokers.
-This is achieved through the concept of the preferred replica, which is the first replica created for a new topic.
-The preferred replica is designated as the partition leader and assigned to a broker for balanced leader distribution.
-A background thread moves the leader role to the preferred replica when it is in sync.
+By default, Kafka aims to evenly distribute the workload across all brokers, employing the concept of the preferred replica.
+This preferred replica, being the first one created for a new topic, is designated as the partition leader and assigned to a broker for balanced leader distribution.
+A background thread ensures that the leader role is shifted to the preferred replica once it's in sync.
 
-This may not be enough, and we may end up with uneven distribution of load across brokers as a consequence of broker failures, addition of new brokers or simply because some partitions are used more than others.
-The `kafka.server:type=KafkaRequestHandlerPool,name=RequestHandlerAvgIdlePercent` metric is a good overall load metric for Kafka scaling and rebalancing decisions.
-Below 0.7 (i.e. the request handler threads are busy 30% of the time) performance start to degrade, below 0.5 you start getting into trouble (scaling or rebalancing at this point adds even more load), and if you hit 0.3 it's barely usable for users.
+However, this default setup might not be enough, leading to uneven load distribution across brokers due to various factors such as broker failures, addition of new brokers, or varying usage levels of different partitions.
 
-The load is composed of various resources that brokers have in limited supply (CPU cycles, disk space, network bandwidth).
-Rebalancing estimates the load imposed by each replica on a broker and tries to rearrange partition leaders and followers to get a better balance.
-That rearrangement usually involves moving the data between different brokers (inter-broker rebalancing), same broker's disks (intra-broker reblancing), and changing partition leaders.
-Doing this job using the `kafka-reassign-partitions.sh` tool is quite complicated, that's why [Cruise Control](https://github.com/linkedin/cruise-control) (CC) was created.
+To monitor cluster load effectively, the `kafka.server:type=KafkaRequestHandlerPool,name=RequestHandlerAvgIdlePercent` metric proves invaluable.
+When this metric falls below 0.7 (indicating that request handler threads are busy 30% of the time), performance begins to degrade.
+Dropping below 0.5 signals potential trouble, as scaling or rebalancing operations under such conditions could exacerbate the load.
+If it plummets to 0.3, the system becomes barely usable for users.
 
-A replica workload model is periodically updated by the workload monitor using the resource utilization metrics from broker agents (CPU, disk, bytes-in, bytes-out).
-The analyzer uses this model to create a valid rebalance proposal when possible (one that must satisfy all configured hard goals, and possibly soft goals).
-The executor ensures that there is only one active rebalancing at any given time and applies changes in batches, enabling graceful cancellation.
-If two equivalent changes are possible, the one with the lower cost is selected (leadership change > replica move > replica swap).
+The workload on Kafka brokers comprises various finite resources such as CPU cycles, disk space, and network bandwidth.
+To achieve a better balance, the rebalancing process estimates the load imposed by each replica on a broker and reorganizes partition leaders and followers accordingly.
+This involves transferring data between different brokers (inter-broker rebalancing), within the same broker's disks (intra-broker rebalancing), and altering partition leaders.
+Managing this intricate task manually using the `kafka-reassign-partitions.sh` tool can be complex, which led to the creation of [Cruise Control](https://github.com/linkedin/cruise-control) (CC).
 
 <p align="center"><img src="images/arch.png" height=450/></p>
 
-In order to have accurate rebalance proposals when using CPU goals, we can set CPU requests equal to CPU limits in `.spec.kafka.resources`.
-That way, all CPU resources are reserved upfront (Guaranteed QoS) and Cruise Control can properly evaluate CPU utilization when generating the rebalance proposals.
+Periodically, a replica workload model is updated by the workload monitor, utilizing resource utilization metrics collected from broker agents (CPU, disk, bytes-in, bytes-out).
+The analyzer leverages this model to generate valid rebalance proposals, ensuring compliance with all configured hard goals and, optionally, soft goals.
+The executor oversees the rebalancing process, permitting only one active rebalancing operation at a time and applying changes in batches to facilitate graceful cancellation.
+When faced with equivalent changes, it prioritizes the one with the lower cost, following the hierarchy of leadership change > replica move > replica swap.
+
+To ensure accurate rebalance proposals, especially when CPU goals are in play, setting CPU requests equal to CPU limits in `.spec.kafka.resources proves beneficial`.
+By reserving all CPU resources upfront (Guaranteed QoS), Cruise Control can accurately assess CPU utilization when generating rebalance proposals.
 
 <br/>
 
@@ -30,6 +32,7 @@ That way, all CPU resources are reserved upfront (Guaranteed QoS) and Cruise Con
 ### Example: scaling up the cluster
 
 First, [deploy the Strimzi Cluster Operator and Kafka cluster](/sessions/001).
+
 When the cluster is ready, we want to scale it up and put some load on the new broker, which otherwise will sit idle waiting for new topic creation.
 Thanks to the Cluster Operator, we can scale the cluster up by simply raising the number of broker replicas in the Kafka custom resource (CR).
 
@@ -120,10 +123,11 @@ exit
 ---
 ### Example: scaling up the cluster with CC
 
-Let's repeat the cluster scale up example, but this time using Cruise Control to see how it helps with the planning phase.
+First, [deploy the Strimzi Cluster Operator and Kafka cluster](/sessions/001).
+
+This time we will use Cruise Control to see how it helps with the planning phase.
 Cruise Control can figure out by itself the required changes, given a set of high-level goals (sensible defaults are provided).
 
-First, [deploy the Strimzi Cluster Operator and Kafka cluster](/sessions/001).
 When the cluster is ready, we verify how the topic partitions are distributed between the available brokers.
 Then we add one broker, deploy Cruise Control by adding the `.spec.cruiseControl` section to the Kafka CR and create a rebalance CR with `mode: add-brokers`.
 

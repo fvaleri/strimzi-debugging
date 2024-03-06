@@ -1,25 +1,24 @@
 ## Transactions and how to rollback
 
-Kafka provides at-least-once semantics by default, so duplicates can arise because of producer retries or consumer restarts after failure.
-The idempotent producer configuration (now default) solves the duplicates problem by creating a producer session identified by a producer id (PID) and an epoch.
-A sequence number is assigned when the record batch is first added to a produce request and it is never changed, even if the batch is resent.
-That way, the broker hosting the partition leader can identify and filter out duplicates.
+Kafka provides at-least-once semantics by default, which means that duplicates might arise due to producer retries or consumer restarts post-failure.
+However, the introduction of the idempotent producer configuration (default), effectively addresses this issue by establishing a producer session identified by a unique Producer ID (PID) along with an epoch.
+Upon the initial addition of a record batch to a produce request, a sequence number is assigned and remains unchanged throughout subsequent resends, ensuring that the hosting broker can identify and filter out duplicates.
 
-Unfortunately, the idempotent producer does not guarantee atomicity when you need to write to multiple partitions as a single unit of work.
-This is usually the case for read-process-write applications, where the exactly-once semantics (EOS) allow atomic writes to multiple partitions.
-Transactions are only supported inside a single Kafka cluster, excluding any external system. 
-If this is the requirement, you would need to use an additional component such as the Spring Transaction Manager.
+Unfortunately, while the idempotent producer offers a solution for duplicate elimination, it falls short in guaranteeing atomicity when writing to multiple partitions as a single unit of work.
+This limitation becomes particularly evident in scenarios such as read-process-write applications, where achieving exactly-once semantics (EOS) is crucial for ensuring atomic writes across multiple partitions.
+Notably, transactions are confined within a single Kafka cluster and do not extend to external systems.
+Should this capability be indispensable, the incorporation of additional components like the Spring Transaction Manager becomes necessary.
 
 <p align="center"><img src="images/apis.png" height=450/></p>
 
-Each producer instance must have its own static and unique `transactional.id` (TID), which is mapped to a producer id (PID) and epoch (to implement zombie fencing).
-Consumers with `isolation.level=read_committed` only get committed messages, ignoring aborted transactions.
+Each producer instance must configure its own static and distinct `transactional.id` (TID), which corresponds to a unique Producer ID (PID) and epoch for implementing zombie fencing.
+Consumers configured with read committed `isolation.level` exclusively receive committed messages, ignoring any transactions that were aborted.
 
-A given producer can have at most one ongoing transaction (ordering guarantee).
-The transaction state is stored in an internal topic called `__transaction_state`.
-The transaction coordinator automatically aborts any ongoing transaction that is not completed within `transaction.timeout.ms`.
+At any given time, a producer can engage in at most one ongoing transaction, ensuring ordering guarantees.
+The state of transactions is stored within an internal topic named `__transaction_state`.
+Any ongoing transaction left incomplete within the defined `transaction.timeout.ms` is automatically aborted by the Transaction Coordinator.
 
-A transaction goes through the following stages:
+Transactions traverse through distinct stages:
 
 1. Undecided (ongoing)
 2. Decided and unreplicated
@@ -42,6 +41,7 @@ After transaction rollback, the LSO starts to increment again on every completed
 ### Example: transactional application
 
 First, [deploy a Kafka cluster on localhost](/sessions/001).
+
 We run the transactional application included in this example on a different terminal (there is a new poll/read every 60 seconds).
 [Look at the code](/sessions/008/kafka-txn/src/main/java/it/fvaleri/example/Main.java) to see how the low-level transaction API is used.
 
