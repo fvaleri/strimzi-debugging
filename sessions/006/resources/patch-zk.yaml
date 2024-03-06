@@ -1,4 +1,6 @@
 spec:
+  nodeSelector:
+    kubernetes.io/hostname: HOSTNAME
   containers:
     - name: busybox
       image: busybox

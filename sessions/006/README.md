@@ -848,13 +848,25 @@ $ kubectl logs $CLUSTER_NAME-zoookeeper-0 | grep "Unable to load database on dis
 ```
 
 We need to remove all servers data from the Zookeeper volumes to allow it get re-synced with the leader.
+To do that, we need to make sure the "ACCESS MODES" of volumes is RWO.
 
 ```sh
-$ for pod in $ZK_PODS; do
-  kubectl run kubectl-remove-zookeeper-0 -itq --rm --restart "Never" --image "foo" --overrides "$(cat sessions/006/resources/patch-zk.yaml \
-    | yq ".spec.volumes[0].persistentVolumeClaim.claimName = \"data-my-cluster-zookeeper-0\"" \
-    | yq -p yaml -o json)"
-done
+kubectl get pvc
+NAME                          STATUS   VOLUME                                     CAPACITY   ACCESS MODES   STORAGECLASS                           AGE
+data-my-cluster-kafka-0       Bound    pvc-f6b0c36c-7ca3-497f-ab27-9b7141742b42   10Gi       RWO            ocs-external-storagecluster-ceph-rbd   12m
+data-my-cluster-kafka-1       Bound    pvc-c1432517-6289-4976-a927-be1c3b3cd8bd   10Gi       RWO            ocs-external-storagecluster-ceph-rbd   12m
+data-my-cluster-kafka-2       Bound    pvc-668096d4-5b79-40b6-be5f-ef9c31cdd3a8   10Gi       RWO            ocs-external-storagecluster-ceph-rbd   12m
+data-my-cluster-zookeeper-0   Bound    pvc-8e8d3aac-2e38-4f1c-b11e-dd66003cbcae   5Gi        RWO            ocs-external-storagecluster-ceph-rbd   13m
+data-my-cluster-zookeeper-1   Bound    pvc-f79b9a18-515d-4992-b92f-186a93ca05ff   5Gi        RWO            ocs-external-storagecluster-ceph-rbd   13m
+data-my-cluster-zookeeper-2   Bound    pvc-2b390fa8-f791-478d-9136-d4e44b4a8e80   5Gi        RWO            ocs-external-storagecluster-ceph-rbd   13m
+
+NODE_HOSTNAME="$(kubectl describe pod my-cluster-zookeeper-0 | grep Node: | awk '{print $2}' | cut -d / -f1)"
+
+kubectl run kubectl-remove-zookeeper-0 -itq --rm --restart "Never" --image "foo" --overrides "$(cat sessions/006/resources/patch-zk.yaml \
+| yq ".spec.nodeSelector.\"kubernetes.io/hostname\" = \"$NODE_HOSTNAME\"" \
+| yq ".spec.volumes[0].persistentVolumeClaim.claimName = \"data-my-cluster-zookeeper-0\"" \
+| yq -p yaml -o json)"
+
 removed '/zookeeper/data/version-2/acceptedEpoch'
 removed '/zookeeper/data/version-2/currentEpoch'
 removed '/zookeeper/data/version-2/log.200000001'
