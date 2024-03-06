@@ -153,7 +153,7 @@ If volume expansion is supported on the storage class, you can simply increase t
 Note that the expansion operation may take some time to complete, depending on the size of the volume and the available resources in the cluster.
 
 ```sh
-if [[ $(kubectl get sc $(kubectl get pv | grep data-my-cluster-kafka-0 | awk '{print $7}') -o yaml | yq .allowVolumeExpansion) == "false" ]]; then 
+if [[ $(kubectl get sc $(kubectl get pv | grep data-my-cluster-kafka-0 | awk '{print $7}') -o yaml | yq .allowVolumeExpansion) == "true" ]]; then 
   kubectl patch k my-cluster --type merge -p '
     spec:
       kafka:
