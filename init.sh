@@ -35,7 +35,7 @@ kafka-cp() {
 }
 
 kubectl-kafka() { kubectl run kubectl-kafka-"$(date +%s)" -itq --rm --restart="Never" \
-  --image="quay.io/strimzi/kafka:latest-kafka-$KAFKA_VERSION" -- sh -c "$*; exit 0"; }
+  --image="quay.io/strimzi/kafka:latest-kafka-$KAFKA_VERSION" -- sh -c "/opt/kafka/$*"; }
 
 echo "Configuring Kafka on localhost"
 pkill -9 -f "kafka.Kafka" &>/dev/null ||true
