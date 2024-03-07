@@ -30,15 +30,19 @@ When a log directory becomes full, the broker may terminate forcefully and fail 
 To mitigate this risk, per-broker quotas can be enforced to control client resource usage, and tiered storage can be utilized to offload old data to remote storage.
 However, expertise is required to ensure timely archival from local to remote storage.
 
-In Kubernetes, a PersistentVolume (PV) is a storage piece in the cluster created by a storage provider with a specific StorageClass (SC).
-Storage classes differentiate based on quality-of-service levels or other policies and allow size increase only when allowVolumeExpansion is true.
-Volumes are requested and mounted into a Pod using a PersistentVolumeClaim (PVC) resource, with provisioning being static or dynamic.
-Some Kubernetes distributions support VolumeSnapshot (VS) for taking volume backups.
+In Kubernetes, PersistentVolume (PV) is an abstraction for container storage, which is a cluster-wide resource.
+A PV ca be requested using a PersistentVolumeClaim (PVC), which is a namespaced resource.
+In case of dynamic storage allocation, you can specify a StorageClass (SC), which represents a quality-of-service level.
 
-PVC to PV binding involves a one-to-one mapping using a ClaimRef, which is a bi-directional binding between the PV and the PVC.
-PVs can be in several phases: Available (unbound), Bound (bound to a claim), Released (claim deleted, but storage not yet reclaimed), or Failed (reclamation failure).
-The reclaim policy (Retain or Delete) for a PV dictates cluster behavior after release.
-To prevent data loss, set `persistentVolumeReclaimPolicy` to Retain in the SC, and `.spec.kafka.storage.deleteClaim` to false in Kafka resource.
+To ensure that you can recover from a PV if the namespace or PVC is deleted unintentionally, the reclaim policy must be reset from Delete to Retain in the PV specification using the persistentVolumeReclaimPolicy property.
+PVs can also inherit the reclaim policy of the associated SC.
+
+Access modes:
+
+- ReadWriteOnce (RWO): the volume can be mounted as read-write by a single node, but allows multiple pods to access when they are running on the same node
+- ReadOnlyMany (ROM): the volume can be mounted as read-only by many nodes
+- ReadWriteMany (RWM): the volume can be mounted as read-write by many nodes
+- ReadWriteOncePod (RWOP): the volume can be mounted as read-write by a single Pod
 
 <br>
 
