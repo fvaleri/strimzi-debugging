@@ -47,11 +47,9 @@ echo "Done"
 echo "Configuring Kafka on Kubernetes"
 kubectl delete ns "$NAMESPACE" --force --wait --ignore-not-found &>/dev/null
 kubectl wait --for=delete ns/"$NAMESPACE" --timeout=120s &>/dev/null && kubectl create ns "$NAMESPACE"
-# shellcheck disable=SC2046
-kubectl delete pv $(kubectl get pv | grep "my-cluster\|Available" | awk '{print $1}') &>/dev/null
-# shellcheck disable=SC2046
-kubectl delete vsc $(kubectl get vsc | grep "my-cluster" | awk '{print $1}') &>/dev/null \
-  && kubectl patch vsc $(kubectl get vsc | grep "my-cluster" | awk '{print $1}') --type json --patch='[{"op":"remove","path":"/metadata/finalizers"}]'
+PVS=$(kubectl get pv 2>/dev/null | grep "my-cluster\|Available" | awk '{print $1}'); if [[ -n "$PVS" ]]; then kubectl delete pv "$PVS" &>/dev/null; fi
+VSCS=$(kubectl get vsc 2>/dev/null | grep "my-cluster" | awk '{print $1}'); if [[ -n "$VSCS" ]]; then kubectl delete vsc "$VSCS" &>/dev/null \
+  && kubectl patch vsc "$VSCS" --type json --patch='[{"op":"remove","path":"/metadata/finalizers"}]' &>/dev/null; fi
 kubectl config set-context --current --namespace="$NAMESPACE" &>/dev/null
 curl -sL "https://github.com/strimzi/strimzi-kafka-operator/releases/download/$STRIMZI_VERSION/strimzi-cluster-operator-$STRIMZI_VERSION.yaml" \
   | sed -E "s/namespace: .*/namespace: $NAMESPACE/g" | kubectl create -f - --dry-run=client -o yaml | kubectl replace --force -f - &>/dev/null
