@@ -828,8 +828,7 @@ $ kubectl logs $CLUSTER_NAME-zookeeper-0 | grep "Unable to load database on disk
 ```
 
 We need to remove all data from the failed Zookeeper volumes to allow it get re-synced with the leader.
-Double check that the volume access mode is not RWOP(ReadWriteOncePod). 
-If it's the case, we can only go with offline recovery process above.
+Double check that the volume access mode is ReadWriteOnly (RWO), so that we can start up a pod within the same node to update the data in the volume.
 
 ```sh
 kubectl get pvc -l strimzi.io/name=$CLUSTER_NAME-zookeeper
