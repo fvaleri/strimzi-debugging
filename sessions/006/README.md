@@ -569,6 +569,7 @@ pvc-0bd38196-2f5b-4a05-8917-b43bd2dde50b   20Gi       RWO            Delete     
 pvc-1a66039a-14e7-4416-9319-6d6437543c02   20Gi       RWO            Delete           Bound    test/data-my-cluster-kafka-0                                         ocs-external-storagecluster-ceph-rbd            18m
 pvc-ca348d35-f466-446e-9f93-e3c15722d214   20Gi       RWO            Delete           Bound    test/data-my-cluster-kafka-2                                         ocs-external-storagecluster-ceph-rbd            18m
 ```
+
 <br/>
 
 ---
@@ -577,9 +578,9 @@ pvc-ca348d35-f466-446e-9f93-e3c15722d214   20Gi       RWO            Delete     
 This example has some tricky steps highlighted in bold, where you need to be extra careful to avoid losing data.
 **Don't use Minikube, as it doesn't have full volume support.**
 
-First, [deploy the Strimzi Cluster Operator and kafka cluster](/sessions/001).
+First, [deploy the Strimzi Cluster Operator and Kafka cluster](/sessions/001).
 
-When the cluster is ready, break 2 zookeeper nodes by writing corrupted data into ZK log.
+When the cluster is ready, we break 2 ZooKeeper servers by writing corrupted data into ZK log.
 
 ```sh
 $ CLUSTER_NAME="my-cluster"
@@ -661,4 +662,4 @@ Topic: t0	TopicId: 1Sgy6V-CR0K7MMJ9khDuRw	PartitionCount: 3	ReplicationFactor: 3
 	Topic: t0	Partition: 2	Leader: 1	Replicas: 1,0,2	Isr: 1,0,2
 ```
 
-If there are only 1 node with storage issue, please go through the same process for the specific node.
+If there is only 1 server with storage issue, please go through the same process for the specific node.
