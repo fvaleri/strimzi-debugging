@@ -2,7 +2,7 @@
 
 Kafka and ZooKeeper require low-latency storage.
 The recommended storage type is block storage (e.g. SSD, NVMe, AWS EBS), as it offers superior efficiency and faster performance compared to file and object storage types.
-However, Kafka doesn't directly utilize raw block devices; instead, it writes data to segment files stored on a standard file system.
+However, Kafka doesn't directly utilize raw block devices; instead, it writes data to segment files stored on a standard file system (e.g. XFS).
 These segment files are memory-mapped for enhanced performance, enabling zero-copy optimization when TLS is not configured.
 NFS is not supported due to issues it causes when renaming files.
 
