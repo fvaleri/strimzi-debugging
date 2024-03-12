@@ -572,7 +572,101 @@ pvc-ca348d35-f466-446e-9f93-e3c15722d214   20Gi       RWO            Delete     
 <br/>
 
 ---
+### Example: online ZooKeeper recovery from corrupted storage with quorum loss
+
+This example has some tricky steps highlighted in bold, where you need to be extra careful to avoid losing data.
+**Don't use Minikube, as it doesn't have full volume support.**
+
+First, [deploy the Strimzi Cluster Operator and kafka cluster](/sessions/001).
+
+When the cluster is ready, break 2 zookeeper nodes by writing corrupted data into ZK log.
+
+```sh
+$ CLUSTER_NAME="my-cluster"
+
+$ kubectl exec $CLUSTER_NAME-zookeeper-0 -- sh -c "echo 'test' > /var/lib/zookeeper/data/version-2/log.200000001"  \
+  && kubectl delete po $CLUSTER_NAME-zookeeper-0
+pod "my-cluster-zookeeper-0" deleted
+
+$ kubectl exec $CLUSTER_NAME-zookeeper-1 -- sh -c "echo 'test' > /var/lib/zookeeper/data/version-2/log.200000001"  \
+  && kubectl delete po $CLUSTER_NAME-zookeeper-1
+pod "my-cluster-zookeeper-1" deleted
+
+$ kubectl get po -l strimzi.io/name=$CLUSTER_NAME-zookeeper
+NAME                     READY   STATUS             RESTARTS        AGE
+my-cluster-zookeeper-0   0/1     CrashLoopBackOff   5 (2m16s ago)   16m
+my-cluster-zookeeper-1   0/1     CrashLoopBackOff   4 (2m16s ago)   16m
+my-cluster-zookeeper-2   1/1     Running            0               16m
+
+$ kubectl logs $CLUSTER_NAME-zookeeper-0 | grep "Unable to load database on disk" | tail -n1
+2024-03-01 08:53:40,806 ERROR Unable to load database on disk (org.apache.zookeeper.server.quorum.QuorumPeer) [main]
+```
+
+We need to remove all data from the failed Zookeeper volumes to allow it get re-synced with the leader.
+Double check that the volume access mode is ReadWriteOnly (RWO), so that we can start up a pod within the same node to update the data in the volume.
+
+```sh
+$ kubectl get pvc -l strimzi.io/name=$CLUSTER_NAME-zookeeper
+NAME                          STATUS   VOLUME                                     CAPACITY   ACCESS MODES   STORAGECLASS                           AGE
+data-my-cluster-zookeeper-0   Bound    pvc-8e8d3aac-2e38-4f1c-b11e-dd66003cbcae   5Gi        RWO            ocs-external-storagecluster-ceph-rbd   13m
+data-my-cluster-zookeeper-1   Bound    pvc-f79b9a18-515d-4992-b92f-186a93ca05ff   5Gi        RWO            ocs-external-storagecluster-ceph-rbd   13m
+data-my-cluster-zookeeper-2   Bound    pvc-2b390fa8-f791-478d-9136-d4e44b4a8e80   5Gi        RWO            ocs-external-storagecluster-ceph-rbd   13m
+
+$ NODE_HOSTNAME_0="$(kubectl describe pod my-cluster-zookeeper-0 | grep Node: | awk '{print $2}' | cut -d / -f1)"
+$ NODE_HOSTNAME_1="$(kubectl describe pod my-cluster-zookeeper-1 | grep Node: | awk '{print $2}' | cut -d / -f1)"
+
+$ kubectl run kubectl-remove-zookeeper-0 -itq --rm --restart "Never" --image "foo" --overrides "$(cat sessions/006/resources/patch-zk.yaml \
+| yq ".spec.nodeSelector.\"kubernetes.io/hostname\" = \"$NODE_HOSTNAME_0\"" \
+| yq ".spec.volumes[0].persistentVolumeClaim.claimName = \"data-$CLUSTER_NAME-zookeeper-0\"" \
+| yq -p yaml -o json)"
+removed '/zookeeper/data/version-2/acceptedEpoch'
+removed '/zookeeper/data/version-2/currentEpoch'
+removed '/zookeeper/data/version-2/log.200000001'
+removed '/zookeeper/data/version-2/snapshot.0'
+
+$ kubectl run kubectl-remove-zookeeper-1 -itq --rm --restart "Never" --image "foo" --overrides "$(cat sessions/006/resources/patch-zk.yaml \
+| yq ".spec.nodeSelector.\"kubernetes.io/hostname\" = \"$NODE_HOSTNAME_1\"" \
+| yq ".spec.volumes[0].persistentVolumeClaim.claimName = \"data-$CLUSTER_NAME-zookeeper-1\"" \
+| yq -p yaml -o json)"
+removed '/zookeeper/data/version-2/acceptedEpoch'
+removed '/zookeeper/data/version-2/currentEpoch'
+removed '/zookeeper/data/version-2/log.200000001'
+removed '/zookeeper/data/version-2/snapshot.0'
+```
+
+Restart all failed pods so that they can sync up with the leader.
+
+```sh
+$ kubectl delete po $CLUSTER_NAME-zookeeper-0 --force && kubectl delete po $CLUSTER_NAME-zookeeper-1 --force
+pod "my-cluster-zookeeper-0" deleted
+pod "my-cluster-zookeeper-1" deleted
+
+$ kubectl get po -l strimzi.io/cluster=$CLUSTER_NAME
+NAME                                          READY   STATUS    RESTARTS   AGE
+my-cluster-entity-operator-7d6d6bd454-sh7rc   3/3     Running   0          96s
+my-cluster-kafka-0                            1/1     Running   0          5m9s
+my-cluster-kafka-1                            1/1     Running   0          5m9s
+my-cluster-kafka-2                            1/1     Running   0          5m9s
+my-cluster-zookeeper-0                        1/1     Running   0          6m14s
+my-cluster-zookeeper-1                        1/1     Running   0          6m14s
+my-cluster-zookeeper-2                        1/1     Running   0          6m14s
+
+$ kubectl-kafka bin/kafka-topics.sh --bootstrap-server $CLUSTER_NAME-kafka-bootstrap:9092 --create --topic t0
+Created topic t0.
+
+$ kubectl-kafka bin/kafka-topics.sh --bootstrap-server $CLUSTER_NAME-kafka-bootstrap:9092 --describe --topic t0
+Topic: t0	TopicId: 1Sgy6V-CR0K7MMJ9khDuRw	PartitionCount: 3	ReplicationFactor: 3	Configs: min.insync.replicas=2,message.format.version=3.0-IV1
+	Topic: t0	Partition: 0	Leader: 0	Replicas: 0,2,1	Isr: 0,2,1
+	Topic: t0	Partition: 1	Leader: 2	Replicas: 2,1,0	Isr: 2,1,0
+	Topic: t0	Partition: 2	Leader: 1	Replicas: 1,0,2	Isr: 1,0,2
+```
+
+If there are only 1 node with storage issue, please go through the same process for the specific node.
+
+---
 ### Example: ZooKeeper storage failure with 1 node having storage (offline recovery)
+
+Note: This is not frequently happened in real case. But we still list here for reference.
 
 This procedure has some tricky steps highlighted in bold, where you need to be extra careful to avoid losing data.
 **Don't use Minikube for this example, as it doesn't have full volume support.**
@@ -781,8 +875,8 @@ Topic: t1	TopicId: Zz3T1a_hQiGvHv8LLK7H9Q	PartitionCount: 1000	ReplicationFactor
 	Topic: t1	Partition: 999	Leader: 1	Replicas: 0,1,2	Isr: 1,0,2
 ```
 We can also get the topic t2's information even though it caused disk full when creating topic t2.
-If this command didn't show expected results, try to run the command later since zookeeper also needs time to do data recovery, 
-and Kafka needs time to complete the topic t2 creation because it failed to create before Zookeeper server disk full. 
+If this command didn't show expected results, try to run the command later since zookeeper also needs time to do data recovery,
+and Kafka needs time to complete the topic t2 creation because it failed to create before Zookeeper server disk full.
 
 ```
 $ kubectl-kafka bin/kafka-topics.sh --bootstrap-server $CLUSTER_NAME-kafka-bootstrap:9092 --describe --topic t2
@@ -815,81 +909,3 @@ pvc-62dc40e2-8732-4563-bd9c-97a480f35dbf   100Mi      RWO            Delete     
 pvc-d33f37a9-de7e-4b6a-8ab1-e0522571ebb1   100Mi      RWO            Delete           Bound    test/data-my-cluster-zookeeper-1                                     ocs-external-storagecluster-ceph-rbd            6m30s
 pvc-e56566de-8b03-4505-8872-f12603dea51f   100Mi      RWO            Delete           Bound    test/data-my-cluster-zookeeper-0                                     ocs-external-storagecluster-ceph-rbd            6m31s
 ```
-
-<br/>
-
----
-### Example: online ZooKeeper recovery from corrupted storage with quorum loss
-
-This example has some tricky steps highlighted in bold, where you need to be extra careful to avoid losing data.
-**Don't use Minikube, as it doesn't have full volume support.**
-
-First, [deploy the Strimzi Cluster Operator and kafka cluster](/sessions/001).
-
-When the cluster is ready, break 1 zookeeper node by writing corrupted data into ZK log.
-
-```sh
-$ CLUSTER_NAME="my-cluster"
-
-$ kubectl exec $CLUSTER_NAME-zookeeper-0 -- sh -c "echo 'test' > /var/lib/zookeeper/data/version-2/log.200000001"  \
-  && kubectl delete po $CLUSTER_NAME-zookeeper-0
-pod "my-cluster-zookeeper-0" deleted
-
-$ kubectl get po -l strimzi.io/name=$CLUSTER_NAME-zookeeper
-NAME                     READY   STATUS             RESTARTS        AGE
-my-cluster-zookeeper-0   0/1     CrashLoopBackOff   5 (2m16s ago)   16m
-my-cluster-zookeeper-1   1/1     Running            0               16m
-my-cluster-zookeeper-2   1/1     Running            0               16m
-
-$ kubectl logs $CLUSTER_NAME-zookeeper-0 | grep "Unable to load database on disk" | tail -n1
-2024-03-01 08:53:40,806 ERROR Unable to load database on disk (org.apache.zookeeper.server.quorum.QuorumPeer) [main]
-```
-
-We need to remove all data from the failed Zookeeper volumes to allow it get re-synced with the leader.
-Double check that the volume access mode is ReadWriteOnly (RWO), so that we can start up a pod within the same node to update the data in the volume.
-
-```sh
-kubectl get pvc -l strimzi.io/name=$CLUSTER_NAME-zookeeper
-NAME                          STATUS   VOLUME                                     CAPACITY   ACCESS MODES   STORAGECLASS                           AGE
-data-my-cluster-zookeeper-0   Bound    pvc-8e8d3aac-2e38-4f1c-b11e-dd66003cbcae   5Gi        RWO            ocs-external-storagecluster-ceph-rbd   13m
-data-my-cluster-zookeeper-1   Bound    pvc-f79b9a18-515d-4992-b92f-186a93ca05ff   5Gi        RWO            ocs-external-storagecluster-ceph-rbd   13m
-data-my-cluster-zookeeper-2   Bound    pvc-2b390fa8-f791-478d-9136-d4e44b4a8e80   5Gi        RWO            ocs-external-storagecluster-ceph-rbd   13m
-
-$ NODE_HOSTNAME="$(kubectl describe pod my-cluster-zookeeper-0 | grep Node: | awk '{print $2}' | cut -d / -f1)"
-
-kubectl run kubectl-remove-zookeeper-0 -itq --rm --restart "Never" --image "foo" --overrides "$(cat sessions/006/resources/patch-zk.yaml \
-| yq ".spec.nodeSelector.\"kubernetes.io/hostname\" = \"$NODE_HOSTNAME\"" \
-| yq ".spec.volumes[0].persistentVolumeClaim.claimName = \"data-$CLUSTER_NAME-zookeeper-0\"" \
-| yq -p yaml -o json)"
-removed '/zookeeper/data/version-2/acceptedEpoch'
-removed '/zookeeper/data/version-2/currentEpoch'
-removed '/zookeeper/data/version-2/log.200000001'
-removed '/zookeeper/data/version-2/snapshot.0'
-```
-
-Restart all failed pods so that they can sync up with the leader.
-
-```sh
-$ kubectl delete po $CLUSTER_NAME-zookeeper-0 --force
-pod "my-cluster-zookeeper-0" deleted
-
-$ kubectl get po -l strimzi.io/cluster=$CLUSTER_NAME
-NAME                                          READY   STATUS    RESTARTS   AGE
-my-cluster-entity-operator-7d6d6bd454-sh7rc   3/3     Running   0          96s
-my-cluster-kafka-0                            1/1     Running   0          5m9s
-my-cluster-kafka-1                            1/1     Running   0          5m9s
-my-cluster-kafka-2                            1/1     Running   0          5m9s
-my-cluster-zookeeper-0                        1/1     Running   0          6m14s
-my-cluster-zookeeper-1                        1/1     Running   0          6m14s
-my-cluster-zookeeper-2                        1/1     Running   0          6m14s
-
-$ kubectl-kafka bin/kafka-topics.sh --bootstrap-server $CLUSTER_NAME-kafka-bootstrap:9092 --create --topic t0
-
-$ kubectl-kafka bin/kafka-topics.sh --bootstrap-server $CLUSTER_NAME-kafka-bootstrap:9092 --describe --topic t0
-Topic: t0	TopicId: 1Sgy6V-CR0K7MMJ9khDuRw	PartitionCount: 3	ReplicationFactor: 3	Configs: min.insync.replicas=2,message.format.version=3.0-IV1
-	Topic: t0	Partition: 0	Leader: 0	Replicas: 0,2,1	Isr: 0,2,1
-	Topic: t0	Partition: 1	Leader: 2	Replicas: 2,1,0	Isr: 2,1,0
-	Topic: t0	Partition: 2	Leader: 1	Replicas: 1,0,2	Isr: 1,0,2
-```
-
-If there are more than 1 node with storage issue, please go through the process for each node.
