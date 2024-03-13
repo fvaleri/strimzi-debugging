@@ -580,10 +580,14 @@ This example has some tricky steps highlighted in bold, where you need to be ext
 
 First, [deploy the Strimzi Cluster Operator and Kafka cluster](/sessions/001).
 
-When the cluster is ready, we break 2 ZooKeeper servers by writing corrupted data into ZK log.
+When the cluster is ready, we create a topic first so that it can be used to make sure the data is not lost after recovery.
+And then break 2 ZooKeeper servers by writing corrupted data into ZK log.
 
 ```sh
 $ CLUSTER_NAME="my-cluster"
+
+$ kubectl-kafka bin/kafka-topics.sh --bootstrap-server $CLUSTER_NAME-kafka-bootstrap:9092 --create --topic t0
+Created topic t0.
 
 $ kubectl exec $CLUSTER_NAME-zookeeper-0 -- sh -c "echo 'test' > /var/lib/zookeeper/data/version-2/log.200000001"  \
   && kubectl delete po $CLUSTER_NAME-zookeeper-0
@@ -636,6 +640,7 @@ removed '/zookeeper/data/version-2/snapshot.0'
 ```
 
 Restart all failed pods so that they can sync up with the leader.
+Trying to describe the topic created at first step to make sure data is not lost.
 
 ```sh
 $ kubectl delete po $CLUSTER_NAME-zookeeper-0 --force && kubectl delete po $CLUSTER_NAME-zookeeper-1 --force
@@ -651,9 +656,6 @@ my-cluster-kafka-2                            1/1     Running   0          5m9s
 my-cluster-zookeeper-0                        1/1     Running   0          6m14s
 my-cluster-zookeeper-1                        1/1     Running   0          6m14s
 my-cluster-zookeeper-2                        1/1     Running   0          6m14s
-
-$ kubectl-kafka bin/kafka-topics.sh --bootstrap-server $CLUSTER_NAME-kafka-bootstrap:9092 --create --topic t0
-Created topic t0.
 
 $ kubectl-kafka bin/kafka-topics.sh --bootstrap-server $CLUSTER_NAME-kafka-bootstrap:9092 --describe --topic t0
 Topic: t0	TopicId: 1Sgy6V-CR0K7MMJ9khDuRw	PartitionCount: 3	ReplicationFactor: 3	Configs: min.insync.replicas=2,message.format.version=3.0-IV1
