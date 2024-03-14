@@ -49,7 +49,7 @@ Access modes:
 ---
 ### Example: avoid running out of Kafka disk space using the Strimzi quota plugin
 
-This example has some tricky steps highlighted in bold, where you need to be extra careful to avoid losing data.
+This example has some tricky steps highlighted in bold, where you need to be extra careful.
 **Don't use Minikube, as it doesn't have full volume support.**
 
 First, [deploy the Strimzi Cluster Operator](/sessions/001).
@@ -120,7 +120,7 @@ $ kubectl exec my-cluster-kafka-0 -- df -h | grep /var/lib/kafka/data \
 ---
 ### Example: online Kafka volume recovery using expansion support
 
-This example has some tricky steps highlighted in bold, where you need to be extra careful to avoid losing data.
+This example has some tricky steps highlighted in bold, where you need to be extra careful.
 **Don't use Minikube, as it doesn't have full volume support.**
 
 First, [deploy the Strimzi Cluster Operator](/sessions/001).
@@ -198,7 +198,7 @@ my-cluster-kafka-2                            1/1     Running   6 (4m5s ago)    
 ---
 ### Example: offline Kafka volume recovery using snapshot support
 
-This example has some tricky steps highlighted in bold, where you need to be extra careful to avoid losing data.
+This example has some tricky steps highlighted in bold, where you need to be extra careful.
 **Don't use Minikube, as it doesn't have full volume support.**
 
 First, [deploy the Strimzi Cluster Operator](/sessions/001).
@@ -214,11 +214,10 @@ kafkatopic.kafka.strimzi.io/my-topic created
 
 $ CLUSTER_NAME="my-cluster" \
   SNAPSHOT_CLASS="ocs-external-storagecluster-rbdplugin-snapclass" \
-  KAFKA_PODS="$(kubectl get po -l strimzi.io/name=my-cluster-kafka --no-headers -o custom-columns=':metadata.name')" \
-  VOLUME_CLASS="$(kubectl get pv | grep my-cluster-kafka-0 | awk '{print $7}')" \
-  NEW_VOLUME_SIZE="20Gi"
-
-$ kubectl get pv | grep $CLUSTER_NAME-kafka
+  KAFKA_PODS="$(kubectl get po -l strimzi.io/name=$CLUSTER_NAME-kafka --no-headers -o custom-columns=':metadata.name')" \
+  VOLUME_CLASS="$(kubectl get pv | grep $CLUSTER_NAME-kafka-0 | awk '{print $7}')" \
+  NEW_VOLUME_SIZE="20Gi" \
+  kubectl get pv | grep $CLUSTER_NAME-kafka
 pvc-2d208791-618e-4f9d-9e3d-b9f7e65f3335   100Mi      RWO            Delete           Bound    test/data-my-cluster-kafka-2                                         ocs-external-storagecluster-ceph-rbd            92s
 pvc-8f6a188c-ab52-49ce-a75d-c0edeaaec0d8   100Mi      RWO            Delete           Bound    test/data-my-cluster-kafka-1                                         ocs-external-storagecluster-ceph-rbd            92s
 pvc-9bdb58be-27d3-4be6-b0e8-8531d6958de2   100Mi      RWO            Delete           Bound    test/data-my-cluster-kafka-0                                         ocs-external-storagecluster-ceph-rbd            92s
@@ -343,7 +342,7 @@ $ kubectl-kafka bin/kafka-console-consumer.sh --bootstrap-server $CLUSTER_NAME-k
 FHBQCYJJXEDISRBBOAKYFHTLDAJABMKLWHLRSBWBUSGRIBKSWWZQZHPHWQWZPVHLYBDVYNNOMLSAXDZSDGGQXVDETEXXEXTVNJTNOVJIYIDAFEPCIRHMQJMCRCGNVNIPISAPPHKTVRVF...
 MYVZNMKXIYVTRGXHNLAXSIISAKQSPQIJKJMVYXFQVTXJVNPRZILRJKMIEBDWGCRKXFUSMWBLCVCDVXEBMXSLVXZSCPQVRNZTHKGFIBZBCOURYJEGKPJACEXCSQDFBCWXGNYERXKOHJAA...
 RHTSTTCCIQLHFTWTCEUZJHADNDIYHMXSCUFDMIQXGISLNYVGNZKIJFDFQJVRWDLUNUTXNLCKSQOZNEYLRAGPFPUQSQWNJWUXLWWCLOHASOMJKNZRYSRXGIWWFTEUWVBIITCFUANCCTNT...
-^CProcessed a total of 3 messages
+Processed a total of 3 messages
 ```
 
 <br/>
@@ -351,7 +350,7 @@ RHTSTTCCIQLHFTWTCEUZJHADNDIYHMXSCUFDMIQXGISLNYVGNZKIJFDFQJVRWDLUNUTXNLCKSQOZNEYL
 ---
 ### Example: offline Kafka volume recovery with no expansion and snapshot support
 
-This example has some tricky steps highlighted in bold, where you need to be extra careful to avoid losing data.
+This example has some tricky steps highlighted in bold, where you need to be extra careful.
 **Don't use Minikube, as it doesn't have full volume support.**
 
 First, [deploy the Strimzi Cluster Operator](/sessions/001).
@@ -366,11 +365,10 @@ kafka.kafka.strimzi.io/my-cluster created
 kafkatopic.kafka.strimzi.io/my-topic created
 
 $ CLUSTER_NAME="my-cluster" \
-  KAFKA_PODS="$(kubectl get po -l strimzi.io/name=my-cluster-kafka --no-headers -o custom-columns=':metadata.name')" \
-  VOLUME_CLASS="$(kubectl get pv | grep my-cluster-kafka-0 | awk '{print $7}')" \
-  NEW_VOLUME_SIZE="20Gi"
-  
-$ kubectl get pvc -l strimzi.io/name=$CLUSTER_NAME-kafka
+  KAFKA_PODS="$(kubectl get po -l strimzi.io/name=$CLUSTER_NAME-kafka --no-headers -o custom-columns=':metadata.name')" \
+  VOLUME_CLASS="$(kubectl get pv | grep $CLUSTER_NAME-kafka-0 | awk '{print $7}')" \
+  NEW_VOLUME_SIZE="20Gi" \ 
+  kubectl get pvc -l strimzi.io/name=$CLUSTER_NAME-kafka
 NAME                      STATUS   VOLUME                                     CAPACITY   ACCESS MODES   STORAGECLASS                           AGE
 data-my-cluster-kafka-0   Bound    pvc-04b55551-fe7f-4662-9955-5e4baaf4df57   100Mi      RWO            ocs-external-storagecluster-ceph-rbd   106s
 data-my-cluster-kafka-1   Bound    pvc-18280833-16a8-4cd5-8c6f-eb764acd3ce9   100Mi      RWO            ocs-external-storagecluster-ceph-rbd   106s
@@ -465,7 +463,7 @@ Note that the following commands may take some time, depending on the amount of 
 
 ```sh
 $ for pod in $KAFKA_PODS; do
-  kubectl run kubectl-copy-$pod -itq --rm --restart "Never" --image "foo" --overrides "$(cat sessions/006/resources/patch.yaml \
+  kubectl run kubectl-patch-$pod -itq --rm --restart "Never" --image "foo" --overrides "$(cat sessions/006/resources/patch-copy.yaml \
     | yq ".spec.volumes[0].persistentVolumeClaim.claimName = \"data-$pod\", .spec.volumes[1].persistentVolumeClaim.claimName = \"data-$pod-new\"" \
     | yq -p yaml -o json)"
 done
@@ -546,7 +544,7 @@ $ kubectl-kafka bin/kafka-console-consumer.sh --bootstrap-server $CLUSTER_NAME-k
 XVFTWDJKAIYRBIKZRFOEZNWURGQHGPDMOZYAEBTFLNCXMVOJOCPCXZLUZJKPTIFQVRHWKHBMTMHFHJGAIXNWURPJOKMXRAWLHMUNNWVYSNPIMZXJDKSLVMLJYZFJCQOIQXNFLYYYTEFK...
 FVABXPFDUNYNYMNVYWZDVZLGZASDYATOWNFMRODUPWCUVVIZFRLZNDOSQWZVNGMGEYHDVAWZDQLXBAIZGFDUOKGGHDBTLOJLMLPXTPXXZZQXFIVTAZOHHGWJBUSMPKIPCMOAJVSLUYGJ...
 OAPJJFCTIWBLZMWUVMWRSGJQMXVLATYRECKCHDEIHYOMLCLKAULDWNSRIXKVWSNHLJUADUZNUMCJQYASBCSJWHIKXLATGMGNENPSSVIUAWSRRABUBXFZZRKOGOFGTBVIWTWFUWHEEMGF...
-^CProcessed a total of 3 messages
+Processed a total of 3 messages
 ```
 
 Finally, we delete the old volumes to reclaim some space, and optionally set the retain policy back to Delete on new volumes.
@@ -570,12 +568,163 @@ pvc-1a66039a-14e7-4416-9319-6d6437543c02   20Gi       RWO            Delete     
 pvc-ca348d35-f466-446e-9f93-e3c15722d214   20Gi       RWO            Delete           Bound    test/data-my-cluster-kafka-2                                         ocs-external-storagecluster-ceph-rbd            18m
 ```
 
+<br>
+
+---
+### Example: offline Kafka volume recovery without additional storage
+
+This example has some tricky steps highlighted in bold, where you need to be extra careful.
+**Don't use Minikube, as it doesn't have full volume support.**
+
+First, [deploy the Strimzi Cluster Operator](/sessions/001).
+For the sake of this example, we deploy the Kafka cluster with 1 MiB as maximum segment size, and reducing the volume size.
+
+```sh
+$ cat sessions/001/resources/000-my-cluster.yaml \
+  | yq ".spec.kafka.config.\"log.segment.bytes\" = 1048576" \
+  | yq ".spec.kafka.storage.size = \"100Mi\"" \
+  | kubectl create -f - \
+  && kubectl create -f sessions/001/resources/001-my-topic.yaml
+kafka.kafka.strimzi.io/my-cluster created
+kafkatopic.kafka.strimzi.io/my-topic created
+
+$ kubectl get pv | grep my-cluster-kafka
+pvc-09647b6c-bb7c-4672-a611-7fdfd8967cd1   100Mi      RWO            Delete           Bound    test/data-my-cluster-kafka-1                                         ocs-external-storagecluster-ceph-rbd            3m17s
+pvc-4a8fc7fb-43cb-4107-952e-8a11f09fa23d   100Mi      RWO            Delete           Bound    test/data-my-cluster-kafka-0                                         ocs-external-storagecluster-ceph-rbd            3m17s
+pvc-c049b7c3-8393-4fcc-9bf3-1e8a7f7f6d27   100Mi      RWO            Delete           Bound    test/data-my-cluster-kafka-2                                         ocs-external-storagecluster-ceph-rbd            3m17s
+```
+
+When the cluster is ready, we break it by sending 110 MiB of data to a topic, which exceeds the disk capacity of 100 MiB.
+
+```sh
+$ kubectl-kafka bin/kafka-producer-perf-test.sh --topic my-topic --record-size 1000 --num-records 110000 \
+  --throughput -1 --producer-props acks=all bootstrap.servers=my-cluster-kafka-bootstrap:9092
+11265 records sent, 2252.5 records/sec (2.15 MB/sec), 2570.3 ms avg latency, 4608.0 ms max latency.
+16784 records sent, 3356.8 records/sec (3.20 MB/sec), 7087.5 ms avg latency, 9501.0 ms max latency.
+17424 records sent, 3484.8 records/sec (3.32 MB/sec), 9830.6 ms avg latency, 11900.0 ms max latency.
+...
+[2024-03-14 13:28:29,701] WARN [Producer clientId=perf-producer-client] Connection to node 2 (my-cluster-kafka-2.my-cluster-kafka-brokers.test.svc/10.135.0.14:9092) could not be established. Broker may not be available. (org.apache.kafka.clients.NetworkClient)
+[2024-03-14 13:28:30,229] WARN [Producer clientId=perf-producer-client] Connection to node 0 (my-cluster-kafka-0.my-cluster-kafka-brokers.test.svc/10.134.0.11:9092) could not be established. Broker may not be available. (org.apache.kafka.clients.NetworkClient)
+[2024-03-14 13:28:30,574] WARN [Producer clientId=perf-producer-client] Connection to node 1 (my-cluster-kafka-1.my-cluster-kafka-brokers.test.svc/10.132.2.29:9092) could not be established. Broker may not be available. (org.apache.kafka.clients.NetworkClient)
+...
+
+$ kubectl get po -l strimzi.io/name=my-cluster-kafka
+NAME                 READY   STATUS             RESTARTS      AGE
+my-cluster-kafka-0   0/1     CrashLoopBackOff   2 (17s ago)   9m10s
+my-cluster-kafka-1   0/1     CrashLoopBackOff   2 (13s ago)   9m10s
+my-cluster-kafka-2   0/1     CrashLoopBackOff   2 (13s ago)   9m10s
+
+$ kubectl logs my-cluster-kafka-0 | grep "No space left on device" | tail -n1
+java.io.IOException: No space left on device
+```
+
+Even if not all pods are failed, we still need to increase the volume size of all brokers because the storage configuration is shared.
+This procedure works offline because copying data while they are being modified can cause tricky problems, especially if transactions are enabled.
+**Before deleting the Kafka cluster, make sure that delete claim storage configuration is set to false in Kafka resource.**
+
+```sh
+$ if [[ $(kubectl get k my-cluster -o yaml | yq .spec.kafka.storage.deleteClaim) == "false" ]]; then kubectl delete k my-cluster; fi
+kafka.kafka.strimzi.io "my-cluster" deleted
+```
+
+In cases where additional storage is not available, another option is to delete the old segments to free up some space.
+**Pay attention on which segments you delete to avoid losing unconsumed or important data.
+Here we only delete the oldest 10 segments of my-topic partitions on broker-0, but you have to repeat the same procedure on each failing broker pod.**
+
+```sh
+$ POD="my-cluster-kafka-0"; \
+  kubectl run kubectl-patch-$POD --restart "Never" --image "foo" --overrides "$(cat sessions/006/resources/patch-delete.yaml \
+    | yq ".spec.volumes[0].persistentVolumeClaim.claimName = \"data-$POD\"" \
+    | yq -p yaml -o json)"
+pod/kubectl-patch-my-cluster-kafka-0 created
+    
+$ kubectl -itq exec kubectl-patch-$POD -- sh
+
+/ # df -h /data
+Filesystem                Size      Used Available Use% Mounted on
+/dev/rbd2                88.2M     86.2M         0 100% /data
+
+/ # LOG_DIR="/data/kafka-log0" TOPIC="my-topic" NUM_SEGMENTS="10"; \
+  for partition in $(ls $LOG_DIR | grep $TOPIC); do
+    OLDEST_SEGMENTS=$(ls $LOG_DIR/$partition | grep -E '\.log' | sort -z | head -$NUM_SEGMENTS | awk -F'.' '{print $1}')
+    for segment in $OLDEST_SEGMENTS; do find $LOG_DIR/$partition -name "$segment.*" -exec rm -rfv {} \;; done
+  done
+removed '/data/kafka-log0/my-topic-0/00000000000000000000.log'
+removed '/data/kafka-log0/my-topic-0/00000000000000000000.timeindex'
+removed '/data/kafka-log0/my-topic-0/00000000000000000000.index'
+removed '/data/kafka-log0/my-topic-0/00000000000000001024.snapshot'
+removed '/data/kafka-log0/my-topic-0/00000000000000001024.log'
+removed '/data/kafka-log0/my-topic-0/00000000000000001024.index'
+...
+removed '/data/kafka-log0/my-topic-1/00000000000000000000.log'
+removed '/data/kafka-log0/my-topic-1/00000000000000000000.timeindex'
+removed '/data/kafka-log0/my-topic-1/00000000000000000000.index'
+removed '/data/kafka-log0/my-topic-1/00000000000000001024.log'
+removed '/data/kafka-log0/my-topic-1/00000000000000001024.index'
+removed '/data/kafka-log0/my-topic-1/00000000000000001024.timeindex'
+...
+removed '/data/kafka-log0/my-topic-2/00000000000000000000.log'
+removed '/data/kafka-log0/my-topic-2/00000000000000000000.timeindex'
+removed '/data/kafka-log0/my-topic-2/00000000000000000000.index'
+removed '/data/kafka-log0/my-topic-2/00000000000000001024.snapshot'
+removed '/data/kafka-log0/my-topic-2/00000000000000001024.log'
+removed '/data/kafka-log0/my-topic-2/00000000000000001024.index'
+removed '/data/kafka-log0/my-topic-2/00000000000000001024.timeindex'
+...
+
+/ # df -h /data
+Filesystem                Size      Used Available Use% Mounted on
+/dev/rbd2                88.2M     56.5M     29.8M  65% /data
+
+/ # exit
+
+$ kubectl delete po kubectl-patch-$POD
+pod "kubectl-patch-my-cluster-kafka-0" deleted
+```
+
+**Before restarting the cluster, we also need to adjust the retention settings to avoid running out of disk space again.**
+Here we set max retention size to 50 MiB at the topic level, and add some configuration at the broker level to speed up log recovery.
+
+```sh
+$ cat sessions/001/resources/001-my-topic.yaml \
+  | yq ".spec.config.\"retention.bytes\" = 52428800" \
+  | kubectl apply -f -
+kafkatopic.kafka.strimzi.io/my-topic configured
+
+$ cat sessions/001/resources/000-my-cluster.yaml \
+  | yq ".spec.kafka.config.\"num.recovery.threads.per.data.dir\" = 5" \
+  | yq ".spec.kafka.config.\"num.replica.fetchers\" = 5" \
+  | kubectl create -f -
+kafka.kafka.strimzi.io/my-cluster created
+```
+
+Once the cluster is ready, we first check if it works, and then repeat the load test again and see if the new retention settings help to avoid running out of disk.
+
+```sh
+$ kubectl-kafka bin/kafka-console-consumer.sh --bootstrap-server my-cluster-kafka-bootstrap:9092 \
+  --topic my-topic --from-beginning --max-messages 3
+SEDINDZFKBANJUMUJISTWWHSMXCXMFYTARBZCXJGFEWLAZVCXYIMMGYGNQTMNSJMMZCERXJBWATARIVJYNSECNSUSSSLOPYWVZQCFLDMQATUANHOCEVYJWZKDJKJNRQBZQFBCATHZOCH...
+KIIHTXKNKIVTPCILIYHYYMLVSOAPJGTUFBLUYENFMPIQYRZCNDZCCHJFKAOANFYTOSTQLOCVMQNENHNMJOPFYETJRMTKQCBLNTXXWQHJOHNKNIGNFCDVMVLSNXWYYQEMUQQIRXPLIAJH...
+YQKQSKRBHTBCIZAIVLTPOFETQGWTYCBFKSAORUTJHSXUQKPSIRTYHXWEMFDTLHXISDUGNXHQJOPLXTATUIODQGPTOYPBEQYCXQZBSHDLYCINLSFURIGQEJWDQLSNLVUTIXTPBLOXGTZA...
+Processed a total of 3 messages
+
+$ kubectl-kafka bin/kafka-producer-perf-test.sh --topic my-topic --record-size 1000 --num-records 110000 \
+  --throughput -1 --producer-props acks=all bootstrap.servers=my-cluster-kafka-bootstrap:9092
+12641 records sent, 2524.2 records/sec (2.41 MB/sec), 2673.9 ms avg latency, 4664.0 ms max latency.
+17536 records sent, 3507.2 records/sec (3.34 MB/sec), 7062.6 ms avg latency, 9557.0 ms max latency.
+17344 records sent, 3464.6 records/sec (3.30 MB/sec), 9542.8 ms avg latency, 11564.0 ms max latency.
+18688 records sent, 3736.9 records/sec (3.56 MB/sec), 8885.3 ms avg latency, 11739.0 ms max latency.
+21168 records sent, 4230.2 records/sec (4.03 MB/sec), 8628.9 ms avg latency, 12224.0 ms max latency.
+18704 records sent, 3740.1 records/sec (3.57 MB/sec), 8395.0 ms avg latency, 10452.0 ms max latency.
+110000 records sent, 3426.577783 records/sec (3.27 MB/sec), 7857.89 ms avg latency, 12224.00 ms max latency, 8265 ms 50th, 11516 ms 95th, 12048 ms 99th, 12203 ms 99.9th.
+```
+
 <br/>
 
 ---
 ### Example: online ZooKeeper recovery from corrupted storage with quorum loss
 
-This example has some tricky steps highlighted in bold, where you need to be extra careful to avoid losing data.
+This example has some tricky steps highlighted in bold, where you need to be extra careful.
 **Don't use Minikube, as it doesn't have full volume support.**
 
 First, [deploy the Strimzi Cluster Operator and Kafka cluster](/sessions/001).
@@ -584,32 +733,30 @@ When the cluster is ready, we create a topic first so that it can be used to mak
 And then break 2 ZooKeeper servers by writing corrupted data into ZK log.
 
 ```sh
-$ CLUSTER_NAME="my-cluster"
-
-$ kubectl-kafka bin/kafka-topics.sh --bootstrap-server $CLUSTER_NAME-kafka-bootstrap:9092 --create --topic t0
+$ kubectl-kafka bin/kafka-topics.sh --bootstrap-server my-cluster-kafka-bootstrap:9092 --create --topic t0
 Created topic t0.
 
-$ kubectl-kafka bin/kafka-topics.sh --bootstrap-server $CLUSTER_NAME-kafka-bootstrap:9092 --describe --topic t0
+$ kubectl-kafka bin/kafka-topics.sh --bootstrap-server my-cluster-kafka-bootstrap:9092 --describe --topic t0
 Topic: t0	TopicId: 1Sgy6V-CR0K7MMJ9khDuRw	PartitionCount: 3	ReplicationFactor: 3	Configs: min.insync.replicas=2,message.format.version=3.0-IV1
 	Topic: t0	Partition: 0	Leader: 0	Replicas: 0,2,1	Isr: 0,2,1
 	Topic: t0	Partition: 1	Leader: 2	Replicas: 2,1,0	Isr: 2,1,0
 	Topic: t0	Partition: 2	Leader: 1	Replicas: 1,0,2	Isr: 1,0,2
 
-$ kubectl exec $CLUSTER_NAME-zookeeper-0 -- sh -c "echo 'test' > /var/lib/zookeeper/data/version-2/log.200000001"  \
-  && kubectl delete po $CLUSTER_NAME-zookeeper-0
+$ kubectl exec my-cluster-zookeeper-0 -- sh -c "echo 'test' > /var/lib/zookeeper/data/version-2/log.200000001"  \
+  && kubectl delete po my-cluster-zookeeper-0
 pod "my-cluster-zookeeper-0" deleted
 
-$ kubectl exec $CLUSTER_NAME-zookeeper-1 -- sh -c "echo 'test' > /var/lib/zookeeper/data/version-2/log.200000001"  \
-  && kubectl delete po $CLUSTER_NAME-zookeeper-1
+$ kubectl exec my-cluster-zookeeper-1 -- sh -c "echo 'test' > /var/lib/zookeeper/data/version-2/log.200000001"  \
+  && kubectl delete po my-cluster-zookeeper-1
 pod "my-cluster-zookeeper-1" deleted
 
-$ kubectl get po -l strimzi.io/name=$CLUSTER_NAME-zookeeper
+$ kubectl get po -l strimzi.io/name=my-cluster-zookeeper
 NAME                     READY   STATUS             RESTARTS        AGE
 my-cluster-zookeeper-0   0/1     CrashLoopBackOff   5 (2m16s ago)   16m
 my-cluster-zookeeper-1   0/1     CrashLoopBackOff   4 (2m16s ago)   16m
 my-cluster-zookeeper-2   1/1     Running            0               16m
 
-$ kubectl logs $CLUSTER_NAME-zookeeper-0 | grep "Unable to load database on disk" | tail -n1
+$ kubectl logs my-cluster-zookeeper-0 | grep "Unable to load database on disk" | tail -n1
 2024-03-01 08:53:40,806 ERROR Unable to load database on disk (org.apache.zookeeper.server.quorum.QuorumPeer) [main]
 ```
 
@@ -617,7 +764,7 @@ We need to remove all data from the failed Zookeeper volumes to allow it get re-
 Double check that the volume access mode is ReadWriteOnly (RWO), so that we can start up a pod within the same node to update the data in the volume.
 
 ```sh
-$ kubectl get pvc -l strimzi.io/name=$CLUSTER_NAME-zookeeper
+$ kubectl get pvc -l strimzi.io/name=my-cluster-zookeeper
 NAME                          STATUS   VOLUME                                     CAPACITY   ACCESS MODES   STORAGECLASS                           AGE
 data-my-cluster-zookeeper-0   Bound    pvc-8e8d3aac-2e38-4f1c-b11e-dd66003cbcae   5Gi        RWO            ocs-external-storagecluster-ceph-rbd   13m
 data-my-cluster-zookeeper-1   Bound    pvc-f79b9a18-515d-4992-b92f-186a93ca05ff   5Gi        RWO            ocs-external-storagecluster-ceph-rbd   13m
@@ -628,7 +775,7 @@ $ NODE_HOSTNAME_1="$(kubectl describe pod my-cluster-zookeeper-1 | grep Node: | 
 
 $ kubectl run kubectl-remove-zookeeper-0 -itq --rm --restart "Never" --image "foo" --overrides "$(cat sessions/006/resources/patch-zk.yaml \
 | yq ".spec.nodeSelector.\"kubernetes.io/hostname\" = \"$NODE_HOSTNAME_0\"" \
-| yq ".spec.volumes[0].persistentVolumeClaim.claimName = \"data-$CLUSTER_NAME-zookeeper-0\"" \
+| yq ".spec.volumes[0].persistentVolumeClaim.claimName = \"data-my-cluster-zookeeper-0\"" \
 | yq -p yaml -o json)"
 removed '/zookeeper/data/version-2/acceptedEpoch'
 removed '/zookeeper/data/version-2/currentEpoch'
@@ -637,7 +784,7 @@ removed '/zookeeper/data/version-2/snapshot.0'
 
 $ kubectl run kubectl-remove-zookeeper-1 -itq --rm --restart "Never" --image "foo" --overrides "$(cat sessions/006/resources/patch-zk.yaml \
 | yq ".spec.nodeSelector.\"kubernetes.io/hostname\" = \"$NODE_HOSTNAME_1\"" \
-| yq ".spec.volumes[0].persistentVolumeClaim.claimName = \"data-$CLUSTER_NAME-zookeeper-1\"" \
+| yq ".spec.volumes[0].persistentVolumeClaim.claimName = \"data-my-cluster-zookeeper-1\"" \
 | yq -p yaml -o json)"
 removed '/zookeeper/data/version-2/acceptedEpoch'
 removed '/zookeeper/data/version-2/currentEpoch'
@@ -649,11 +796,11 @@ Restart all failed pods so that they can sync up with the leader.
 Trying to describe the topic created at first step to make sure data is not lost.
 
 ```sh
-$ kubectl delete po $CLUSTER_NAME-zookeeper-0 --force && kubectl delete po $CLUSTER_NAME-zookeeper-1 --force
+$ kubectl delete po my-cluster-zookeeper-0 --force && kubectl delete po my-cluster-zookeeper-1 --force
 pod "my-cluster-zookeeper-0" deleted
 pod "my-cluster-zookeeper-1" deleted
 
-$ kubectl get po -l strimzi.io/cluster=$CLUSTER_NAME
+$ kubectl get po -l strimzi.io/cluster=my-cluster
 NAME                                          READY   STATUS    RESTARTS   AGE
 my-cluster-entity-operator-7d6d6bd454-sh7rc   3/3     Running   0          96s
 my-cluster-kafka-0                            1/1     Running   0          5m9s
@@ -663,7 +810,7 @@ my-cluster-zookeeper-0                        1/1     Running   0          6m14s
 my-cluster-zookeeper-1                        1/1     Running   0          6m14s
 my-cluster-zookeeper-2                        1/1     Running   0          6m14s
 
-$ kubectl-kafka bin/kafka-topics.sh --bootstrap-server $CLUSTER_NAME-kafka-bootstrap:9092 --describe --topic t0
+$ kubectl-kafka bin/kafka-topics.sh --bootstrap-server my-cluster-kafka-bootstrap:9092 --describe --topic t0
 Topic: t0	TopicId: 1Sgy6V-CR0K7MMJ9khDuRw	PartitionCount: 3	ReplicationFactor: 3	Configs: min.insync.replicas=2,message.format.version=3.0-IV1
 	Topic: t0	Partition: 0	Leader: 0	Replicas: 0,2,1	Isr: 0,2,1
 	Topic: t0	Partition: 1	Leader: 2	Replicas: 2,1,0	Isr: 2,1,0
