@@ -639,12 +639,13 @@ $ POD="my-cluster-kafka-0"; \
 pod/kubectl-patch-my-cluster-kafka-0 created
     
 $ kubectl -itq exec kubectl-patch-$POD -- sh
-
-> df -h /data
+```
+```
+/ # df -h /data
 Filesystem                Size      Used Available Use% Mounted on
 /dev/rbd2                88.2M     86.2M         0 100% /data
 
-> LOG_DIR="/data/kafka-log0" TOPIC="my-topic" NUM_SEGMENTS="10"; \
+/ # LOG_DIR="/data/kafka-log0" TOPIC="my-topic" NUM_SEGMENTS="10"; \
   for partition in $(ls $LOG_DIR | grep $TOPIC); do
     OLDEST_SEGMENTS=$(ls $LOG_DIR/$partition | grep -E '\.log' | sort -z | head -$NUM_SEGMENTS | awk -F'.' '{print $1}')
     for segment in $OLDEST_SEGMENTS; do find $LOG_DIR/$partition -name "$segment.*" -exec rm -rfv {} \;; done
@@ -672,12 +673,13 @@ removed '/data/kafka-log0/my-topic-2/00000000000000001024.index'
 removed '/data/kafka-log0/my-topic-2/00000000000000001024.timeindex'
 ...
 
-> df -h /data
+/ # df -h /data
 Filesystem                Size      Used Available Use% Mounted on
 /dev/rbd2                88.2M     56.5M     29.8M  65% /data
 
-> exit
-
+/ # exit
+```
+```sh
 $ kubectl delete po kubectl-patch-$POD
 pod "kubectl-patch-my-cluster-kafka-0" deleted
 ```
