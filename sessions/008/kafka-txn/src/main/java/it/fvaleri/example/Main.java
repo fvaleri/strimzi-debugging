@@ -103,7 +103,9 @@ public class Main {
                     consumer.seekToEnd(e.partitions());
                     consumer.commitSync();
                 } catch (KafkaException e) {
-                    // abort the transaction and retry
+                    // abort the transaction and continue
+                    // in a real world application you would need to send these 
+                    // records to a DLT (dead letter topic) for further processing
                     System.err.printf("Aborting transaction: %s%n", e);
                     producer.abortTransaction();
                 }
