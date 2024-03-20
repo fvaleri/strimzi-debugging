@@ -174,7 +174,7 @@ kafkamirrormaker2.kafka.strimzi.io/my-mm2 scaled
 
 # took about 3 minutes
 $ kubectl -n "$NAMESPACE" exec -it $(kubectl -n "$NAMESPACE" get po | grep my-mm2 | awk '{print $1}') -- bash -c '\
-  for i in {1..100}; do /opt/kafka/bin/kubectl-kafka-class.sh kafka.tools.JmxTool --jmx-url service:jmx:rmi:///jndi/rmi://:9999/jmxrmi \
+  for i in {1..100}; do /opt/kafka/bin/kafka-jmx.sh --jmx-url service:jmx:rmi:///jndi/rmi://:9999/jmxrmi \
     --object-name kafka.producer:type=producer-metrics,client-id=\""connector-producer-my-cluster->my-cluster.MirrorSourceConnector-0\"" \
     --attributes batch-size-avg,request-latency-avg --date-format yyyy-MM-dd_HH:mm:ss --one-time true --wait \
       2>/dev/null | grep $(date +"%Y") && sleep 5; done'
@@ -242,7 +242,7 @@ kafkamirrormaker2.kafka.strimzi.io/my-mm2 scaled
 
 # took less than 2 minutes
 $ kubectl -n "$NAMESPACE" exec -it $(kubectl -n "$NAMESPACE" get po | grep my-mm2 | awk '{print $1}') -- bash -c '\
-  for i in {1..100}; do /opt/kafka/bin/kubectl-kafka-class.sh kafka.tools.JmxTool --jmx-url service:jmx:rmi:///jndi/rmi://:9999/jmxrmi \
+  for i in {1..100}; do /opt/kafka/bin/kafka-jmx.sh --jmx-url service:jmx:rmi:///jndi/rmi://:9999/jmxrmi \
     --object-name kafka.producer:type=producer-metrics,client-id=\""connector-producer-my-cluster->my-cluster.MirrorSourceConnector-0\"" \
     --attributes batch-size-avg,request-latency-avg --date-format yyyy-MM-dd_HH:mm:ss --one-time true --wait \
       2>/dev/null | grep $(date +"%Y") && sleep 5; done'
