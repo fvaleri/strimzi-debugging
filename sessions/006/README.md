@@ -216,8 +216,7 @@ $ CLUSTER_NAME="my-cluster" \
   SNAPSHOT_CLASS="ocs-external-storagecluster-rbdplugin-snapclass" \
   KAFKA_PODS="$(kubectl get po -l strimzi.io/name=$CLUSTER_NAME-kafka --no-headers -o custom-columns=':metadata.name')" \
   VOLUME_CLASS="$(kubectl get pv | grep $CLUSTER_NAME-kafka-0 | awk '{print $7}')" \
-  NEW_VOLUME_SIZE="20Gi" \
-  kubectl get pv | grep $CLUSTER_NAME-kafka
+  NEW_VOLUME_SIZE="20Gi"; kubectl get pv | grep $CLUSTER_NAME-kafka
 pvc-2d208791-618e-4f9d-9e3d-b9f7e65f3335   100Mi      RWO            Delete           Bound    test/data-my-cluster-kafka-2                                         ocs-external-storagecluster-ceph-rbd            92s
 pvc-8f6a188c-ab52-49ce-a75d-c0edeaaec0d8   100Mi      RWO            Delete           Bound    test/data-my-cluster-kafka-1                                         ocs-external-storagecluster-ceph-rbd            92s
 pvc-9bdb58be-27d3-4be6-b0e8-8531d6958de2   100Mi      RWO            Delete           Bound    test/data-my-cluster-kafka-0                                         ocs-external-storagecluster-ceph-rbd            92s
@@ -367,8 +366,7 @@ kafkatopic.kafka.strimzi.io/my-topic created
 $ CLUSTER_NAME="my-cluster" \
   KAFKA_PODS="$(kubectl get po -l strimzi.io/name=$CLUSTER_NAME-kafka --no-headers -o custom-columns=':metadata.name')" \
   VOLUME_CLASS="$(kubectl get pv | grep $CLUSTER_NAME-kafka-0 | awk '{print $7}')" \
-  NEW_VOLUME_SIZE="20Gi" \ 
-  kubectl get pvc -l strimzi.io/name=$CLUSTER_NAME-kafka
+  NEW_VOLUME_SIZE="20Gi"; kubectl get pvc -l strimzi.io/name=$CLUSTER_NAME-kafka
 NAME                      STATUS   VOLUME                                     CAPACITY   ACCESS MODES   STORAGECLASS                           AGE
 data-my-cluster-kafka-0   Bound    pvc-04b55551-fe7f-4662-9955-5e4baaf4df57   100Mi      RWO            ocs-external-storagecluster-ceph-rbd   106s
 data-my-cluster-kafka-1   Bound    pvc-18280833-16a8-4cd5-8c6f-eb764acd3ce9   100Mi      RWO            ocs-external-storagecluster-ceph-rbd   106s
