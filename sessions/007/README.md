@@ -6,10 +6,10 @@ A background thread ensures that the leader role is shifted to the preferred rep
 
 However, this default setup might not be enough, leading to uneven load distribution across brokers due to various factors such as broker failures, addition of new brokers, or varying usage levels of different partitions.
 
-To monitor cluster load effectively, the `kafka.server:type=KafkaRequestHandlerPool,name=RequestHandlerAvgIdlePercent` metric proves invaluable.
-When this metric falls below 0.7 (indicating that request handler threads are busy 30% of the time), performance begins to degrade.
-Dropping below 0.5 signals potential trouble, as scaling or rebalancing operations under such conditions could exacerbate the load.
-If it plummets to 0.3, the system becomes barely usable for users.
+To monitor cluster load effectively, you can use the metric `kafka.server:type=KafkaRequestHandlerPool,name=RequestHandlerAvgIdlePercent`.
+When it falls below 0.7 (indicating that request handler threads are busy 30% of the time), performance begins to degrade.
+Dropping below 0.5 signals potential trouble, as scaling or rebalancing operations under such conditions could increase the load.
+If it drops to 0.3, the system becomes barely usable for users.
 
 The workload on Kafka brokers comprises various finite resources such as CPU cycles, disk space, and network bandwidth.
 To achieve a better balance, the rebalancing process estimates the load imposed by each replica on a broker and reorganizes partition leaders and followers accordingly.
