@@ -1,12 +1,10 @@
 #!/usr/bin/env bash
 
 NAMESPACE="test"
-KAFKA_VERSION="3.7.1"
-STRIMZI_VERSION="0.42.0"
+KAFKA_VERSION="3.8.0"
+STRIMZI_VERSION="0.43.0"
 
-if [[ "${BASH_SOURCE[0]}" -ef "$0" ]]; then
-  echo "Source this script, not execute it"; exit 1
-fi
+[[ "${BASH_SOURCE[0]}" -ef "$0" ]] && echo "Usage: source init.sh" && exit 1
 
 for x in curl kubectl openssl keytool unzip yq jq java javac jshell mvn; do
   if ! command -v "$x" &>/dev/null; then
@@ -16,21 +14,24 @@ done
 
 kafka-cp() {
   local id="${1-}" part="${2-50}"
-  if [[ -z $id ]]; then echo "Missing id parameter"; return; fi
+  [[ -z $id ]] && echo "Missing params" && return
   echo 'public void run(String id, int part) { System.out.println(abs(id.hashCode()) % part); }
     private int abs(int n) { return (n == Integer.MIN_VALUE) ? 0 : Math.abs(n); }
     run("'"$id"'", '"$part"');' | jshell -
 }
 
-kubectl-kafka() { kubectl run kubectl-kafka-"$(date +%s)" -itq --rm --restart="Never" \
-  --image="apache/kafka:$KAFKA_VERSION" -- sh -c "/opt/kafka/$*; exit 0"; }
+kubectl-kafka() {
+  kubectl get po kafka-tools &>/dev/null || kubectl run kafka-tools -q --restart="Never" \
+    --image="apache/kafka:latest" -- sh -c "trap : TERM INT; sleep infinity & wait"
+  kubectl wait --for=condition=ready po kafka-tools &>/dev/null
+  kubectl exec kafka-tools -itq -- sh -c "/opt/kafka/$*"
+}
   
 echo "Configuring Kafka on localhost"
 
 # delete previous processes and data
 pkill -9 -f "kafka.Kafka" &>/dev/null ||true
-pkill -9 -f "quorum.QuorumPeerMain" &>/dev/null ||true
-rm -rf /tmp/kafka-logs /tmp/zookeeper
+rm -rf /tmp/kraft-combined-logs
 
 # get Kafka
 KAFKA_HOME="/tmp/kafka-$KAFKA_VERSION" && export KAFKA_HOME
@@ -42,22 +43,21 @@ fi
 
 echo "Configuring Strimzi on Kubernetes"
 
-# create the test namespace
+# create test namespace
 kubectl config set-context --current --namespace="$NAMESPACE" &>/dev/null
-kubectl delete kt --all &>/dev/null && kubectl get kt -o yaml 2>/dev/null | yq 'del(.items[].metadata.finalizers[])' | kubectl apply -f - &>/dev/null
+
+# delete topics first, as they contain finalizers
+kubectl get kt -o yaml 2>/dev/null | yq 'del(.items[].metadata.finalizers[])' | kubectl apply -f - &>/dev/null; kubectl delete kt --all --force &>/dev/null
+
 kubectl delete ns "$NAMESPACE" --ignore-not-found --force --wait=false &>/dev/null
 kubectl wait --for=delete ns/"$NAMESPACE" --timeout=120s &>/dev/null && kubectl create ns "$NAMESPACE"
 
-# set privileged SecurityStandard label for this namespace and configure it as current
+# set privileged SecurityStandard label for this namespace
 kubectl label ns "$NAMESPACE" pod-security.kubernetes.io/enforce=privileged --overwrite &>/dev/null
 
-# PersistentVolumes cleanup 
+# PersistentVolumes cleanup
 # shellcheck disable=SC2046
-kubectl delete pv $(kubectl get pv 2>/dev/null | grep "my-cluster" | awk '{print $1}') --ignore-not-found --now --force &>/dev/null
-
-# VolumeSnapshotContents cleanup
-# shellcheck disable=SC2046
-kubectl delete pv $(kubectl get vsc 2>/dev/null | grep "my-cluster" | awk '{print $1}') --ignore-not-found --now --force &>/dev/null
+kubectl delete pv $(kubectl get pv 2>/dev/null | grep "my-cluster" | awk '{print $1}') --ignore-not-found --force &>/dev/null
 
 # get Strimzi
 STRIMZI_FILE="/tmp/strimzi-$STRIMZI_VERSION.yaml"

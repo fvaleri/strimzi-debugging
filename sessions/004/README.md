@@ -1,13 +1,13 @@
 ## Cloud-native CDC pipeline with Debezium
 
-First, [deploy the Strimzi Cluster Operator and Kafka cluster](/sessions/001).
+First, use [session1](/sessions/001) to deploy a Kafka cluster on Kubernetes.
 When the cluster is ready, we deploy a MySQL instance (the external system), and Kafka Connect cluster.
 
 The Kafka Connect image uses an internal component (Kaniko) to build a custom image containing the configured MySQL connector.
 In production, it is recommended to use your own Connect image built from the Strimzi one.
 
 ```sh
-$ kubectl create -f sessions/004/resources && kubectl wait --for=condition=Ready pod -l app=my-mysql --timeout=300s \
+$ kubectl create -f sessions/004/install && kubectl wait --for=condition=Ready pod -l app=my-mysql --timeout=300s \
   && kubectl exec my-mysql-0 -- sh -c 'mysql -u root < /tmp/sql/initdb.sql'
 persistentvolumeclaim/my-mysql-data created
 configmap/my-mysql-cfg created
@@ -21,16 +21,16 @@ pod/my-mysql-0 condition met
 
 $ kubectl get po,kt
 NAME                                              READY   STATUS    RESTARTS   AGE
-pod/my-cluster-entity-operator-86687d799f-scrls   2/2     Running   0          4m5s
-pod/my-cluster-kafka-0                            1/1     Running   0          4m29s
-pod/my-cluster-kafka-1                            1/1     Running   0          4m29s
-pod/my-cluster-kafka-2                            1/1     Running   0          4m29s
-pod/my-cluster-zookeeper-0                        1/1     Running   0          4m54s
-pod/my-cluster-zookeeper-1                        1/1     Running   0          4m54s
-pod/my-cluster-zookeeper-2                        1/1     Running   0          4m54s
-pod/my-connect-cluster-connect-0                  1/1     Running   0          76s
-pod/my-mysql-0                                    1/1     Running   0          2m57s
-pod/strimzi-cluster-operator-6865489846-rqp46     1/1     Running   0          10m
+pod/my-cluster-broker-7                           1/1     Running   0          3m48s
+pod/my-cluster-broker-8                           1/1     Running   0          3m48s
+pod/my-cluster-broker-9                           1/1     Running   0          3m48s
+pod/my-cluster-controller-0                       1/1     Running   0          3m48s
+pod/my-cluster-controller-1                       1/1     Running   0          3m48s
+pod/my-cluster-controller-2                       1/1     Running   0          3m48s
+pod/my-cluster-entity-operator-5cc5d685f8-dqtpt   2/2     Running   0          3m15s
+pod/my-connect-cluster-connect-0                  1/1     Running   0          69s
+pod/my-mysql-0                                    1/1     Running   0          2m22s
+pod/strimzi-cluster-operator-7fb8ff4bd-tx5nl      1/1     Running   0          4m31s
 
 NAME                                   CLUSTER      PARTITIONS   REPLICATION FACTOR   READY
 kafkatopic.kafka.strimzi.io/my-topic   my-cluster   3            3                    True
@@ -42,24 +42,22 @@ Let's check if the connector and its tasks are running fine by using the `KafkaC
 ```sh
 $ kubectl get kctr mysql-source-connector -o yaml | yq .status
 conditions:
-  - lastTransitionTime: "2022-09-15T07:56:48.585862Z"
+  - lastTransitionTime: "2024-10-12T09:51:39.969529275Z"
     status: "True"
     type: Ready
 connectorStatus:
   connector:
     state: RUNNING
-    worker_id: 10.128.2.29:8083
+    worker_id: my-connect-cluster-connect-0.my-connect-cluster-connect.test.svc:8083
   name: mysql-source-connector
   tasks:
     - id: 0
       state: RUNNING
-      worker_id: 10.128.2.29:8083
+      worker_id: my-connect-cluster-connect-0.my-connect-cluster-connect.test.svc:8083
   type: source
 observedGeneration: 1
 tasksMax: 1
-topics:
-  - __debezium-heartbeat.my-mysql
-  - my-mysql
+topics: []
 ```
 
 Debezium configuration is specific to each connector and it is documented in detail.

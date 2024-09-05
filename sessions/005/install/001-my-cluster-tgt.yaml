@@ -4,6 +4,7 @@ metadata:
   name: my-cluster-tgt
   annotations:
     strimzi.io/node-pools: enabled
+    strimzi.io/kraft: enabled
 spec:
   kafka:
     config:
@@ -22,16 +23,3 @@ spec:
         port: 9093
         type: internal
         tls: true
-  zookeeper:
-    replicas: 3
-    resources:
-      limits:
-        cpu: 500m
-        memory: 1Gi
-      requests:
-        cpu: 500m
-        memory: 1Gi
-    storage:
-      size: 5Gi
-      type: persistent-claim
-      deleteClaim: false

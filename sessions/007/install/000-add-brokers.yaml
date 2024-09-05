@@ -9,4 +9,4 @@ metadata:
 spec:
   # using default goals
   mode: add-brokers
-  brokers: [3]
+  brokers: [10]

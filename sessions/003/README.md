@@ -1,9 +1,7 @@
 ## Schema registry in action
 
-First, [deploy the Strimzi Cluster Operator and Kafka cluster](/sessions/001).
-We also add an external listener (if route is not supported, you can use ingress type).
-
-Then, we deploy the Service Registry instance with the in-memory storage system.
+First, use [session1](/sessions/001) to deploy a Kafka cluster on Kubernetes.
+We also add an external listener (see [session2](/sessions/002) for more details).
 
 ```sh
 $ kubectl patch k my-cluster --type merge -p '
@@ -18,16 +16,20 @@ $ kubectl patch k my-cluster --type merge -p '
             bootstrap:
               host: kafka-bootstrap.my-cluster.local
             brokers:
-              - broker: 0
-                host: kafka-0.my-cluster.local
-              - broker: 1
-                host: kafka-1.my-cluster.local
-              - broker: 2
-                host: kafka-2.my-cluster.local
+              - broker: 7
+                host: kafka-7.my-cluster.local
+              - broker: 8
+                host: kafka-8.my-cluster.local
+              - broker: 9
+                host: kafka-9.my-cluster.local
             class: nginx'
 kafka.kafka.strimzi.io/my-cluster patched
+```
 
-$ for f in sessions/003/resources/*.yaml; do sed "s/namespace: .*/namespace: $NAMESPACE/g" $f \
+Then, we deploy the Service Registry instance with the in-memory storage system.
+
+```sh
+$ for f in sessions/003/install/*.yaml; do sed "s/namespace: .*/namespace: $NAMESPACE/g" $f \
   | kubectl create -f - --dry-run=client -o yaml | kubectl replace --force -f -; done
 customresourcedefinition.apiextensions.k8s.io/apicurioregistries.registry.apicur.io replaced
 serviceaccount/apicurio-registry-operator replaced
@@ -40,21 +42,20 @@ apicurioregistry.registry.apicur.io/my-registry replaced
 
 $ kubectl get po
 NAME                                          READY   STATUS    RESTARTS   AGE
-apicurio-registry-operator-6c87ccb8fb-tgd59   1/1     Running   0          64s
-my-cluster-entity-operator-7766bb8469-vnvbs   3/3     Running   0          16m
-my-cluster-kafka-0                            1/1     Running   0          15m
-my-cluster-kafka-1                            1/1     Running   0          14m
-my-cluster-kafka-2                            1/1     Running   0          13m
-my-cluster-zookeeper-0                        1/1     Running   0          20m
-my-cluster-zookeeper-1                        1/1     Running   0          20m
-my-cluster-zookeeper-2                        1/1     Running   0          20m
-my-registry-deployment-bfbbc68b6-9dmlt        1/1     Running   0          39s
-strimzi-cluster-operator-95d88f6b5-rwh8b      1/1     Running   0          21m
+apicurio-registry-operator-9448ffc74-n699g    1/1     Running   0          99s
+my-cluster-broker-7                           1/1     Running   0          95s
+my-cluster-broker-8                           1/1     Running   0          67s
+my-cluster-broker-9                           1/1     Running   0          42s
+my-cluster-controller-0                       1/1     Running   0          3m53s
+my-cluster-controller-1                       1/1     Running   0          3m53s
+my-cluster-controller-2                       1/1     Running   0          3m53s
+my-cluster-entity-operator-867cbbf79c-6b7mk   2/2     Running   0          3m20s
+my-registry-deployment-858c7dc76b-xq7bt       1/1     Running   0          96s
+strimzi-cluster-operator-7fb8ff4bd-2wbmb      1/1     Running   0          4m18s
 ```
 
 Now, we just need to tell our client application where it can find the Kafka cluster by setting the bootstrap URL and the schema registry REST endpoint.
 We also need to provide the truststore location and password because we are connecting externally.
-**Note: don't forget to add `my-registry.test` mapping to your `/etc/hosts`**
 
 ```sh
 $ kubectl get secret my-cluster-cluster-ca-cert -o jsonpath="{.data['ca\.p12']}" | base64 -d >/tmp/truststore.p12 \
