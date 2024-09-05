@@ -1,11 +1,11 @@
 ## TLS authentication (mTLS) using an external listener
 
-First, [deploy the Strimzi Cluster Operator and Kafka cluster](/sessions/001).
+First, use [session1](/sessions/001) to deploy a Kafka cluster on Kubernetes.
 We also add an external listener of type ingress with TLS authentication (OpenShift route is an easier alternative to ingress).
 Then, wait for the Cluster Operator to restart all pods one by one (rolling update).
 
 ```sh
-$ kubectl create -f sessions/002/resources \
+$ kubectl create -f sessions/002/install \
   && kubectl patch k my-cluster --type merge -p '
     spec:
       kafka:
@@ -20,12 +20,12 @@ $ kubectl create -f sessions/002/resources \
               bootstrap:
                 host: kafka-bootstrap.my-cluster.local
               brokers:
-                - broker: 0
-                  host: kafka-0.my-cluster.local
-                - broker: 1
-                  host: kafka-1.my-cluster.local
-                - broker: 2
-                  host: kafka-2.my-cluster.local
+                - broker: 7
+                  host: kafka-7.my-cluster.local
+                - broker: 8
+                  host: kafka-8.my-cluster.local
+                - broker: 9
+                  host: kafka-9.my-cluster.local
               class: nginx'
 kafkauser.kafka.strimzi.io/my-user created            
 kafka.kafka.strimzi.io/my-cluster patched
@@ -37,21 +37,21 @@ It also creates a Kafka user resource with a matching configuration.
 ```sh
 $ kubectl get ingress
 NAME                         CLASS   HOSTS                              ADDRESS        PORTS     AGE
-my-cluster-kafka-0           nginx   kafka-0.my-cluster.local           192.168.49.2   80, 443   2m12s
-my-cluster-kafka-1           nginx   kafka-1.my-cluster.local           192.168.49.2   80, 443   2m12s
-my-cluster-kafka-2           nginx   kafka-2.my-cluster.local           192.168.49.2   80, 443   2m12s
-my-cluster-kafka-bootstrap   nginx   kafka-bootstrap.my-cluster.local   192.168.49.2   80, 443   2m12s
+my-cluster-broker-7          nginx   kafka-7.my-cluster.local           192.168.49.2   80, 443   104s
+my-cluster-broker-8          nginx   kafka-8.my-cluster.local           192.168.49.2   80, 443   104s
+my-cluster-broker-9          nginx   kafka-9.my-cluster.local           192.168.49.2   80, 443   104s
+my-cluster-kafka-bootstrap   nginx   kafka-bootstrap.my-cluster.local   192.168.49.2   80, 443   104s
 
 $ kubectl get ku my-user -o yaml | yq .spec
 authentication:
   type: tls
 ```
 
-**Note that you need to enable the nginx ingress controller if you are using minikube and add ingress host mappings to `/etc/hosts`.**
-If it's all configured correctly, you shuold be able to see the broker certificate running the following command.
+**Note that you need to enable the nginx ingress controller with `--enable-ssl-passthrough` flag if you are using Minikube, and add host mappings to `/etc/hosts`.**
+If it's all configured correctly, you should be able to see the broker certificate running the following command.
 
 ```sh
-$ openssl s_client -connect kafka-0.my-cluster.local:443 -servername kafka-0.my-cluster.local -showcerts
+$ openssl s_client -connect kafka-7.my-cluster.local:443 -servername kafka-100.my-cluster.local -showcerts
 ...
 Server certificate
 subject=O=io.strimzi, CN=my-cluster-kafka
@@ -88,9 +88,7 @@ We can use use `kubectl` to do so, but let's suppose we have a must-gather scrip
 Use the command from the first session to generate a new report from the current cluster.
 
 ```sh
-$ unzip -q report-10-09-2022_16-45-32.zip
-$ cat reports/secrets/my-cluster-cluster-ca-cert.yaml | yq '.data."ca.crt"' | base64 -d > /tmp/ca.crt
-openssl crl2pkcs7 -nocrl -certfile /tmp/ca.crt | openssl pkcs7 -print_certs -text -noout
+$ unzip -p report-12-10-2024_11-31-59.zip reports/secrets/my-cluster-cluster-ca-cert.yaml | yq '.data."ca.crt"' | base64 -d | openssl x509 -inform pem -noout -text
 Certificate:
     Data:
         Version: 3 (0x2)
@@ -136,7 +134,7 @@ Typically, the security team will provide a certificate bundle which includes th
 If that's not the case, you can easily create the bundle from individual certificates in PEM format, because you need to trust the whole chain, if any.
 
 ```sh
-$ cat /tmp/listener.crt /tmp/intermca.crt /tmp/rootca.crt > /tmp/bundle.crt
+$ cat /tmp/listener.crt /tmp/intermca.crt /tmp/rootca.crt >/tmp/bundle.crt
 ```
 
 It's important to note that the custom server certificate for a listener must not be a CA and it must include a SAN for each broker route, plus one for the bootstrap route.
@@ -200,12 +198,12 @@ $ kubectl patch k my-cluster --type merge -p '
             bootstrap:
               host: kafka-bootstrap.my-cluster.local
             brokers:
-              - broker: 0
-                host: kafka-0.my-cluster.local
-              - broker: 1
-                host: kafka-1.my-cluster.local
-              - broker: 2
-                host: kafka-2.my-cluster.local
+              - broker: 7
+                host: kafka-7.my-cluster.local
+              - broker: 8
+                host: kafka-8.my-cluster.local
+              - broker: 9
+                host: kafka-9.my-cluster.local
             class: nginx
             brokerCertChainAndKey:
               secretName: ext-listener-crt

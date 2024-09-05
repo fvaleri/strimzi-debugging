@@ -1,0 +1,25 @@
+apiVersion: kafka.strimzi.io/v1beta2
+kind: KafkaNodePool
+metadata:
+  name: controller
+  labels:
+    # must match the cluster name
+    strimzi.io/cluster: my-cluster
+  annotations:
+    strimzi.io/next-node-ids: "[0-6]"
+spec:
+  replicas: 3
+  roles:
+    - controller
+  resources:
+    # set requests==limits to have Guaranteed QoS
+    limits:
+      cpu: 500m
+      memory: 1Gi
+    requests:
+      cpu: 500m
+      memory: 1Gi
+  storage:
+    size: 5Gi
+    type: persistent-claim
+    deleteClaim: false

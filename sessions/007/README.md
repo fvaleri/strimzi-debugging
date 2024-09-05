@@ -1,6 +1,6 @@
 ## Scaling up the cluster with the reassign tool
 
-First, [deploy the Strimzi Cluster Operator and Kafka cluster](/sessions/001).
+First, use [session1](/sessions/001) to deploy a Kafka cluster on Kubernetes.
 
 Then, we send some data.
 
@@ -113,17 +113,17 @@ Then we add one broker, deploy Cruise Control by adding the `.spec.cruiseControl
 ```sh
 $ kubectl-kafka bin/kafka-topics.sh --bootstrap-server my-cluster-kafka-bootstrap:9092 --topic my-topic --describe
 Topic: my-topic	TopicId: n1QKre80QFmnEKWIXfrLDw	PartitionCount: 3	ReplicationFactor: 3	Configs: min.insync.replicas=2,message.format.version=3.0-IV1,retention.bytes=1073741824
-	Topic: my-topic	Partition: 0	Leader: 2	Replicas: 2,1,0	Isr: 2,1,0
-	Topic: my-topic	Partition: 1	Leader: 1	Replicas: 1,0,2	Isr: 1,0,2
-	Topic: my-topic	Partition: 2	Leader: 0	Replicas: 0,2,1	Isr: 0,2,1
+	Topic: my-topic	Partition: 0	Leader: 9	Replicas: 9,8,7	Isr: 9,8,7
+	Topic: my-topic	Partition: 1	Leader: 8	Replicas: 8,7,9	Isr: 8,7,9
+	Topic: my-topic	Partition: 2	Leader: 7	Replicas: 7,9,8	Isr: 7,9,8
 
-$ kubectl patch knp kafka --type merge -p '
+$ kubectl patch knp broker --type merge -p '
     spec:
       replicas: 4' \
   && kubectl patch k my-cluster --type merge -p '
     spec:
       cruiseControl: {}' \
-  && kubectl create -f sessions/007/resources
+  && kubectl create -f sessions/007/install
 kafkanodepool.kafka.strimzi.io/kafka patched
 kafka.kafka.strimzi.io/my-cluster patched
 kafkarebalance.kafka.strimzi.io/my-rebalance created
@@ -136,8 +136,7 @@ Our rebalance has auto approval annotation so, once ready, it will automatically
 
 ```sh
 $ kubectl get kr add-brokers -o wide -w
-NAME          CLUSTER      PENDINGPROPOSAL   PROPOSALREADY   REBALANCING   READY   NOTREADY   STOPPED
-add-brokers   my-cluster                                                                      
+NAME          CLUSTER      PENDINGPROPOSAL   PROPOSALREADY   REBALANCING   READY   NOTREADY   STOPPED    
 add-brokers   my-cluster                                                           True       
 add-brokers   my-cluster   True                                                               
 add-brokers   my-cluster                     True                                             
@@ -148,9 +147,9 @@ add-brokers   my-cluster                                                   True
 When the rebalance is ready, we can see if the new broker contains some of the existing replicas.
 
 ```sh
-$ kubectl-kafka bin/kafka-topics.sh --bootstrap-server my-cluster-kafka-bootstrap:9092 --topic my-topic --describe
-Topic: my-topic	TopicId: _OrrcGtiSu-e5F2HMtxcfQ	PartitionCount: 3	ReplicationFactor: 3	Configs: min.insync.replicas=2,message.format.version=3.0-IV1
-	Topic: my-topic	Partition: 0	Leader: 0	Replicas: 0,2,1	Isr: 0,2,1
-	Topic: my-topic	Partition: 1	Leader: 2	Replicas: 2,3,0	Isr: 0,2,3
-	Topic: my-topic	Partition: 2	Leader: 1	Replicas: 1,0,2	Isr: 0,2,1
+$ kubectl-kafka bin/kafka-topics.sh --bootstrap-server my-cluster-kafka-bootstrap:9092 --describe --topic my-topic
+Topic: my-topic	TopicId: 2gmTA7Z9RReR0fsORVZ6GA	PartitionCount: 3	ReplicationFactor: 3	Configs: min.insync.replicas=2
+	Topic: my-topic	Partition: 0	Leader: 7	Replicas: 7,8,9	    Isr: 8,9,7	    Elr: 	LastKnownElr: 
+	Topic: my-topic	Partition: 1	Leader: 8	Replicas: 8,10,7	Isr: 8,7,10	    Elr: 	LastKnownElr: 
+	Topic: my-topic	Partition: 2	Leader: 9	Replicas: 9,7,8	    Isr: 8,9,7	    Elr: 	LastKnownElr:
 ```

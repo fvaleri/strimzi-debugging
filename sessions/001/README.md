@@ -10,18 +10,19 @@ It downloads Kafka to localhost and initializes the Kubernetes cluster installin
 ```sh
 $ source init.sh
 Configuring Kafka on localhost
-Downloading Kafka to /tmp/kafka-v
+Downloading Kafka to /tmp/kafka-[version]
 Configuring Strimzi on Kubernetes
 namespace/test created
-Downloading Strimzi to /tmp/strimzi-v.yaml
+Downloading Strimzi to /tmp/strimzi-[version].yaml
 Done
 
-$ $KAFKA_HOME/bin/zookeeper-server-start.sh -daemon $KAFKA_HOME/config/zookeeper.properties \
-  && sleep 5 && $KAFKA_HOME/bin/kafka-server-start.sh -daemon $KAFKA_HOME/config/server.properties
+$ CLUSTER_ID="$($KAFKA_HOME/bin/kafka-storage.sh random-uuid)"; \
+  "$KAFKA_HOME"/bin/kafka-storage.sh format -c "$KAFKA_HOME"/config/kraft/server.properties -t "$CLUSTER_ID" \
+    && "$KAFKA_HOME"/bin/kafka-server-start.sh -daemon "$KAFKA_HOME"/config/kraft/server.properties
+Formatting /tmp/kraft-combined-logs with metadata.version [version].
 
 $ jcmd | grep kafka
-831273 org.apache.zookeeper.server.quorum.QuorumPeerMain /tmp/kafka.yidQitI/config/zookeeper.properties
-831635 kafka.Kafka /tmp/kafka.yidQitI/config/server.properties
+1523381 kafka.Kafka /tmp/kafka-[version]/config/kraft/server.properties
 ```
 
 We create a new topic with 3 partitions, then produce and consume some messages.
@@ -29,25 +30,27 @@ When consuming messages, you can print additional data such as the partition num
 Every consumer with the same `group.id` is part of the same consumer group.
 
 ```sh
-$ $KAFKA_HOME/bin/kafka-topics.sh --bootstrap-server :9092 --topic my-topic --create --partitions 3 --replication-factor 1 
+$ "$KAFKA_HOME"/bin/kafka-topics.sh --bootstrap-server :9092 --create --topic my-topic --partitions 3 --replication-factor 1 
 Created topic my-topic.
 
 $ $KAFKA_HOME/bin/kafka-topics.sh --bootstrap-server :9092 --topic my-topic --describe
-Topic: my-topic	TopicId: _sLsPUT-RcSuLdv9niI2ig	PartitionCount: 3	ReplicationFactor: 1	Configs: 
-	Topic: my-topic	Partition: 0	Leader: 0	Replicas: 0	Isr: 0
-	Topic: my-topic	Partition: 1	Leader: 0	Replicas: 0	Isr: 0
-	Topic: my-topic	Partition: 2	Leader: 0	Replicas: 0	Isr: 0
+Topic: my-topic	TopicId: wBAzSO5tTkOp71nsve_U_w	PartitionCount: 3	ReplicationFactor: 1	Configs: segment.bytes=1073741824
+	Topic: my-topic	Partition: 0	Leader: 1	Replicas: 1	Isr: 1	Elr: 	LastKnownElr: 
+	Topic: my-topic	Partition: 1	Leader: 1	Replicas: 1	Isr: 1	Elr: 	LastKnownElr: 
+	Topic: my-topic	Partition: 2	Leader: 1	Replicas: 1	Isr: 1	Elr: 	LastKnownElr:
 
-$ $KAFKA_HOME/bin/kafka-console-producer.sh --bootstrap-server :9092 --topic my-topic --property parse.key=true --property key.separator="#"
->1#hello
->2#world
+$ "$KAFKA_HOME"/bin/kafka-console-producer.sh --bootstrap-server :9092 --topic my-topic --property parse.key=true --property key.separator="#"
+>32947#hello
+>24910#kafka
+>45237#world
 >^C
 
-$ $KAFKA_HOME/bin/kafka-console-consumer.sh --bootstrap-server :9092 --topic my-topic --group my-group --from-beginning \
-  --max-messages 2 --property print.partition=true --property print.key=true
-Partition:0	1	hello
-Partition:2	2	world
-Processed a total of 2 messages
+$ "$KAFKA_HOME"/bin/kafka-console-consumer.sh --bootstrap-server :9092 --topic my-topic --group my-group --from-beginning \
+  --max-messages 3 --property print.partition=true --property print.key=true
+Partition:0	24910	kafka
+Partition:2	32947	hello
+Partition:2	45237	world
+Processed a total of 3 messages
 ```
 
 It works, but where these messages are being stored?
@@ -55,13 +58,13 @@ The broker property `log.dirs` configures where our topic partitions are stored.
 We have 3 partitions, which corresponds to exactly 3 folders on disk.
 
 ```sh
-$ cat $KAFKA_HOME/config/server.properties | grep log.dirs
-log.dirs=/tmp/kafka-logs
+$ cat $KAFKA_HOME/config/kraft/server.properties | grep log.dirs
+log.dirs=/tmp/kraft-combined-logs
 
-$ ls -lh /tmp/kafka-logs/ | grep my-topic
-drwxr-xr-x. 2 fvaleri fvaleri  140 Jul  4 17:51 my-topic-0
-drwxr-xr-x. 2 fvaleri fvaleri  140 Jul  4 17:51 my-topic-1
-drwxr-xr-x. 2 fvaleri fvaleri  140 Jul  4 17:51 my-topic-2
+$ ls -lh /tmp/kraft-combined-logs | grep my-topic
+drwxr-xr-x. 2 fvaleri fvaleri  140 Sep  5 13:45 my-topic-0
+drwxr-xr-x. 2 fvaleri fvaleri  140 Sep  5 13:45 my-topic-1
+drwxr-xr-x. 2 fvaleri fvaleri  140 Sep  5 13:45 my-topic-2
 ```
 
 The consumer output shows that messages were sent to partition 0 and 2.
@@ -69,24 +72,24 @@ Looking inside partition 0, we have a `.log` file containing our records (each s
 The other two files contain additional metadata.
 
 ```sh
-$ ls -lh /tmp/kafka-logs/my-topic-0
+$ ls -lh /tmp/kraft-combined-logs/my-topic-0
 total 12K
--rw-r--r--. 1 fvaleri fvaleri 10M Jul  4 17:51 00000000000000000000.index
--rw-r--r--. 1 fvaleri fvaleri  74 Jul  4 17:51 00000000000000000000.log
--rw-r--r--. 1 fvaleri fvaleri 10M Jul  4 17:51 00000000000000000000.timeindex
--rw-r--r--. 1 fvaleri fvaleri   8 Jul  4 17:51 leader-epoch-checkpoint
--rw-r--r--. 1 fvaleri fvaleri  43 Jul  4 17:51 partition.metadata
+-rw-r--r--. 1 fvaleri fvaleri 10M Sep  5 13:45 00000000000000000000.index
+-rw-r--r--. 1 fvaleri fvaleri  78 Sep  5 13:45 00000000000000000000.log
+-rw-r--r--. 1 fvaleri fvaleri 10M Sep  5 13:45 00000000000000000000.timeindex
+-rw-r--r--. 1 fvaleri fvaleri   8 Sep  5 13:45 leader-epoch-checkpoint
+-rw-r--r--. 1 fvaleri fvaleri  43 Sep  5 13:45 partition.metadata
 ```
 
 Partition log files are in binary format, but Kafka includes a dump tool for decoding them.
-On this partition, we have one batch (`baseOffset`), containing only one record (`| offset`) with key "1" and value "hello".
+On this partition, we have one batch (`baseOffset`), containing only one record (`| offset`) with key "24910" and payload "kafka".
 
 ```sh
-$ $KAFKA_HOME/bin/kafka-dump-log.sh --deep-iteration --print-data-log --files /tmp/kafka-logs/my-topic-0/00000000000000000000.log
-Dumping /tmp/kafka-logs/my-topic-0/00000000000000000000.log
+$ $KAFKA_HOME/bin/kafka-dump-log.sh --deep-iteration --print-data-log --files /tmp/kraft-combined-logs/my-topic-0/00000000000000000000.log
+Dumping /tmp/kraft-combined-logs/my-topic-0/00000000000000000000.log
 Log starting offset: 0
-baseOffset: 0 lastOffset: 0 count: 1 baseSequence: 0 lastSequence: 0 producerId: 0 producerEpoch: 0 partitionLeaderEpoch: 0 isTransactional: false isControl: false deleteHorizonMs: OptionalLong.empty position: 0 CreateTime: 1720108310684 size: 74 magic: 2 compresscodec: none crc: 990125471 isvalid: true
-| offset: 0 CreateTime: 1720108310684 keySize: 1 valueSize: 5 sequence: 0 headerKeys: [] key: 1 payload: hello
+baseOffset: 0 lastOffset: 0 count: 1 baseSequence: 0 lastSequence: 0 producerId: 20 producerEpoch: 0 partitionLeaderEpoch: 0 isTransactional: false isControl: false deleteHorizonMs: OptionalLong.empty position: 0 CreateTime: 1725536752604 size: 78 magic: 2 compresscodec: none crc: 4051670483 isvalid: true
+| offset: 0 CreateTime: 1725536752604 keySize: 5 valueSize: 5 sequence: 0 headerKeys: [] key: 24910 payload: kafka
 ```
 
 Our consumer group should have committed the offsets to the `__consumer_offsets` internal topic.
@@ -104,18 +107,17 @@ Here values are encoded for performance reasons, so we have to pass the `--offse
 
 This partition contains other metadata, but we are specifically interested in the `offset_commit` key.
 We have a batch from our consumer group, which includes 3 records, one for each input topic partition.
-As expected, the consumer group committed offset1 on partition0 and partition2, plus offset0 on partition1 (we sent 2 messages).
+As expected, the consumer group committed offset1@partition0, offset2@partition2, and offset0@partition1 (this didn't received any message).
 
 ```sh
-$ $KAFKA_HOME/bin/kafka-dump-log.sh --deep-iteration --print-data-log --offsets-decoder \
-  --files /tmp/kafka-logs/__consumer_offsets-12/00000000000000000000.log
-Dumping /tmp/kafka-logs/__consumer_offsets-12/00000000000000000000.log
+$ $KAFKA_HOME/bin/kafka-dump-log.sh --deep-iteration --print-data-log --offsets-decoder --files /tmp/kraft-combined-logs/__consumer_offsets-12/00000000000000000000.log
+Dumping /tmp/kraft-combined-logs/__consumer_offsets-12/00000000000000000000.log
 Log starting offset: 0
 ...
-baseOffset: 1 lastOffset: 3 count: 3 baseSequence: 0 lastSequence: 2 producerId: -1 producerEpoch: -1 partitionLeaderEpoch: 0 isTransactional: false isControl: false deleteHorizonMs: OptionalLong.empty position: 345 CreateTime: 1720108358031 size: 232 magic: 2 compresscodec: none crc: 432303170 isvalid: true
-| offset: 1 CreateTime: 1720108358031 keySize: 26 valueSize: 24 sequence: 0 headerKeys: [] key: offset_commit::group=my-group,partition=my-topic-0 payload: offset=1
-| offset: 2 CreateTime: 1720108358031 keySize: 26 valueSize: 24 sequence: 1 headerKeys: [] key: offset_commit::group=my-group,partition=my-topic-1 payload: offset=0
-| offset: 3 CreateTime: 1720108358031 keySize: 26 valueSize: 24 sequence: 2 headerKeys: [] key: offset_commit::group=my-group,partition=my-topic-2 payload: offset=1
+baseOffset: 90 lastOffset: 92 count: 3 baseSequence: 0 lastSequence: 2 producerId: -1 producerEpoch: -1 partitionLeaderEpoch: 0 isTransactional: false isControl: false deleteHorizonMs: OptionalLong.empty position: 9544 CreateTime: 1725536760740 size: 232 magic: 2 compresscodec: none crc: 1509164452 isvalid: true
+| offset: 90 CreateTime: 1725536760740 keySize: 26 valueSize: 24 sequence: 0 headerKeys: [] key: {"type":"1","data":{"group":"my-group","topic":"my-topic","partition":0}} payload: {"version":"3","data":{"offset":1,"leaderEpoch":0,"metadata":"","commitTimestamp":1725536760740}}
+| offset: 91 CreateTime: 1725536760740 keySize: 26 valueSize: 24 sequence: 1 headerKeys: [] key: {"type":"1","data":{"group":"my-group","topic":"my-topic","partition":1}} payload: {"version":"3","data":{"offset":0,"leaderEpoch":-1,"metadata":"","commitTimestamp":1725536760740}}
+| offset: 92 CreateTime: 1725536760740 keySize: 26 valueSize: 24 sequence: 2 headerKeys: [] key: {"type":"1","data":{"group":"my-group","topic":"my-topic","partition":2}} payload: {"version":"3","data":{"offset":2,"leaderEpoch":0,"metadata":"","commitTimestamp":1725536760740}}
 ...
 ```
 
@@ -136,38 +138,40 @@ Done
 Then, we create a new Kafka cluster and test topic.
 In the YAML files, we can see how the desired cluster state is declared.
 
-In addition to ZooKeeper and Kafka pods, the Entity Operator (EO) pod is also deployed, which includes two namespaced operators: the Topic Operator (TO), which reconciles topic resources, and the User Operator (UO), which reconciles user resources.
+In addition to Kafka pods, the Entity Operator (EO) pod is also deployed, which includes two namespaced operators: the Topic Operator (TO), which reconciles topic resources, and the User Operator (UO), which reconciles user resources.
 If you want to deploy multiple Kafka clusters on the same namespace, make sure to have only one instance of these operators to avoid race conditions.
 
 ```sh
-$ kubectl create -f sessions/001/resources
-kafkanodepool.kafka.strimzi.io/kafka created
+$ kubectl create -f sessions/001/install
+kafkanodepool.kafka.strimzi.io/controller created
+kafkanodepool.kafka.strimzi.io/broker created
 kafka.kafka.strimzi.io/my-cluster created
-kafkatopic.kafka.strimzi.io/my-topic create
+kafkatopic.kafka.strimzi.io/my-topic created
 
 $ kubectl get sps,knp,k,kt,po
-NAME                                                 PODS   READY PODS   CURRENT PODS   AGE
-strimzipodset.core.strimzi.io/my-cluster-kafka       3      3            3              2m2s
-strimzipodset.core.strimzi.io/my-cluster-zookeeper   3      3            3              2m31s
+NAME                                                  PODS   READY PODS   CURRENT PODS   AGE
+strimzipodset.core.strimzi.io/my-cluster-broker       3      3            3              60s
+strimzipodset.core.strimzi.io/my-cluster-controller   3      3            3              60s
 
-NAME                                   DESIRED REPLICAS   ROLES        NODEIDS
-kafkanodepool.kafka.strimzi.io/kafka   3                  ["broker"]   [0,1,2]
+NAME                                        DESIRED REPLICAS   ROLES            NODEIDS
+kafkanodepool.kafka.strimzi.io/broker       3                  ["broker"]       [7,8,9]
+kafkanodepool.kafka.strimzi.io/controller   3                  ["controller"]   [0,1,2]
 
 NAME                                DESIRED KAFKA REPLICAS   DESIRED ZK REPLICAS   READY   METADATA STATE   WARNINGS
-kafka.kafka.strimzi.io/my-cluster                            3                     True    ZooKeeper        
+kafka.kafka.strimzi.io/my-cluster                                                  True    KRaft            
 
 NAME                                   CLUSTER      PARTITIONS   REPLICATION FACTOR   READY
 kafkatopic.kafka.strimzi.io/my-topic   my-cluster   3            3                    True
 
 NAME                                             READY   STATUS    RESTARTS   AGE
-pod/my-cluster-entity-operator-d4b4d8c8c-z29xq   2/2     Running   0          99s
-pod/my-cluster-kafka-0                           1/1     Running   0          2m2s
-pod/my-cluster-kafka-1                           1/1     Running   0          2m2s
-pod/my-cluster-kafka-2                           1/1     Running   0          2m2s
-pod/my-cluster-zookeeper-0                       1/1     Running   0          2m30s
-pod/my-cluster-zookeeper-1                       1/1     Running   0          2m30s
-pod/my-cluster-zookeeper-2                       1/1     Running   0          2m30s
-pod/strimzi-cluster-operator-6865489846-qskht    1/1     Running   0          2m50s
+pod/my-cluster-broker-7                          1/1     Running   0          59s
+pod/my-cluster-broker-8                          1/1     Running   0          59s
+pod/my-cluster-broker-9                          1/1     Running   0          59s
+pod/my-cluster-controller-0                      1/1     Running   0          59s
+pod/my-cluster-controller-1                      1/1     Running   0          59s
+pod/my-cluster-controller-2                      1/1     Running   0          59s
+pod/my-cluster-entity-operator-5bfb48dbc-6fjl9   2/2     Running   0          26s
+pod/strimzi-cluster-operator-7fb8ff4bd-4ds5g     1/1     Running   0          82s
 ```
 
 When the Kafka cluster is ready, we produce and consume some messages.
@@ -177,14 +181,15 @@ You can also use the broker pods for that, but it is always risky to spin up ano
 ```sh
 $ kubectl-kafka bin/kafka-console-producer.sh --bootstrap-server my-cluster-kafka-bootstrap:9092 --topic my-topic
 >hello
+>kafka
 >world
 >^C
 
-$ kubectl-kafka bin/kafka-console-consumer.sh --bootstrap-server my-cluster-kafka-bootstrap:9092 \
-  --topic my-topic --group my-group --from-beginning --max-messages 2
+$ kubectl-kafka bin/kafka-console-consumer.sh --bootstrap-server my-cluster-kafka-bootstrap:9092 --topic my-topic --group my-group --from-beginning --max-messages 3
 hello
+kafka
 world
-Processed a total of 2 messages
+Processed a total of 3 messages
 ```
 
 When debugging issues, you usually need to retrieve various artifacts from the environment, which can be a lot of effort.
@@ -198,14 +203,16 @@ deployments
     deployment.apps/my-cluster-entity-operator
 statefulsets
 replicasets
-    replicaset.apps/my-cluster-entity-operator-d4b4d8c8c
+    replicaset.apps/my-cluster-entity-operator-57c4d54c94
 configmaps
+    configmap/my-cluster-broker-7
+    configmap/my-cluster-broker-8
+    configmap/my-cluster-broker-9
+    configmap/my-cluster-controller-0
+    configmap/my-cluster-controller-1
+    configmap/my-cluster-controller-2
     configmap/my-cluster-entity-topic-operator-config
     configmap/my-cluster-entity-user-operator-config
-    configmap/my-cluster-kafka-0
-    configmap/my-cluster-kafka-1
-    configmap/my-cluster-kafka-2
-    configmap/my-cluster-zookeeper-config
 secrets
     secret/my-cluster-clients-ca
     secret/my-cluster-clients-ca-cert
@@ -215,15 +222,11 @@ secrets
     secret/my-cluster-entity-topic-operator-certs
     secret/my-cluster-entity-user-operator-certs
     secret/my-cluster-kafka-brokers
-    secret/my-cluster-zookeeper-nodes
 services
     service/my-cluster-kafka-bootstrap
     service/my-cluster-kafka-brokers
-    service/my-cluster-zookeeper-client
-    service/my-cluster-zookeeper-nodes
 poddisruptionbudgets
     poddisruptionbudget.policy/my-cluster-kafka
-    poddisruptionbudget.policy/my-cluster-zookeeper
 roles
     role.rbac.authorization.k8s.io/my-cluster-entity-operator
 rolebindings
@@ -232,22 +235,21 @@ rolebindings
 networkpolicies
     networkpolicy.networking.k8s.io/my-cluster-entity-operator
     networkpolicy.networking.k8s.io/my-cluster-network-policy-kafka
-    networkpolicy.networking.k8s.io/my-cluster-network-policy-zookeeper
 pods
-    pod/my-cluster-entity-operator-d4b4d8c8c-z29xq
-    pod/my-cluster-kafka-0
-    pod/my-cluster-kafka-1
-    pod/my-cluster-kafka-2
-    pod/my-cluster-zookeeper-0
-    pod/my-cluster-zookeeper-1
-    pod/my-cluster-zookeeper-2
+    pod/my-cluster-broker-7  
+    pod/my-cluster-broker-8  
+    pod/my-cluster-broker-9  
+    pod/my-cluster-controller-0
+    pod/my-cluster-controller-1
+    pod/my-cluster-controller-2
+    pod/my-cluster-entity-operator-57c4d54c94-m87qg
 persistentvolumeclaims
-    persistentvolumeclaim/data-my-cluster-kafka-0
-    persistentvolumeclaim/data-my-cluster-kafka-1
-    persistentvolumeclaim/data-my-cluster-kafka-2
-    persistentvolumeclaim/data-my-cluster-zookeeper-0
-    persistentvolumeclaim/data-my-cluster-zookeeper-1
-    persistentvolumeclaim/data-my-cluster-zookeeper-2
+    persistentvolumeclaim/data-my-cluster-broker-7
+    persistentvolumeclaim/data-my-cluster-broker-8
+    persistentvolumeclaim/data-my-cluster-broker-9
+    persistentvolumeclaim/data-my-cluster-controller-0
+    persistentvolumeclaim/data-my-cluster-controller-1
+    persistentvolumeclaim/data-my-cluster-controller-2
 ingresses
 routes
 clusterroles
@@ -260,36 +262,33 @@ clusterroles
     clusterrole.rbac.authorization.k8s.io/strimzi-kafka-client
 clusterrolebindings
     clusterrolebinding.rbac.authorization.k8s.io/strimzi-cluster-operator
-    clusterrolebinding.rbac.authorization.k8s.io/strimzi-cluster-operator-all-ns
-    clusterrolebinding.rbac.authorization.k8s.io/strimzi-cluster-operator-entity-operator-delegation-all-ns
     clusterrolebinding.rbac.authorization.k8s.io/strimzi-cluster-operator-kafka-broker-delegation
     clusterrolebinding.rbac.authorization.k8s.io/strimzi-cluster-operator-kafka-client-delegation
-    clusterrolebinding.rbac.authorization.k8s.io/strimzi-cluster-operator-leader-election-all-ns
-    clusterrolebinding.rbac.authorization.k8s.io/strimzi-cluster-operator-watched-all-ns
 clusteroperator
     deployment.apps/strimzi-cluster-operator
-    replicaset.apps/strimzi-cluster-operator-6865489846
-    pod/strimzi-cluster-operator-6865489846-qskht
+    replicaset.apps/strimzi-cluster-operator-7fb8ff4bd
+    pod/strimzi-cluster-operator-7fb8ff4bd-vf4zl
     configmap/strimzi-cluster-operator
 draincleaner
 customresources
     kafkanodepools.kafka.strimzi.io
-        kafka
+        broker
+        controller
     kafkas.kafka.strimzi.io
         my-cluster
     kafkatopics.kafka.strimzi.io
         my-topic
     strimzipodsets.core.strimzi.io
-        my-cluster-kafka
-        my-cluster-zookeeper
+        my-cluster-broker
+        my-cluster-controller
 events
 logs
-    my-cluster-kafka-0
-    my-cluster-kafka-1
-    my-cluster-kafka-2
-    my-cluster-zookeeper-0
-    my-cluster-zookeeper-1
-    my-cluster-zookeeper-2
-    my-cluster-entity-operator-d4b4d8c8c-z29xq
-Report file report-04-07-2024_18-40-30.zip created
+    my-cluster-broker-7
+    my-cluster-broker-8
+    my-cluster-broker-9
+    my-cluster-controller-0
+    my-cluster-controller-1
+    my-cluster-controller-2
+    my-cluster-entity-operator-57c4d54c94-m87qg
+Report file report-12-10-2024_11-31-59.zip created
 ```

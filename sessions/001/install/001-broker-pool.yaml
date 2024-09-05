@@ -1,10 +1,12 @@
 apiVersion: kafka.strimzi.io/v1beta2
 kind: KafkaNodePool
 metadata:
-  name: kafka
+  name: broker
   labels:
     # must match the cluster name
     strimzi.io/cluster: my-cluster
+  annotations:
+    strimzi.io/next-node-ids: "[7-99]"
 spec:
   replicas: 3
   roles:
