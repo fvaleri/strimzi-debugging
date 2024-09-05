@@ -1,8 +1,8 @@
 #!/usr/bin/env bash
 
 NAMESPACE="test"
-KAFKA_VERSION="3.7.1"
-STRIMZI_VERSION="0.42.0"
+KAFKA_VERSION="3.8.0"
+STRIMZI_VERSION="0.43.0"
 
 if [[ "${BASH_SOURCE[0]}" -ef "$0" ]]; then
   echo "Source this script, not execute it"; exit 1
@@ -29,8 +29,7 @@ echo "Configuring Kafka on localhost"
 
 # delete previous processes and data
 pkill -9 -f "kafka.Kafka" &>/dev/null ||true
-pkill -9 -f "quorum.QuorumPeerMain" &>/dev/null ||true
-rm -rf /tmp/kafka-logs /tmp/zookeeper
+rm -rf /tmp/kraft-combined-logs
 
 # get Kafka
 KAFKA_HOME="/tmp/kafka-$KAFKA_VERSION" && export KAFKA_HOME

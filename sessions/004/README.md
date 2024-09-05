@@ -1,6 +1,6 @@
 ## Cloud-native CDC pipeline with Debezium
 
-First, [deploy the Strimzi Cluster Operator and Kafka cluster](/sessions/001).
+First, use [session1](/sessions/001) to deploy a Kafka cluster on Kubernetes.
 When the cluster is ready, we deploy a MySQL instance (the external system), and Kafka Connect cluster.
 
 The Kafka Connect image uses an internal component (Kaniko) to build a custom image containing the configured MySQL connector.

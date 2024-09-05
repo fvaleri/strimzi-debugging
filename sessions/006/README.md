@@ -1,8 +1,8 @@
 ## Avoid running out of Kafka disk space using the Strimzi quota plugin
 
+First, use [session1](/sessions/001) to deploy a Kafka cluster on Kubernetes.
 **Don't use Minikube, as it doesn't have full volume support.**
 
-First, [deploy the Strimzi Cluster Operator](/sessions/001).
 For the sake of this example, we deploy the Kafka cluster reducing the volume size.
 
 ```sh
@@ -79,9 +79,9 @@ Filesystem      Size  Used Avail Use% Mounted on
 
 ### Online Kafka volume recovery using expansion support
 
+First, use [session1](/sessions/001) to deploy a Kafka cluster on Kubernetes.
 **Don't use Minikube, as it doesn't have full volume support.**
 
-First, [deploy the Strimzi Cluster Operator](/sessions/001).
 For the sake of this example, we deploy the Kafka cluster reducing the volume size.
 
 ```sh
@@ -154,9 +154,9 @@ pvc-f8bc69ed-56db-4c5d-abc8-fedf13093128   10Gi       RWO            Delete     
 
 ## Offline Kafka volume recovery using snapshot support
 
+First, use [session1](/sessions/001) to deploy a Kafka cluster on Kubernetes.
 **Don't use Minikube, as it doesn't have full volume support.**
 
-First, [deploy the Strimzi Cluster Operator](/sessions/001).
 For the sake of this example, we deploy the Kafka cluster reducing the volume size.
 
 ```sh
@@ -304,9 +304,9 @@ Processed a total of 3 messages
 
 ## Offline Kafka volume recovery with no expansion and snapshot support
 
+First, use [session1](/sessions/001) to deploy a Kafka cluster on Kubernetes.
 **Don't use Minikube, as it doesn't have full volume support.**
 
-First, [deploy the Strimzi Cluster Operator](/sessions/001).
 For the sake of this example, we deploy the Kafka cluster reducing the volume size.
 
 ```sh
@@ -521,9 +521,9 @@ pvc-d9596016-4bed-4cd6-b660-c854763c64e9   10Gi       RWO            Delete     
 
 ## Offline Kafka volume recovery without additional storage
 
+First, use [session1](/sessions/001) to deploy a Kafka cluster on Kubernetes.
 **Don't use Minikube, as it doesn't have full volume support.**
 
-First, [deploy the Strimzi Cluster Operator](/sessions/001).
 For the sake of this example, we deploy the Kafka cluster with 1 MiB as maximum segment size, and reducing the volume size.
 
 ```sh
@@ -671,9 +671,8 @@ $ kubectl-kafka bin/kafka-producer-perf-test.sh --topic my-topic --record-size 1
 
 ## Online ZooKeeper recovery from corrupted storage with quorum loss
 
+First, use [session1](/sessions/001) to deploy a Kafka cluster on Kubernetes.
 **Don't use Minikube, as it doesn't have full volume support.**
-
-First, [deploy the Strimzi Cluster Operator and Kafka cluster](/sessions/001).
 
 When the cluster is ready, we create a topic first so that it can be used to make sure the data is not lost after recovery.
 And then break 2 ZooKeeper servers by writing corrupted data into ZK log.

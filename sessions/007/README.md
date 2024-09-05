@@ -1,6 +1,6 @@
 ## Scaling up the cluster with the reassign tool
 
-First, [deploy the Strimzi Cluster Operator and Kafka cluster](/sessions/001).
+First, use [session1](/sessions/001) to deploy a Kafka cluster on Kubernetes.
 
 Then, we send some data.
 

@@ -1,9 +1,7 @@
 ## Schema registry in action
 
-First, [deploy the Strimzi Cluster Operator and Kafka cluster](/sessions/001).
-We also add an external listener (if route is not supported, you can use ingress type).
-
-Then, we deploy the Service Registry instance with the in-memory storage system.
+First, use [session1](/sessions/001) to deploy a Kafka cluster on Kubernetes.
+We also add an external listener (see [session2](/sessions/002) for more details).
 
 ```sh
 $ kubectl patch k my-cluster --type merge -p '
@@ -26,7 +24,11 @@ $ kubectl patch k my-cluster --type merge -p '
                 host: kafka-2.my-cluster.local
             class: nginx'
 kafka.kafka.strimzi.io/my-cluster patched
+```
 
+Then, we deploy the Service Registry instance with the in-memory storage system.
+
+```sh
 $ for f in sessions/003/resources/*.yaml; do sed "s/namespace: .*/namespace: $NAMESPACE/g" $f \
   | kubectl create -f - --dry-run=client -o yaml | kubectl replace --force -f -; done
 customresourcedefinition.apiextensions.k8s.io/apicurioregistries.registry.apicur.io replaced
@@ -54,7 +56,6 @@ strimzi-cluster-operator-95d88f6b5-rwh8b      1/1     Running   0          21m
 
 Now, we just need to tell our client application where it can find the Kafka cluster by setting the bootstrap URL and the schema registry REST endpoint.
 We also need to provide the truststore location and password because we are connecting externally.
-**Note: don't forget to add `my-registry.test` mapping to your `/etc/hosts`**
 
 ```sh
 $ kubectl get secret my-cluster-cluster-ca-cert -o jsonpath="{.data['ca\.p12']}" | base64 -d >/tmp/truststore.p12 \

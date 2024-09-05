@@ -1,6 +1,6 @@
 ## TLS authentication (mTLS) using an external listener
 
-First, [deploy the Strimzi Cluster Operator and Kafka cluster](/sessions/001).
+First, use [session1](/sessions/001) to deploy a Kafka cluster on Kubernetes.
 We also add an external listener of type ingress with TLS authentication (OpenShift route is an easier alternative to ingress).
 Then, wait for the Cluster Operator to restart all pods one by one (rolling update).
 
@@ -47,8 +47,8 @@ authentication:
   type: tls
 ```
 
-**Note that you need to enable the nginx ingress controller if you are using minikube and add ingress host mappings to `/etc/hosts`.**
-If it's all configured correctly, you shuold be able to see the broker certificate running the following command.
+**Note that you need to enable the nginx ingress controller with `--enable-ssl-passthrough` flag if you are using minikube, and add host mappings to `/etc/hosts`.**
+If it's all configured correctly, you should be able to see the broker certificate running the following command.
 
 ```sh
 $ openssl s_client -connect kafka-0.my-cluster.local:443 -servername kafka-0.my-cluster.local -showcerts
@@ -88,9 +88,8 @@ We can use use `kubectl` to do so, but let's suppose we have a must-gather scrip
 Use the command from the first session to generate a new report from the current cluster.
 
 ```sh
-$ unzip -q report-10-09-2022_16-45-32.zip
-$ cat reports/secrets/my-cluster-cluster-ca-cert.yaml | yq '.data."ca.crt"' | base64 -d > /tmp/ca.crt
-openssl crl2pkcs7 -nocrl -certfile /tmp/ca.crt | openssl pkcs7 -print_certs -text -noout
+$ unzip -p report-05-09-2024_14-04-06.zip
+$ unzip -p report-05-09-2024_14-04-06.zip reports/secrets/my-cluster-cluster-ca-cert.yaml | yq '.data."ca.crt"' | base64 -d | openssl x509 -inform pem -noout -text
 Certificate:
     Data:
         Version: 3 (0x2)
@@ -136,7 +135,7 @@ Typically, the security team will provide a certificate bundle which includes th
 If that's not the case, you can easily create the bundle from individual certificates in PEM format, because you need to trust the whole chain, if any.
 
 ```sh
-$ cat /tmp/listener.crt /tmp/intermca.crt /tmp/rootca.crt > /tmp/bundle.crt
+$ cat /tmp/listener.crt /tmp/intermca.crt /tmp/rootca.crt >/tmp/bundle.crt
 ```
 
 It's important to note that the custom server certificate for a listener must not be a CA and it must include a SAN for each broker route, plus one for the bootstrap route.

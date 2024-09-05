@@ -1,6 +1,6 @@
 ## Active-passive cluster mirroring
 
-First, [deploy the Strimzi Cluster Operator and Kafka cluster](/sessions/001).
+First, use [session1](/sessions/001) to deploy a Kafka cluster on Kubernetes.
 
 At this point, we can deploy the target cluster and an MM2 instance.
 The recommended way of deploying the MM2 is near the target Kafka cluster (same subnet or zone), because the producer overhead is greater than the consumer overhead.
@@ -8,13 +8,13 @@ The recommended way of deploying the MM2 is near the target Kafka cluster (same 
 ```sh
 $ for f in sessions/005/resources/*.yaml; do sed "s/SOURCE_NS/$NAMESPACE/g; s/TARGET_NS/$NAMESPACE/g" $f \
   | kubectl create -f -; done
-kafkanodepool.kafka.strimzi.io/kafka-tgt created
+kafkanodepool.kafka.strimzi.io/combined created
 kafka.kafka.strimzi.io/my-cluster-tgt created
 kafkamirrormaker2.kafka.strimzi.io/my-mm2 created
 ```
 
 The following step copies the source CA certificate in the target namespace, where we will deploy MirrorMaker 2.
-We can skip it, as it is only required when source and target clusters runs on different namespaces or Kubernetes clusters.
+**We can skip it, as it is only required when source and target clusters runs on different namespaces or Kubernetes clusters.**
 
 ```sh
 $ kubectl get secret "my-cluster-cluster-ca-cert" -o yaml \
@@ -34,25 +34,22 @@ kafkamirrormaker2.kafka.strimzi.io/my-mm2 scaled
 
 $ kubectl get po
 NAME                                          READY   STATUS    RESTARTS   AGE
-my-cluster-entity-operator-7766bb8469-wnldm   3/3     Running   0          8m35s
-my-cluster-kafka-0                            1/1     Running   0          10m
-my-cluster-kafka-1                            1/1     Running   0          10m
-my-cluster-kafka-2                            1/1     Running   0          10m
-my-cluster-tgt-kafka-0                        1/1     Running   0          8m5s
-my-cluster-tgt-kafka-1                        1/1     Running   0          8m5s
-my-cluster-tgt-kafka-2                        1/1     Running   0          8m5s
-my-cluster-tgt-zookeeper-0                    1/1     Running   0          5m30s
-my-cluster-tgt-zookeeper-1                    1/1     Running   0          2m49s
-my-cluster-tgt-zookeeper-2                    1/1     Running   0          4m11s
-my-cluster-zookeeper-0                        1/1     Running   0          11m
-my-cluster-zookeeper-1                        1/1     Running   0          11m
-my-cluster-zookeeper-2                        1/1     Running   0          11m
-my-mm2-mirrormaker2-0                         1/1     Running   0          7m20s
-strimzi-cluster-operator-95d88f6b5-mbhf9      1/1     Running   0          12m
+my-cluster-broker-0                           1/1     Running   0          7m44s
+my-cluster-broker-1                           1/1     Running   0          7m44s
+my-cluster-broker-2                           1/1     Running   0          7m44s
+my-cluster-controller-3                       1/1     Running   0          7m44s
+my-cluster-controller-4                       1/1     Running   0          7m44s
+my-cluster-controller-5                       1/1     Running   0          7m44s
+my-cluster-entity-operator-7f757b7fd8-f7fcq   2/2     Running   0          7m
+my-cluster-tgt-combined-0                     1/1     Running   0          5m9s
+my-cluster-tgt-combined-1                     1/1     Running   0          5m9s
+my-cluster-tgt-combined-2                     1/1     Running   0          5m9s
+my-mm2-mirrormaker2-0                         1/1     Running   0          3m27s
+strimzi-cluster-operator-7fb8ff4bd-jxjxx      1/1     Running   0          11m
 
 $ kubectl get kmm2 my-mm2 -o yaml | yq .status
 conditions:
-  - lastTransitionTime: "2024-07-05T13:00:57.139065941Z"
+  - lastTransitionTime: "2024-09-05T15:21:42.851253970Z"
     status: "True"
     type: Ready
 connectors:
