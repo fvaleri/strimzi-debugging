@@ -33,9 +33,10 @@ pkill -9 -f "quorum.QuorumPeerMain" &>/dev/null ||true
 rm -rf /tmp/kafka-logs /tmp/zookeeper
 
 # get Kafka
-KAFKA_HOME="/tmp/kafka-$KAFKA_VERSION" && mkdir -p "$KAFKA_HOME" && export KAFKA_HOME
+KAFKA_HOME="/tmp/kafka-$KAFKA_VERSION" && export KAFKA_HOME
 if [[ ! -d $KAFKA_HOME ]]; then
   echo "Downloading Kafka to $KAFKA_HOME"
+  mkdir -p "$KAFKA_HOME"
   curl -sLk "https://archive.apache.org/dist/kafka/$KAFKA_VERSION/kafka_2.13-$KAFKA_VERSION.tgz" | tar xz -C "$KAFKA_HOME" --strip-components 1
 fi
 
