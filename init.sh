@@ -22,8 +22,12 @@ kafka-cp() {
     run("'"$id"'", '"$part"');' | jshell -
 }
 
-kubectl-kafka() { kubectl run kubectl-kafka-"$(date +%s)" -itq --rm --restart="Never" \
-  --image="apache/kafka:$KAFKA_VERSION" -- sh -c "/opt/kafka/$*; exit 0"; }
+kubectl-kafka() {
+  kubectl get po kafka-tools &>/dev/null || kubectl run kafka-tools -q --restart="Never" \
+    --image="apache/kafka:latest" -- sh -c "trap : TERM INT; sleep infinity & wait"
+  kubectl wait --for=condition=ready po kafka-tools &>/dev/null
+  kubectl exec kafka-tools -itq -- sh -c "/opt/kafka/$*"
+}
   
 echo "Configuring Kafka on localhost"
 
