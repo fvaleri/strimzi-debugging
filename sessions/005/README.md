@@ -82,8 +82,10 @@ url: http://my-mm2-mirrormaker2-api.test.svc:8083
 
 Finally, we can send 1 million messages to the test topic in the source Kafka cluster.
 After some time, the log end offsets should match on both clusters.
-**Note that this is a controlled experiment, but the actual offsets tend to naturally diverge with time, because each Kafka cluster operates independently.**
-This is why we have offset mapping metadata.
+
+> [!IMPORTANT]  
+> This is a controlled experiment, but the actual offsets tend to naturally diverge with time, because each Kafka cluster operates independently.
+> This is why we have offset mapping metadata.
 
 ```sh
 $ kubectl-kafka bin/kafka-producer-perf-test.sh --topic my-topic --record-size 100 --num-records 1000000 \
@@ -167,7 +169,7 @@ $ kubectl -n "$NAMESPACE" exec -it $(kubectl -n "$NAMESPACE" get po | grep my-mm
 
 When the replication is done (showing `NaN metrics` in the log), we increase the producer buffer by overriding its configuration.
 Now every batch will include more data and the same test should complete the replications in about half of the time or even less.
-Note how the request latency increases too, but it is still okay.
+The request latency increases too, but it is still okay.
 There is no free lunch, it's always a tradeoff between throughput and latency.
 
 ```sh

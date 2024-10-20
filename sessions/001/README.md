@@ -4,8 +4,9 @@ In this example, we deploy a Kafka cluster on localhost.
 This is useful for quick tests where a multi node cluster is not required.
 We use the latest upstream Kafka release because the downstream release is just a rebuild with few additional and optional plugins.
 
-The `init.sh` script can be used to easily initialize or reset the test environment.
-It downloads Kafka to localhost and initializes the Kubernetes cluster installing the Cluster Operator.
+> [!NOTE]  
+> The `init.sh` script is used to easily initialize or reset the test environment.
+> It downloads Kafka to localhost and initializes the Kubernetes cluster installing the Cluster Operator.
 
 ```sh
 $ source init.sh
@@ -125,7 +126,8 @@ baseOffset: 90 lastOffset: 92 count: 3 baseSequence: 0 lastSequence: 2 producerI
 
 In this example, we deploy a Kafka cluster to a Kubernetes cluster using the operator.
 
-**Login first if your Kubernetes cluster requires authentication.**
+> [!IMPORTANT]  
+> Login first if your Kubernetes cluster requires authentication.
 
 ```sh
 $ source init.sh
@@ -175,7 +177,7 @@ pod/strimzi-cluster-operator-7fb8ff4bd-4ds5g     1/1     Running   0          82
 ```
 
 When the Kafka cluster is ready, we produce and consume some messages.
-Note that we are using a nice function to avoid repeating that for every client we need.
+We are using a simple function defined in `init.sh` to spin up a pod for invoking Kafka tools.
 You can also use the broker pods for that, but it is always risky to spin up another JVM inside a pod, especially in production.
 
 ```sh

@@ -1,7 +1,9 @@
 ## Avoid running out of disk space with the Strimzi quota plugin
 
+> [!WARNING]
+> Don't use Minikube, as it uses hostpath volumes that do not enforce storage capacity.
+
 First, use [session1](/sessions/001) to deploy a Kafka cluster on Kubernetes.
-**Don't use Minikube, as it doesn't have full volume support.**
 
 For the sake of this example, we deploy the Kafka cluster reducing the volume size.
 
@@ -79,8 +81,10 @@ Filesystem      Size  Used Avail Use% Mounted on
 
 ## Online Kafka volume recovery with expansion support
 
+> [!WARNING]
+> Don't use Minikube, as it uses hostpath volumes that do not enforce storage capacity.
+
 First, use [session1](/sessions/001) to deploy a Kafka cluster on Kubernetes.
-**Don't use Minikube, as it doesn't have full volume support.**
 
 For the sake of this example, we deploy the Kafka cluster reducing the volume size.
 
@@ -125,7 +129,9 @@ Caused by: java.io.IOException: No space left on device
 Even if not all pods failed, we still need to increase the volume size of all brokers because the storage configuration is shared.
 If volume expansion is supported on the storage class, you can simply increase the storage size in the Kafka resource, and the operator will take care of it. 
 This operation may take some time to complete, depending on the size of the volume and the available resources in the cluster.
-**The expansion is not always feasible in cloud deployments, for example with a standard block size of 4KB an AWS EBS volume can support only up to 16TB.**
+
+> [!WARNING]  
+> The expansion is not always feasible in cloud deployments, for example with a standard block size of 4KB an AWS EBS volume can support only up to 16TB.
 
 ```sh
 [[ $(kubectl get sc $(kubectl get pv | grep data-my-cluster-broker-7 | awk '{print $7}') -o yaml | yq .allowVolumeExpansion) == "true" ]] \
@@ -153,7 +159,8 @@ pvc-c328aab2-8948-4791-88df-a488e9fd9faa   10Gi       RWO            Delete     
 
 ## Offline Kafka volume recovery with no expansion support (expert level)
 
-**Don't use Minikube, as it doesn't have full volume support.**
+> [!WARNING]
+> Don't use Minikube, as it uses hostpath volumes that do not enforce storage capacity.
 
 First, [deploy the Strimzi Cluster Operator](/sessions/001).
 For the sake of this example, we deploy the Kafka cluster reducing the volume size.
@@ -204,7 +211,9 @@ Caused by: java.io.IOException: No space left on device
 
 Even if not all pods are failed, we still need to increase the volume size of all brokers because the storage configuration is shared.
 This procedure works offline because copying data while they are being modified can cause tricky problems, especially if transactions are enabled.
-**Before deleting the Kafka cluster, make sure that delete claim storage configuration is set to false in Kafka resource.**
+
+> [!WARNING]  
+> Before deleting the Kafka cluster, make sure that delete claim storage configuration is set to false in Kafka resource.
 
 ```sh
 $ [[ $(kubectl get knp broker -o yaml | yq .spec.storage.deleteClaim) == "false" ]] \
@@ -249,7 +258,9 @@ data-my-cluster-broker-9-new   Pending                                          
 ```
 
 Using a maintenance pod, copy all broker data from the old volumes to the new volumes.
-**Note that the following command may take some time, depending on the amount of data to copy.**
+
+> [!NOTE]  
+> The following command may take some time, depending on the amount of data to copy.
 
 ```sh
 $ for pod in $KAFKA_PODS; do
@@ -296,7 +307,8 @@ pvc-d76d68c6-52e9-4a9f-a20f-3b052ea49c55   1Gi        RWO            Delete     
 pvc-fe5ccdb3-b550-467e-b6e0-f4d3ece79ed0   1Gi        RWO            Delete           Bound    test/data-my-cluster-broker-7       gp3-csi        <unset>                          24m
 ```
 
-**Set the persistent volume reclaim policy as Retain to avoid losing data when deleting broker PVCs.**
+> [!WARNING]  
+> Set the persistent volume reclaim policy as Retain to avoid losing data when deleting broker PVCs.
 
 ```sh
 $ for pv in $(kubectl get pv | grep my-cluster-broker | awk '{print $1}'); do
@@ -369,8 +381,10 @@ data-my-cluster-broker-9       Bound    pvc-35fed9c0-f12f-4012-899a-759add4cef4e
 ```
 
 Deploy the Kafka cluster with our brand new volumes, wait for the cluster to be ready, and try to consume some data.
-**Note that we adjust the storage size in Kafka custom resource, and set the previous `clusterId` in the Kafka CR status.**
-To speed up log recovery and partition synchronization, we can also tune recovery threads and replica fetchers.
+
+> [!IMPORTANT]  
+> We adjust the storage size in Kafka custom resource, and set the previous `clusterId` in the Kafka CR status.
+> To speed up log recovery and partition synchronization, we can also tune recovery threads and replica fetchers.
 
 ```sh
 $ cat sessions/001/install/001-broker-pool.yaml \

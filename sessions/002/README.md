@@ -47,7 +47,9 @@ authentication:
   type: tls
 ```
 
-**Note that you need to enable the nginx ingress controller with `--enable-ssl-passthrough` flag if you are using Minikube, and add host mappings to `/etc/hosts`.**
+> [!IMPORTANT]  
+> You need to enable the nginx ingress controller with `--enable-ssl-passthrough` flag if you are using Minikube, and add host mappings to `/etc/hosts`.
+
 If it's all configured correctly, you should be able to see the broker certificate running the following command.
 
 ```sh
@@ -137,7 +139,9 @@ If that's not the case, you can easily create the bundle from individual certifi
 $ cat /tmp/listener.crt /tmp/intermca.crt /tmp/rootca.crt >/tmp/bundle.crt
 ```
 
-It's important to note that the custom server certificate for a listener must not be a CA and it must include a SAN for each broker route, plus one for the bootstrap route.
+> [!NOTE]  
+> The custom server certificate for a listener must not be a CA and it must include a SAN for each broker route, plus one for the bootstrap route.
+
 This is an example of how it looks.
 
 ```sh

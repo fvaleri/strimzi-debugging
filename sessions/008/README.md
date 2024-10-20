@@ -32,7 +32,7 @@ tset a si siht
 
 Now we can stop the application (Ctrl+C) and take a look at partition content.
 Our output topic has one partition, but what are the `__consumer_offsets` and `__transaction_state` coordinating partitions?
-We can pass the `group.id` and `transactional.id` to find out.
+We can pass the `group.id` and `transactional.id` to the following function define in `init.sh` to find out.
 
 ```sh
 $ kafka-cp my-group
@@ -113,7 +113,9 @@ __consumer_offsets 27 913095344
 ```
 
 In Kafka 3+ there is an official command line tool that you can use to identify and rollback hanging transactions.
-Note that the `CLUSTER_ACTION` operation is required if authorization is enabled.
+
+> [!IMPORTANT]  
+> The `CLUSTER_ACTION` operation type is required if authorization is enabled.
 
 ```sh
 $ $KAFKA_HOME/bin/kafka-transactions.sh --bootstrap-server :9092 find-hanging --broker 0

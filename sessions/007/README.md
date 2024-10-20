@@ -62,13 +62,16 @@ Successfully started partition reassignments for my-topic-0,my-topic-1,my-topic-
 ```
 
 To prevent any impact on the cluster while moving partitions between brokers, we use the `--throttle` option with a limit of 10 MB/s.
-However, it's important to note that this option also applies to the normal replication traffic between brokers.
-As a result, we need to find the right balance between the `--throttle` limit and the replication traffic to ensure that we can move data in a reasonable amount of time without slowing down replication too much.
+
+> [!IMPORTANT]  
+> The `--throttle` option also applies throttling to the normal replication traffic between brokers.
+> We need to find the right balance to ensure that we can move data in a reasonable amount of time without slowing down replication too much.
+> Don't forget to call `--verify` at the end to disable replication throttling, which otherwise will continue to affect the cluster.
 
 We can start from a safe throttle value and then use the `kafka.server:type=FetcherLagMetrics,name=ConsumerLag,clientId=([-.\w]+),topic=([-.\w]+),partition=([0-9]+)` metric to observe how far the followers are lagging behind the leader for a given partition. 
 If this lag is growing or the reassignment is taking too much time, we can run the command again with the `--additional` option to increase the throttle value.
 
-After the reassignment is started, we use the `--verify` option to check the status of the reassignment process and disable the replication throttling, which otherwise will continue to affect the cluster.
+After the reassignment is started, we use the `--verify` option to check the status of the reassignment process and disable the replication throttling.
 When the process is done, we can check if the topic configuration changes have been applied.
 
 ```sh
