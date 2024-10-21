@@ -18,14 +18,14 @@ $ kubectl create -f sessions/002/install \
               type: tls
             configuration:
               bootstrap:
-                host: kafka-bootstrap.my-cluster.local
+                host: kafka-bootstrap.my-cluster.f12i.io
               brokers:
                 - broker: 7
-                  host: kafka-7.my-cluster.local
+                  host: kafka-7.my-cluster.f12i.io
                 - broker: 8
-                  host: kafka-8.my-cluster.local
+                  host: kafka-8.my-cluster.f12i.io
                 - broker: 9
-                  host: kafka-9.my-cluster.local
+                  host: kafka-9.my-cluster.f12i.io
               class: nginx'
 kafkauser.kafka.strimzi.io/my-user created            
 kafka.kafka.strimzi.io/my-cluster patched
@@ -34,26 +34,26 @@ kafka.kafka.strimzi.io/my-cluster patched
 The previous command adds a new authentication element to the external listener, which is the endpoint used by clients connecting from outside using TLS.
 It also creates a Kafka user resource with a matching configuration.
 
+> [!IMPORTANT]  
+> You need to enable the nginx ingress controller with `--enable-ssl-passthrough` flag if you are using Minikube, and add host mappings to `/etc/hosts`.
+
 ```sh
 $ kubectl get ingress
-NAME                         CLASS   HOSTS                              ADDRESS        PORTS     AGE
-my-cluster-broker-7          nginx   kafka-7.my-cluster.local           192.168.49.2   80, 443   104s
-my-cluster-broker-8          nginx   kafka-8.my-cluster.local           192.168.49.2   80, 443   104s
-my-cluster-broker-9          nginx   kafka-9.my-cluster.local           192.168.49.2   80, 443   104s
-my-cluster-kafka-bootstrap   nginx   kafka-bootstrap.my-cluster.local   192.168.49.2   80, 443   104s
+NAME                         CLASS   HOSTS                                ADDRESS        PORTS     AGE
+my-cluster-broker-7          nginx   kafka-7.my-cluster.f12i.io           192.168.49.2   80, 443   104s
+my-cluster-broker-8          nginx   kafka-8.my-cluster.f12i.io           192.168.49.2   80, 443   104s
+my-cluster-broker-9          nginx   kafka-9.my-cluster.f12i.io           192.168.49.2   80, 443   104s
+my-cluster-kafka-bootstrap   nginx   kafka-bootstrap.my-cluster.f12i.io   192.168.49.2   80, 443   104s
 
 $ kubectl get ku my-user -o yaml | yq .spec
 authentication:
   type: tls
 ```
 
-> [!IMPORTANT]  
-> You need to enable the nginx ingress controller with `--enable-ssl-passthrough` flag if you are using Minikube, and add host mappings to `/etc/hosts`.
-
 If it's all configured correctly, you should be able to see the broker certificate running the following command.
 
 ```sh
-$ openssl s_client -connect kafka-7.my-cluster.local:443 -servername kafka-100.my-cluster.local -showcerts
+$ openssl s_client -connect kafka-7.my-cluster.f12i.io:443 -servername kafka-7.my-cluster.f12i.io -showcerts
 ...
 Server certificate
 subject=O=io.strimzi, CN=my-cluster-kafka

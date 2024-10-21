@@ -14,14 +14,14 @@ $ kubectl patch k my-cluster --type merge -p '
           tls: true
           configuration:
             bootstrap:
-              host: kafka-bootstrap.my-cluster.local
+              host: kafka-bootstrap.my-cluster.f12i.io
             brokers:
               - broker: 7
-                host: kafka-7.my-cluster.local
+                host: kafka-7.my-cluster.f12i.io
               - broker: 8
-                host: kafka-8.my-cluster.local
+                host: kafka-8.my-cluster.f12i.io
               - broker: 9
-                host: kafka-9.my-cluster.local
+                host: kafka-9.my-cluster.f12i.io
             class: nginx'
 kafka.kafka.strimzi.io/my-cluster patched
 ```
