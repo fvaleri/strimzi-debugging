@@ -3,8 +3,9 @@
 First, use [session1](/sessions/001) to deploy a Kafka cluster on Kubernetes.
 When the cluster is ready, we deploy a MySQL instance (the external system), and Kafka Connect cluster.
 
-The Kafka Connect image uses an internal component (Kaniko) to build a custom image containing the configured MySQL connector.
-In production, it is recommended to use your own Connect image built from the Strimzi one.
+> [!IMPORTANT]  
+> The Kafka Connect image uses an internal component (Kaniko) to build a custom image containing the configured MySQL connector.
+> In production, this is not recommended, so you should use your own Connect image built from the Strimzi one.
 
 ```sh
 $ kubectl create -f sessions/004/install && kubectl wait --for=condition=Ready pod -l app=my-mysql --timeout=300s \
@@ -19,21 +20,24 @@ kafkaconnect.kafka.strimzi.io/my-connect-cluster created
 kafkaconnector.kafka.strimzi.io/mysql-source-connector created
 pod/my-mysql-0 condition met
 
-$ kubectl get po,kt
+$ kubectl get po,kt,kctr
 NAME                                              READY   STATUS    RESTARTS   AGE
-pod/my-cluster-broker-7                           1/1     Running   0          3m48s
-pod/my-cluster-broker-8                           1/1     Running   0          3m48s
-pod/my-cluster-broker-9                           1/1     Running   0          3m48s
-pod/my-cluster-controller-0                       1/1     Running   0          3m48s
-pod/my-cluster-controller-1                       1/1     Running   0          3m48s
-pod/my-cluster-controller-2                       1/1     Running   0          3m48s
-pod/my-cluster-entity-operator-5cc5d685f8-dqtpt   2/2     Running   0          3m15s
-pod/my-connect-cluster-connect-0                  1/1     Running   0          69s
-pod/my-mysql-0                                    1/1     Running   0          2m22s
-pod/strimzi-cluster-operator-7fb8ff4bd-tx5nl      1/1     Running   0          4m31s
+pod/my-cluster-broker-7                           1/1     Running   0          6m1s
+pod/my-cluster-broker-8                           1/1     Running   0          6m1s
+pod/my-cluster-broker-9                           1/1     Running   0          6m1s
+pod/my-cluster-controller-0                       1/1     Running   0          6m1s
+pod/my-cluster-controller-1                       1/1     Running   0          6m1s
+pod/my-cluster-controller-2                       1/1     Running   0          6m1s
+pod/my-cluster-entity-operator-7bc799c449-8jxmb   2/2     Running   0          5m27s
+pod/my-connect-cluster-connect-0                  1/1     Running   0          2m46s
+pod/my-mysql-0                                    1/1     Running   0          4m19s
+pod/strimzi-cluster-operator-d78fd875b-q9sds      1/1     Running   0          6m30s
 
 NAME                                   CLUSTER      PARTITIONS   REPLICATION FACTOR   READY
 kafkatopic.kafka.strimzi.io/my-topic   my-cluster   3            3                    True
+
+NAME                                                     CLUSTER              CONNECTOR CLASS                              MAX TASKS   READY
+kafkaconnector.kafka.strimzi.io/mysql-source-connector   my-connect-cluster   io.debezium.connector.mysql.MySqlConnector   1           True
 ```
 
 As you may have guessed at this point, we are going to emit MySQL row changes and import them into Kafka, so that other applications can pick them up and process them.
@@ -42,7 +46,7 @@ Let's check if the connector and its tasks are running fine by using the `KafkaC
 ```sh
 $ kubectl get kctr mysql-source-connector -o yaml | yq .status
 conditions:
-  - lastTransitionTime: "2024-10-12T09:51:39.969529275Z"
+  - lastTransitionTime: "2024-10-28T10:53:20.123553787Z"
     status: "True"
     type: Ready
 connectorStatus:
@@ -57,7 +61,9 @@ connectorStatus:
   type: source
 observedGeneration: 1
 tasksMax: 1
-topics: []
+topics:
+  - __debezium-heartbeat.my-mysql
+  - my-mysq
 ```
 
 Debezium configuration is specific to each connector and it is documented in detail.
@@ -113,9 +119,9 @@ It's interesting to look at some record properties: `op` is the change type (c=c
 ```sh
 $ kubectl-kafka bin/kafka-console-consumer.sh --bootstrap-server my-cluster-kafka-bootstrap:9092 \
   --topic my-mysql.testdb.customers --from-beginning --max-messages 3
-Struct{after=Struct{id=2,first_name=Dylan,last_name=Dog,email=ddog@example.com},source=Struct{version=1.9.5.Final-redhat-00001,connector=mysql,name=my-mysql,ts_ms=1663228576000,db=testdb,table=customers,server_id=224466,gtid=1c90a695-34cb-11ed-aba8-0a580a810216:16,file=mysql-bin.000002,pos=2585,row=0,thread=67},op=c,ts_ms=1663228576092}
-Struct{after=Struct{id=1,first_name=John,last_name=Doe,email=jdoe@example.com},source=Struct{version=1.9.5.Final-redhat-00001,connector=mysql,name=my-mysql,ts_ms=1663228576000,db=testdb,table=customers,server_id=224466,gtid=1c90a695-34cb-11ed-aba8-0a580a810216:14,file=mysql-bin.000002,pos=1690,row=0,thread=67},op=c,ts_ms=1663228576088}
-Struct{before=Struct{id=1,first_name=John,last_name=Doe,email=jdoe@example.com},after=Struct{id=1,first_name=Jane,last_name=Doe,email=jdoe@example.com},source=Struct{version=1.9.5.Final-redhat-00001,connector=mysql,name=my-mysql,ts_ms=1663228576000,db=testdb,table=customers,server_id=224466,gtid=1c90a695-34cb-11ed-aba8-0a580a810216:15,file=mysql-bin.000002,pos=2103,row=0,thread=67},op=u,ts_ms=1663228576091}
+Struct{after=Struct{id=2,first_name=Dylan,last_name=Dog,email=ddog@example.com},source=Struct{version=2.3.7.Final,connector=mysql,name=my-mysql,ts_ms=1730112871000,db=testdb,table=customers,server_id=111111,gtid=500bc4b7-951a-11ef-aae4-9e82de0bd73c:16,file=mysql-bin.000002,pos=2602,row=0,thread=61},op=c,ts_ms=1730112871209}
+Struct{after=Struct{id=1,first_name=John,last_name=Doe,email=jdoe@example.com},source=Struct{version=2.3.7.Final,connector=mysql,name=my-mysql,ts_ms=1730112871000,db=testdb,table=customers,server_id=111111,gtid=500bc4b7-951a-11ef-aae4-9e82de0bd73c:14,file=mysql-bin.000002,pos=1707,row=0,thread=61},op=c,ts_ms=1730112871199}
+Struct{before=Struct{id=1,first_name=John,last_name=Doe,email=jdoe@example.com},after=Struct{id=1,first_name=Jane,last_name=Doe,email=jdoe@example.com},source=Struct{version=2.3.7.Final,connector=mysql,name=my-mysql,ts_ms=1730112871000,db=testdb,table=customers,server_id=111111,gtid=500bc4b7-951a-11ef-aae4-9e82de0bd73c:15,file=mysql-bin.000002,pos=2120,row=0,thread=61},op=u,ts_ms=1730112871207}
 Processed a total of 3 messages
 ```
 

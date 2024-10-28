@@ -5,3 +5,5 @@ metadata:
 spec:
   configuration:
     persistence: mem
+  deployment:
+    host: my-registry.f12i.io  

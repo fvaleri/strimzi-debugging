@@ -110,15 +110,15 @@ $ kubectl-kafka bin/kafka-producer-perf-test.sh --topic my-topic --record-size 1
 This time we will use Cruise Control to see how it helps with the planning phase.
 Cruise Control can figure out by itself the required changes, given a set of high-level goals (sensible defaults are provided).
 
-When the cluster is ready, we verify how the topic partitions are distributed between the available brokers.
+When the cluster is ready, we verify how the topic partitions are distributed among the available brokers.
 Then we add one broker, deploy Cruise Control by adding the `.spec.cruiseControl` section to the Kafka CR and create a rebalance CR with `mode: add-brokers`.
 
 ```sh
 $ kubectl-kafka bin/kafka-topics.sh --bootstrap-server my-cluster-kafka-bootstrap:9092 --topic my-topic --describe
-Topic: my-topic	TopicId: n1QKre80QFmnEKWIXfrLDw	PartitionCount: 3	ReplicationFactor: 3	Configs: min.insync.replicas=2,message.format.version=3.0-IV1,retention.bytes=1073741824
-	Topic: my-topic	Partition: 0	Leader: 9	Replicas: 9,8,7	Isr: 9,8,7
-	Topic: my-topic	Partition: 1	Leader: 8	Replicas: 8,7,9	Isr: 8,7,9
-	Topic: my-topic	Partition: 2	Leader: 7	Replicas: 7,9,8	Isr: 7,9,8
+Topic: my-topic	TopicId: sVW190UoSeG1aXmrfD1Y0w	PartitionCount: 3	ReplicationFactor: 3	Configs: min.insync.replicas=2
+	Topic: my-topic	Partition: 0	Leader: 9	Replicas: 9,7,8	Isr: 9,7,8	Elr: 	LastKnownElr: 
+	Topic: my-topic	Partition: 1	Leader: 7	Replicas: 7,8,9	Isr: 7,8,9	Elr: 	LastKnownElr: 
+	Topic: my-topic	Partition: 2	Leader: 8	Replicas: 8,9,7	Isr: 8,9,7	Elr: 	LastKnownElr: 
 
 $ kubectl patch knp broker --type merge -p '
     spec:
@@ -132,27 +132,27 @@ kafka.kafka.strimzi.io/my-cluster patched
 kafkarebalance.kafka.strimzi.io/my-rebalance created
 ```
 
-After that, the cluster operator will trigger a rolling update to add the metrics reporter plugin to brokers and then it will deploy Cruise Control. 
+After that, the cluster operator will trigger a rolling update to add the metrics reporter plugin to brokers and then it will deploy Cruise Control.
 
 The first rebalance proposal generation takes some time because the workload model is created from scratch, then it is automatically refreshed every 15 minutes.
-Our rebalance has auto approval annotation so, once ready, it will automatically proceed with rebalacing.
+Our rebalance has auto approval annotation so, once ready, it will automatically proceed with rebalancing.
 
 ```sh
 $ kubectl get kr add-brokers -o wide -w
-NAME          CLUSTER      PENDINGPROPOSAL   PROPOSALREADY   REBALANCING   READY   NOTREADY   STOPPED    
-add-brokers   my-cluster                                                           True       
-add-brokers   my-cluster   True                                                               
-add-brokers   my-cluster                     True                                             
-add-brokers   my-cluster                                     True                             
-add-brokers   my-cluster                                                   True               
+NAME          CLUSTER      TEMPLATE   STATUS
+add-brokers   my-cluster              NotReady
+add-brokers   my-cluster              PendingProposal
+add-brokers   my-cluster              ProposalReady
+add-brokers   my-cluster              Rebalancing
+add-brokers   my-cluster              Ready
 ```
 
 When the rebalance is ready, we can see if the new broker contains some of the existing replicas.
 
 ```sh
 $ kubectl-kafka bin/kafka-topics.sh --bootstrap-server my-cluster-kafka-bootstrap:9092 --describe --topic my-topic
-Topic: my-topic	TopicId: 2gmTA7Z9RReR0fsORVZ6GA	PartitionCount: 3	ReplicationFactor: 3	Configs: min.insync.replicas=2
-	Topic: my-topic	Partition: 0	Leader: 7	Replicas: 7,8,9	    Isr: 8,9,7	    Elr: 	LastKnownElr: 
-	Topic: my-topic	Partition: 1	Leader: 8	Replicas: 8,10,7	Isr: 8,7,10	    Elr: 	LastKnownElr: 
-	Topic: my-topic	Partition: 2	Leader: 9	Replicas: 9,7,8	    Isr: 8,9,7	    Elr: 	LastKnownElr:
+Topic: my-topic	TopicId: sVW190UoSeG1aXmrfD1Y0w	PartitionCount: 3	ReplicationFactor: 3	Configs: min.insync.replicas=2
+	Topic: my-topic	Partition: 0	Leader: 9	Replicas: 9,7,8	    Isr: 7,8,9	Elr: 	LastKnownElr: 
+	Topic: my-topic	Partition: 1	Leader: 7	Replicas: 7,8,10	Isr: 7,8,10	Elr: 	LastKnownElr: 
+	Topic: my-topic	Partition: 2	Leader: 10	Replicas: 10,9,7	Isr: 7,9,10	Elr: 	LastKnownElr: 
 ```

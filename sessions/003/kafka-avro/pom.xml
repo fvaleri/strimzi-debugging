@@ -84,9 +84,9 @@
                             <registryUrl>${env.REGISTRY_URL}</registryUrl>
                             <artifacts>
                                 <artifact>
-                                    <groupId>default</groupId>
+                                    <groupId>${env.ARTIFACT_GROUP}</groupId>
                                     <!-- using an artifactId that matches with the default artifact resolver strategy -->
-                                    <artifactId>my-topic-value</artifactId>
+                                    <artifactId>${env.TOPIC_NAME}-value</artifactId>
                                     <file>${project.basedir}/src/main/resources/greeting.avsc</file>
                                     <type>AVRO</type>
                                     <ifExists>RETURN_OR_UPDATE</ifExists>

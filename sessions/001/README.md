@@ -196,7 +196,9 @@ Processed a total of 3 messages
 
 When debugging issues, you usually need to retrieve various artifacts from the environment, which can be a lot of effort.
 Fortunately, Strimzi maintains a backward compatible must-gather script that can be used to download all relevant artifacts and logs from a specific Kafka cluster.
-Add the `--secrets=all` option to also get secret values.
+
+> [!NOTE]  
+> You can add the `--secrets=all` option to also get secret values.
 
 ```sh
 $ curl -s https://raw.githubusercontent.com/strimzi/strimzi-kafka-operator/main/tools/report.sh \

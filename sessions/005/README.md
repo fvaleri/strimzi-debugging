@@ -5,22 +5,14 @@ First, use [session1](/sessions/001) to deploy a Kafka cluster on Kubernetes.
 At this point, we can deploy the target cluster and an MM2 instance.
 The recommended way of deploying the MM2 is near the target Kafka cluster (same subnet or zone), because the producer overhead is greater than the consumer overhead.
 
+> [!IMPORTANT]
+> When source and target clusters run on different namespaces or Kubernetes clusters, you have to copy the source `cluster-ca-cert` in the target namespace where MM2 is running.
+
 ```sh
-$ for f in sessions/005/install/*.yaml; do sed "s/SOURCE_NS/$NAMESPACE/g; s/TARGET_NS/$NAMESPACE/g" $f \
-  | kubectl create -f -; done
+$ for f in sessions/005/install/*.yaml; do sed "s/SOURCE_NS/$NAMESPACE/g; s/TARGET_NS/$NAMESPACE/g" $f | kubectl create -f -; done
 kafkanodepool.kafka.strimzi.io/combined created
 kafka.kafka.strimzi.io/my-cluster-tgt created
 kafkamirrormaker2.kafka.strimzi.io/my-mm2 created
-```
-
-The following step copies the source CA certificate in the target namespace, where we will deploy MirrorMaker 2.
-**We can skip it, as it is only required when source and target clusters runs on different namespaces or Kubernetes clusters.**
-
-```sh
-$ kubectl get secret "my-cluster-cluster-ca-cert" -o yaml \
-  | yq "del(.metadata.namespace, .metadata.resourceVersion, .metadata.selfLink, .metadata.uid, .metadata.ownerReferences, .status)" \
-  | kubectl -n $NAMESPACE create -f -
-secret/my-cluster-cluster-ca-cert created
 ```
 
 When both source and target clusters are up and running, we can start MM2 and check its status.
@@ -33,19 +25,19 @@ $ kubectl scale kmm2 my-mm2 --replicas 1
 kafkamirrormaker2.kafka.strimzi.io/my-mm2 scaled
 
 $ kubectl get po
-NAME                                         READY   STATUS    RESTARTS   AGE
-my-cluster-broker-7                          1/1     Running   0          7m25s
-my-cluster-broker-8                          1/1     Running   0          7m25s
-my-cluster-broker-9                          1/1     Running   0          7m25s
-my-cluster-controller-0                      1/1     Running   0          7m25s
-my-cluster-controller-1                      1/1     Running   0          7m25s
-my-cluster-controller-2                      1/1     Running   0          7m25s
-my-cluster-entity-operator-b9fdfcd49-dc892   2/2     Running   0          6m52s
-my-cluster-tgt-combined-0                    1/1     Running   0          5m36s
-my-cluster-tgt-combined-1                    1/1     Running   0          5m36s
-my-cluster-tgt-combined-2                    1/1     Running   0          5m36s
-my-mm2-mirrormaker2-0                        1/1     Running   0          3m11s
-strimzi-cluster-operator-7fb8ff4bd-chklx     1/1     Running   0          19m
+NAME                                          READY   STATUS    RESTARTS   AGE
+my-cluster-broker-7                           1/1     Running   0          11m
+my-cluster-broker-8                           1/1     Running   0          11m
+my-cluster-broker-9                           1/1     Running   0          11m
+my-cluster-controller-0                       1/1     Running   0          11m
+my-cluster-controller-1                       1/1     Running   0          11m
+my-cluster-controller-2                       1/1     Running   0          11m
+my-cluster-entity-operator-657b477d4f-sv77v   2/2     Running   0          10m
+my-cluster-tgt-combined-0                     1/1     Running   0          6m18s
+my-cluster-tgt-combined-1                     1/1     Running   0          6m18s
+my-cluster-tgt-combined-2                     1/1     Running   0          6m18s
+my-mm2-mirrormaker2-0                         1/1     Running   0          2m5s
+strimzi-cluster-operator-d78fd875b-ljmpl      1/1     Running   0          11m
 
 $ kubectl get kmm2 my-mm2 -o yaml | yq .status
 conditions:
@@ -83,7 +75,7 @@ url: http://my-mm2-mirrormaker2-api.test.svc:8083
 Finally, we can send 1 million messages to the test topic in the source Kafka cluster.
 After some time, the log end offsets should match on both clusters.
 
-> [!IMPORTANT]  
+> [!NOTE]  
 > This is a controlled experiment, but the actual offsets tend to naturally diverge with time, because each Kafka cluster operates independently.
 > This is why we have offset mapping metadata.
 
@@ -129,7 +121,6 @@ $ kubectl-kafka bin/kafka-producer-perf-test.sh --topic my-topic --record-size 1
 1047156 records sent, 209389.3 records/sec (19.97 MB/sec), 102.5 ms avg latency, 496.0 ms max latency.
 ...
 30000000 records sent, 239285.970664 records/sec (22.82 MB/sec), 15.98 ms avg latency, 496.00 ms max latency, 3 ms 50th, 60 ms 95th, 115 ms 99th, 428 ms 99.9th.
-pod "producer-perf" deleted
 
 $ kubectl scale kmm2 my-mm2 --replicas 1
 kafkamirrormaker2.kafka.strimzi.io/my-mm2 scaled
@@ -177,7 +168,7 @@ $ kubectl patch kmm2 my-mm2 --type merge -p '
   spec:
     mirrors:
       - sourceCluster: my-cluster
-        targetCluster: my-cluster
+        targetCluster: my-cluster-tgt
         sourceConnector:
           config:
             replication.factor: -1
@@ -203,11 +194,11 @@ $ kubectl scale kmm2 my-mm2 --replicas 1
 kafkamirrormaker2.kafka.strimzi.io/my-mm2 scaled
 
 # took less than 2 minutes
-$ kubectl -n "$NAMESPACE" exec -it $(kubectl -n "$NAMESPACE" get po | grep my-mm2 | awk '{print $1}') -- bash -c '\
+$ kubectl exec -it $(kubectl get po | grep my-mm2 | awk '{print $1}') -- bash -c '\
   for i in {1..100}; do /opt/kafka/bin/kafka-jmx.sh --jmx-url service:jmx:rmi:///jndi/rmi://:9999/jmxrmi \
-    --object-name kafka.producer:type=producer-metrics,client-id=\""connector-producer-my-cluster->my-cluster.MirrorSourceConnector-0\"" \
+    --object-name kafka.producer:type=producer-metrics,client-id=\""connector-producer-my-cluster->my-cluster-tgt.MirrorSourceConnector-0\"" \
     --attributes batch-size-avg,request-latency-avg --date-format yyyy-MM-dd_HH:mm:ss --one-time true --wait \
-      2>/dev/null | grep $(date +"%Y") && sleep 5; done'
+      | grep $(date +"%Y") && sleep 5; done'
 2022-10-24_08:25:34,114822.21625544268,3.096321393998064
 2022-10-24_08:25:41,115199.66019845645,2.9993381866313698
 2022-10-24_08:25:47,117026.9576514499,3.007466973004021

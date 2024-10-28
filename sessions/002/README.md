@@ -2,6 +2,10 @@
 
 First, use [session1](/sessions/001) to deploy a Kafka cluster on Kubernetes.
 We also add an external listener of type ingress with TLS authentication (OpenShift route is an easier alternative to ingress).
+
+> [!IMPORTANT]  
+> You need to enable the Nginx ingress controller with `--enable-ssl-passthrough` flag, and add host mappings to `/etc/hosts`.
+
 Then, wait for the Cluster Operator to restart all pods one by one (rolling update).
 
 ```sh
@@ -17,16 +21,10 @@ $ kubectl create -f sessions/002/install \
             authentication:
               type: tls
             configuration:
+              class: nginx
+              hostTemplate: broker-{nodeId}.my-cluster.f12i.io
               bootstrap:
-                host: kafka-bootstrap.my-cluster.f12i.io
-              brokers:
-                - broker: 7
-                  host: kafka-7.my-cluster.f12i.io
-                - broker: 8
-                  host: kafka-8.my-cluster.f12i.io
-                - broker: 9
-                  host: kafka-9.my-cluster.f12i.io
-              class: nginx'
+                host: bootstrap.my-cluster.f12i.io'
 kafkauser.kafka.strimzi.io/my-user created            
 kafka.kafka.strimzi.io/my-cluster patched
 ```
@@ -34,16 +32,13 @@ kafka.kafka.strimzi.io/my-cluster patched
 The previous command adds a new authentication element to the external listener, which is the endpoint used by clients connecting from outside using TLS.
 It also creates a Kafka user resource with a matching configuration.
 
-> [!IMPORTANT]  
-> You need to enable the nginx ingress controller with `--enable-ssl-passthrough` flag if you are using Minikube, and add host mappings to `/etc/hosts`.
-
 ```sh
 $ kubectl get ingress
-NAME                         CLASS   HOSTS                                ADDRESS        PORTS     AGE
-my-cluster-broker-7          nginx   kafka-7.my-cluster.f12i.io           192.168.49.2   80, 443   104s
-my-cluster-broker-8          nginx   kafka-8.my-cluster.f12i.io           192.168.49.2   80, 443   104s
-my-cluster-broker-9          nginx   kafka-9.my-cluster.f12i.io           192.168.49.2   80, 443   104s
-my-cluster-kafka-bootstrap   nginx   kafka-bootstrap.my-cluster.f12i.io   192.168.49.2   80, 443   104s
+NAME                         CLASS   HOSTS                              ADDRESS        PORTS     AGE
+my-cluster-broker-7          nginx   broker-7.my-cluster.f12i.io        192.168.49.2   80, 443   104s
+my-cluster-broker-8          nginx   broker-8.my-cluster.f12i.io        192.168.49.2   80, 443   104s
+my-cluster-broker-9          nginx   broker-9.my-cluster.f12i.io        192.168.49.2   80, 443   104s
+my-cluster-kafka-bootstrap   nginx   bootstrap.my-cluster.f12i.io       192.168.49.2   80, 443   104s
 
 $ kubectl get ku my-user -o yaml | yq .spec
 authentication:
@@ -53,7 +48,7 @@ authentication:
 If it's all configured correctly, you should be able to see the broker certificate running the following command.
 
 ```sh
-$ openssl s_client -connect kafka-7.my-cluster.f12i.io:443 -servername kafka-7.my-cluster.f12i.io -showcerts
+$ openssl s_client -connect broker-7.my-cluster.f12i.io:443 -servername bootstrap.my-cluster.f12i.io -showcerts
 ...
 Server certificate
 subject=O=io.strimzi, CN=my-cluster-kafka
@@ -63,7 +58,7 @@ issuer=O=io.strimzi, CN=cluster-ca v0
 
 Wait some time for the rolling update to complete.
 The external clients have to retrieve the bootstrap URL from the passthrough route, configure their keystore and truststore.
-Then, we can try to send some messages in a secure way.
+Then, we can try to send some messages with an external client.
 
 ```sh
 $ BOOTSTRAP_SERVERS=$(kubectl get k my-cluster -o yaml | yq '.status.listeners.[] | select(.name == "external").bootstrapServers')
@@ -78,10 +73,10 @@ ssl.keystore.password = $KEYSTORE_PASSWORD
 ssl.truststore.location = $TRUSTSTORE_LOCATION
 ssl.truststore.password = $TRUSTSTORE_PASSWORD" >/tmp/client.properties
 
-$ $KAFKA_HOME/bin/kafka-console-producer.sh --producer.config /tmp/client.properties --bootstrap-server $BOOTSTRAP_SERVERS --topic my-topic
+$ $KAFKA_HOME/bin/kafka-console-producer.sh --bootstrap-server $BOOTSTRAP_SERVERS --topic my-topic --producer.config /tmp/client.properties
 >hello
 >world
->^C 
+>^C
 ```
 
 When dealing with TLS issues, it is useful to look inside the certificate to verify its configuration and expiration.
@@ -90,7 +85,8 @@ We can use use `kubectl` to do so, but let's suppose we have a must-gather scrip
 Use the command from the first session to generate a new report from the current cluster.
 
 ```sh
-$ unzip -p report-12-10-2024_11-31-59.zip reports/secrets/my-cluster-cluster-ca-cert.yaml | yq '.data."ca.crt"' | base64 -d | openssl x509 -inform pem -noout -text
+$ unzip -p ~/Downloads/report-12-10-2024_11-31-59.zip reports/secrets/my-cluster-cluster-ca-cert.yaml \
+  | yq '.data."ca.crt"' | base64 -d | openssl x509 -inform pem -noout -text
 Certificate:
     Data:
         Version: 3 (0x2)
@@ -139,26 +135,11 @@ If that's not the case, you can easily create the bundle from individual certifi
 $ cat /tmp/listener.crt /tmp/intermca.crt /tmp/rootca.crt >/tmp/bundle.crt
 ```
 
-> [!NOTE]  
-> The custom server certificate for a listener must not be a CA and it must include a SAN for each broker route, plus one for the bootstrap route.
+Here we generate our own certificate bundle with only one self-signed certificate, pretending it was handed over by the security team.
+We also use a wildcard certificate so that we don't need to specify all broker SANs.
 
-This is an example of how it looks.
-
-```sh
-...
-X509v3 extensions:
-  X509v3 Basic Constraints: critical
-    CA:FALSE
-  X509v3 Key Usage:
-    Digital Signature, Key Encipherment
-  X509v3 Extended Key Usage:
-    TLS Web Server Authentication, TLS Web Client Authentication
-  X509v3 Subject Alternative Name:
-    DNS:my-cluster-kafka-bootstrap-test.apps.example.com, DNS:my-cluster-kafka-0-test.apps.example.com, DNS:my-cluster-kafka-1-test.apps.example.com, DNS:my-cluster-kafka-2-test.apps.example.com
-```
-
-Just for convenience, we generate our own certificate bundle with only one self-signed certificate, pretending it was handed over by the security team.
-We use a wildcard certificate so that we don't need to specify all broker SANs.
+> [!IMPORTANT]  
+> The custom server certificate for a listener must not be a CA and it must include a SAN for each broker address, plus one for the bootstrap address.
 
 ```sh
 $ CONFIG="
@@ -169,16 +150,14 @@ x509_extensions=ext
 [dn]
 countryName=IT
 stateOrProvinceName=Rome
-organizationName=RedHat
+organizationName=Fede
 commonName=my-cluster
 [ext]
 subjectAltName=@san
 [san]
-DNS.1=$(kubectl get route my-cluster-kafka-bootstrap -o yaml | yq .status.ingress.[0].routerCanonicalHostname | sed "s#router-default#*#")
-" && openssl genrsa -out /tmp/listener.key 2048 && openssl req -new -x509 -days 3650 -key /tmp/listener.key -out /tmp/bundle.crt -config <(echo "$CONFIG")
-
-$ openssl crl2pkcs7 -nocrl -certfile /tmp/bundle.crt | openssl pkcs7 -print_certs -text -noout | grep DNS
-                DNS:*.apps.cluster-8z6kz.8z6kz.sandbox425.opentlc.com
+DNS.1=*.my-cluster.f12i.io
+" && openssl genrsa -out /tmp/listener.key 2048 \
+  && openssl req -new -x509 -days 3650 -key /tmp/listener.key -out /tmp/bundle.crt -config <(echo "$CONFIG")
 ```
 
 Now we [deploy the Strimzi Cluster Operator and Kafka cluster](/sessions/001), and set the external listener.
@@ -186,9 +165,8 @@ Then, we deploy the secret containing the custom certificate and update the Kafk
 
 ```sh
 $ kubectl create secret generic ext-listener-crt \
-  --from-file=/tmp/bundle.crt --from-file=/tmp/listener.key \
-  --dry-run=client -o yaml | kubectl replace --force -f -
-secret/ext-listener-crt replaced
+  --from-file=/tmp/bundle.crt --from-file=/tmp/listener.key
+secret/ext-listener-crt created
   
 $ kubectl patch k my-cluster --type merge -p '
   spec:
@@ -199,16 +177,10 @@ $ kubectl patch k my-cluster --type merge -p '
           type: ingress
           tls: true
           configuration:
-            bootstrap:
-              host: kafka-bootstrap.my-cluster.local
-            brokers:
-              - broker: 7
-                host: kafka-7.my-cluster.local
-              - broker: 8
-                host: kafka-8.my-cluster.local
-              - broker: 9
-                host: kafka-9.my-cluster.local
             class: nginx
+            hostTemplate: broker-{nodeId}.my-cluster.f12i.io
+            bootstrap:
+              host: bootstrap.my-cluster.f12i.io
             brokerCertChainAndKey:
               secretName: ext-listener-crt
               certificate: bundle.crt
@@ -220,16 +192,10 @@ When the rolling update is completed, clients just need to trust the external CA
 In our case, we don't have a CA, so we just need to trust the self-signed certificate.
 
 ```sh
-$ BOOTSTRAP_SERVERS=$(kubectl get k my-cluster -o yaml | yq '.status.listeners.[] | select(.name == "external").bootstrapServers') \
-  CERT_LOCATION="/tmp/bundle.crt" TRUSTSTORE_LOCATION="/tmp/truststore.p12" TRUSTSTORE_PASSWORD="changeit"
-  
-$ rm -rf $TRUSTSTORE_LOCATION && keytool -keystore $TRUSTSTORE_LOCATION -storetype PKCS12 -alias my-cluster \
-  -storepass $TRUSTSTORE_PASSWORD -keypass $TRUSTSTORE_PASSWORD -import -file $CERT_LOCATION -noprompt
-Certificate was added to keystore
-
-$ echo -e "security.protocol = SSL
-ssl.truststore.location = $TRUSTSTORE_LOCATION
-ssl.truststore.password = $TRUSTSTORE_PASSWORD" >/tmp/client.properties
+$ PUBLIC_CRT=$(</tmp/bundle.crt) && PUBLIC_CRT=$(echo "$PUBLIC_CRT" |sed ':a;N;$!ba; s;\n; \\\n;g') \
+  && echo -e "security.protocol=SSL
+ssl.truststore.type=PEM
+ssl.truststore.certificates=$PUBLIC_CRT" >/tmp/client.properties
 
 $ $KAFKA_HOME/bin/kafka-console-producer.sh --producer.config /tmp/client.properties --bootstrap-server $BOOTSTRAP_SERVERS --topic my-topic
 >hello

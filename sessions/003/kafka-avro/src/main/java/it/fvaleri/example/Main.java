@@ -52,6 +52,12 @@ public class Main {
         if (System.getenv("BOOTSTRAP_SERVERS") != null) {
             bootstrapServers = System.getenv("BOOTSTRAP_SERVERS");
         }
+        if (System.getenv("SSL_TRUSTSTORE_LOCATION") != null) {
+            sslTruststoreLocation = System.getenv("SSL_TRUSTSTORE_LOCATION");
+        }
+        if (System.getenv("SSL_TRUSTSTORE_PASSWORD") != null) {
+            sslTruststorePassword = System.getenv("SSL_TRUSTSTORE_PASSWORD");
+        }
         if (System.getenv("REGISTRY_URL") != null) {
             registryUrl = System.getenv("REGISTRY_URL");
         }
@@ -60,12 +66,6 @@ public class Main {
         }
         if (System.getenv("ARTIFACT_GROUP") != null) {
             artifactGroup = System.getenv("ARTIFACT_GROUP");
-        }
-        if (System.getenv("SSL_TRUSTSTORE_LOCATION") != null) {
-            sslTruststoreLocation = System.getenv("SSL_TRUSTSTORE_LOCATION");
-        }
-        if (System.getenv("SSL_TRUSTSTORE_PASSWORD") != null) {
-            sslTruststorePassword = System.getenv("SSL_TRUSTSTORE_PASSWORD");
         }
     }
 
