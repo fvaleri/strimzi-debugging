@@ -58,8 +58,6 @@ spec:
           emit.checkpoints.enabled: true
           emit.checkpoints.interval.seconds: 20
           refresh.groups.interval.seconds: 20
-  # enable unprotected JMX on port 9999
-  jmxOptions: {}
   logging:
     type: inline
     loggers:
@@ -73,9 +71,10 @@ spec:
     requests:
       cpu: 500m
       memory: 1Gi
-  readinessProbe:
-    initialDelaySeconds: 120
-    timeoutSeconds: 60
-  livenessProbe:
-    initialDelaySeconds: 120
-    timeoutSeconds: 60
+  # expose JMX metrics in Prometheus format on port 9404
+  metricsConfig:
+    type: jmxPrometheusExporter
+    valueFrom:
+      configMapKeyRef:
+        name: mirror-maker-2-metrics
+        key: metrics-config.yml

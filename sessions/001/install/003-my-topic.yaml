@@ -10,3 +10,5 @@ spec:
   replicas: 3
   config:
     min.insync.replicas: 2
+    # 1 GiB to avoid running out of space with load tests
+    retention.bytes: 1073741824
