@@ -3,8 +3,6 @@
 > [!WARNING]
 > Don't use Minikube, as it uses hostpath volumes that do not enforce storage capacity.
 
-First, use [session1](/sessions/001) to deploy a Kafka cluster on Kubernetes.
-
 For the sake of this example, we deploy the Kafka cluster reducing the volume size.
 
 ```sh
@@ -84,8 +82,6 @@ Filesystem      Size  Used Avail Use% Mounted on
 > [!WARNING]
 > Don't use Minikube, as it uses hostpath volumes that do not enforce storage capacity.
 
-First, use [session1](/sessions/001) to deploy a Kafka cluster on Kubernetes.
-
 For the sake of this example, we deploy the Kafka cluster reducing the volume size.
 
 ```sh
@@ -162,7 +158,6 @@ pvc-c328aab2-8948-4791-88df-a488e9fd9faa   10Gi       RWO            Delete     
 > [!WARNING]
 > Don't use Minikube, as it uses hostpath volumes that do not enforce storage capacity.
 
-First, [deploy the Strimzi Cluster Operator](/sessions/001).
 For the sake of this example, we deploy the Kafka cluster reducing the volume size.
 
 ```sh

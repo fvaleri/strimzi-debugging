@@ -97,85 +97,68 @@ exit
 
 ## Scaling up the cluster with Cruise Control
 
-First, [deploy the Strimzi Cluster Operator and Kafka cluster](/sessions/001).
+First, use [session1](/sessions/001) to deploy a Kafka cluster on Kubernetes.
 
-Then, we send some data.
-
-```sh
-$ kubectl-kafka bin/kafka-producer-perf-test.sh --topic my-topic --record-size 100 --num-records 1000000 \
-  --throughput -1 --producer-props acks=1 bootstrap.servers=my-cluster-kafka-bootstrap:9092
-1000000 records sent, 233699.462491 records/sec (22.29 MB/sec), 866.05 ms avg latency, 1652.00 ms max latency, 827 ms 50th, 1500 ms 95th, 1595 ms 99th, 1614 ms 99.9th.  
-```
-
-This time we will use Cruise Control to see how it helps with the planning phase.
-Cruise Control can figure out by itself the required changes, given a set of high-level goals (sensible defaults are provided).
-
-When the cluster is ready, we check how the topic partitions are distributed among the available brokers.
-Then we scale up with one additional broker and deploy Cruise Control by updating the Kafka CR.
-There is no need to manually create a KafkaRebalance resource because this is fully automated.
+Then, we deploy Cruise Control with the auto rebalance feature enabled.
 
 > [!NOTE]  
-> The auto rebalance feature will automatically generate and execute the required KafkaRebalance resources.
+> The auto rebalance feature will automatically generate and execute KafkaRebalance resources on cluster scale up and down.
 > Each auto rebalance mode can be customized by adding custom KafkaRebalance templates.
 
-```sh
-$ kubectl-kafka bin/kafka-topics.sh --bootstrap-server my-cluster-kafka-bootstrap:9092 --topic my-topic --describe
-Topic: my-topic	TopicId: sVW190UoSeG1aXmrfD1Y0w	PartitionCount: 3	ReplicationFactor: 3	Configs: min.insync.replicas=2
-	Topic: my-topic	Partition: 0	Leader: 9	Replicas: 9,7,8	Isr: 9,7,8	Elr: 	LastKnownElr: 
-	Topic: my-topic	Partition: 1	Leader: 7	Replicas: 7,8,9	Isr: 7,8,9	Elr: 	LastKnownElr: 
-	Topic: my-topic	Partition: 2	Leader: 8	Replicas: 8,9,7	Isr: 8,9,7	Elr: 	LastKnownElr: 
+The Cluster Operator will trigger a rolling update to add the metrics reporter plugin to brokers, and then it will deploy Cruise Control.
 
-$ kubectl patch knp broker --type merge -p '
-    spec:
-      replicas: 4' \
-  && kubectl patch k my-cluster --type merge -p '
+```sh
+$ kubectl patch k my-cluster --type merge -p '
     spec:
       cruiseControl: 
         autoRebalance:
           - mode: add-brokers
           - mode: remove-brokers'
-kafkanodepool.kafka.strimzi.io/broker patched
 kafka.kafka.strimzi.io/my-cluster patched
 ```
 
-After that, the cluster operator will trigger a rolling update to add the metrics reporter plugin to brokers and then it will deploy Cruise Control.
-We can see that the auto rebalance is idle at first, because we just deployed Cruise Control and it needs some time to build its internal cluster model.
+When Cruise Control is ready, we send some data and check how the topic partitions are distributed between the brokers.
 
 ```sh
-$ kubectl get k my-cluster -o yaml | yq .status.autoRebalance
-lastTransitionTime: "2024-10-29T10:35:11.228712509Z"
-modes:
-  - brokers:
-      - 10
-    mode: add-brokers
-state: Idle
+$ kubectl-kafka bin/kafka-producer-perf-test.sh --topic my-topic --record-size 100 --num-records 10000000 \
+  --throughput -1 --producer-props acks=1 bootstrap.servers=my-cluster-kafka-bootstrap:9092
+...
+10000000 records sent, 165387.668695 records/sec (15.77 MB/sec), 1750.32 ms avg latency, 5498.00 ms max latency, 1504 ms 50th, 3831 ms 95th, 4697 ms 99th, 5377 ms 99.9th.
+
+$ kubectl-kafka bin/kafka-topics.sh --bootstrap-server my-cluster-kafka-bootstrap:9092 --describe --topic my-topic
+Topic: my-topic	TopicId: Gkti6y9fQjiYCU02tkwTFg	PartitionCount: 3	ReplicationFactor: 3	Configs: min.insync.replicas=2,retention.bytes=1073741824
+	Topic: my-topic	Partition: 0	Leader: 9	Replicas: 9,7,8	Isr: 7,8,9	Elr: 	LastKnownElr: 
+	Topic: my-topic	Partition: 1	Leader: 7	Replicas: 7,8,9	Isr: 7,8,9	Elr: 	LastKnownElr: 
+	Topic: my-topic	Partition: 2	Leader: 8	Replicas: 8,9,7	Isr: 7,8,9	Elr: 	LastKnownElr: 
 ```
 
-When Cruise Control is ready, a scale up KafkaRebalance resource is automatically created and executed.
+At this point we scale up the Kafka cluster, adding two more brokers.
 
 ```sh
-$ kubectl get k my-cluster -o yaml | yq .status.autoRebalance
-lastTransitionTime: "2024-10-29T10:38:11.909308930Z"
-modes:
-  - brokers:
-      - 10
-    mode: add-brokers
-state: RebalanceOnScaleUp
+$ kubectl patch knp broker --type merge -p '
+    spec:
+      replicas: 5'
+kafkanodepool.kafka.strimzi.io/broker patched
+```
 
+After some time, we check if the KafkaRebalance resource is automatically created and executed.
+
+```sh
 $ kubectl get kr -w
 NAME                                      CLUSTER      TEMPLATE   STATUS
+my-cluster-auto-rebalancing-add-brokers   my-cluster              
 my-cluster-auto-rebalancing-add-brokers   my-cluster              PendingProposal
 my-cluster-auto-rebalancing-add-brokers   my-cluster              ProposalReady
 my-cluster-auto-rebalancing-add-brokers   my-cluster              Rebalancing
 my-cluster-auto-rebalancing-add-brokers   my-cluster              Ready
 ```
 
-When the auto generated rebalance is ready, we can see that the new broker contains some of the existing replicas.
+When the KafkaRebalance is ready, we can see that the new broker contains some of the existing replicas.
 
 ```sh
-$ kubectl-kafka bin/kafka-topics.sh --bootstrap-server my-cluster-kafka-bootstrap:9092 --describe --topic my-topic
-Topic: my-topic	TopicId: b0tpZHyaQ-K_fqIGwOrjKQ	PartitionCount: 3	ReplicationFactor: 3	Configs: min.insync.replicas=2
-	Topic: my-topic	Partition: 0	Leader: 7	Replicas: 7,8,9	    Isr: 7,8,9	Elr: 	LastKnownElr: 
-	Topic: my-topic	Partition: 1	Leader: 10	Replicas: 10,8,7	Isr: 7,8,10	Elr: 	LastKnownElr: 
-	Topic: my-topic	Partition: 2	Leader: 9	Replicas: 9,7,8	    Isr: 7,8,9	Elr: 	LastKnownElr:
+$ kubectl-kafka bin/kafka-topics.sh --bootstrap-server my-cluster-kafka-bootstrap:9092 --describe --topic my-topicic
+Topic: my-topic	TopicId: Gkti6y9fQjiYCU02tkwTFg	PartitionCount: 3	ReplicationFactor: 3	Configs: min.insync.replicas=2,retention.bytes=1073741824
+    Topic: my-topic Partition: 0    Leader: 9   Replicas: 9,10,11   Isr: 10,9,11    Elr:    LastKnownElr: 
+    Topic: my-topic Partition: 1    Leader: 11  Replicas: 11,10,9   Isr: 10,9,11    Elr:    LastKnownElr: 
+    Topic: my-topic Partition: 2    Leader: 8   Replicas: 8,9,7     Isr: 7,8,9      Elr:    LastKnownElr: 
 ```

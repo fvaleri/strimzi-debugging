@@ -4,7 +4,7 @@ First, use [session1](/sessions/001) to deploy a Kafka cluster on Kubernetes.
 When the cluster is ready, we deploy a MySQL instance (the external system), and Kafka Connect cluster.
 
 > [!IMPORTANT]  
-> The Kafka Connect image uses an internal component (Kaniko) to build a custom image containing the configured MySQL connector.
+> The Kafka Connect image uses Kaniko to build a custom image containing the configured MySQL connector.
 > In production, this is not recommended, so you should use your own Connect image built from the Strimzi one.
 
 ```sh

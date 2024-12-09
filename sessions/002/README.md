@@ -3,9 +3,6 @@
 First, use [session1](/sessions/001) to deploy a Kafka cluster on Kubernetes.
 We also add an external listener of type ingress with TLS authentication (OpenShift route is an easier alternative to ingress).
 
-> [!IMPORTANT]  
-> You need to enable the Nginx ingress controller with `--enable-ssl-passthrough` flag, and add host mappings to `/etc/hosts`.
-
 Then, wait for the Cluster Operator to restart all pods one by one (rolling update).
 
 ```sh
@@ -45,7 +42,10 @@ authentication:
   type: tls
 ```
 
-If it's all configured correctly, you should be able to see the broker certificate running the following command.
+Once the rolling update completes, and if it's all configured correctly, you should be able to see the broker certificate running the following command.
+
+> [!IMPORTANT]  
+> You need to enable the Nginx ingress controller with `--enable-ssl-passthrough` flag, and add host mappings to `/etc/hosts`.
 
 ```sh
 $ openssl s_client -connect broker-7.my-cluster.f12i.io:443 -servername bootstrap.my-cluster.f12i.io -showcerts
@@ -56,9 +56,8 @@ issuer=O=io.strimzi, CN=cluster-ca v0
 ...
 ```
 
-Wait some time for the rolling update to complete.
-The external clients have to retrieve the bootstrap URL from the passthrough route, configure their keystore and truststore.
-Then, we can try to send some messages with an external client.
+External clients have to retrieve the bootstrap URL from the passthrough route, configure their keystore and truststore.
+Then, we can try to send some messages.
 
 ```sh
 $ BOOTSTRAP_SERVERS=$(kubectl get k my-cluster -o yaml | yq '.status.listeners.[] | select(.name == "external").bootstrapServers')
