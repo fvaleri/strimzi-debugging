@@ -1,8 +1,8 @@
 #!/usr/bin/env bash
 
 NAMESPACE="test"
-KAFKA_VERSION="3.8.0" && export KAFKA_VERSION
-STRIMZI_VERSION="0.44.0"
+KAFKA_VERSION="3.9.0"
+STRIMZI_VERSION="0.45.0"
 
 [[ "${BASH_SOURCE[0]}" -ef "$0" ]] && echo "Usage: source init.sh" && exit 1
 

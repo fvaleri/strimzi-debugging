@@ -17,8 +17,8 @@ namespace/test created
 Downloading Strimzi to /tmp/strimzi-[version].yaml
 Done
 
-$ CLUSTER_ID="$($KAFKA_HOME/bin/kafka-storage.sh random-uuid)"; \
-  "$KAFKA_HOME"/bin/kafka-storage.sh format -c "$KAFKA_HOME"/config/kraft/server.properties -t "$CLUSTER_ID" \
+$ KAFKA_CID="$($KAFKA_HOME/bin/kafka-storage.sh random-uuid)"; \
+  "$KAFKA_HOME"/bin/kafka-storage.sh format -c "$KAFKA_HOME"/config/kraft/server.properties -t "$KAFKA_CID" \
     && "$KAFKA_HOME"/bin/kafka-server-start.sh -daemon "$KAFKA_HOME"/config/kraft/server.properties
 Formatting /tmp/kraft-combined-logs with metadata.version [version].
 
@@ -195,7 +195,7 @@ Processed a total of 3 messages
 ```
 
 When debugging issues, you usually need to retrieve various artifacts from the environment, which can be a lot of effort.
-Fortunately, Strimzi maintains a backward compatible must-gather script that can be used to download all relevant artifacts and logs from a specific Kafka cluster.
+Fortunately, Strimzi maintains a must-gather script that can be used to download all relevant artifacts and logs from a specific Kafka cluster.
 
 > [!NOTE]  
 > You can add the `--secrets=all` option to also get secret values.
