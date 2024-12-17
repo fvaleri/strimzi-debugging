@@ -2,7 +2,7 @@
 
 NAMESPACE="test"
 KAFKA_VERSION="3.9.0"
-STRIMZI_VERSION="0.45.0-rc1"
+STRIMZI_VERSION="0.45.0"
 
 [[ "${BASH_SOURCE[0]}" -ef "$0" ]] && echo "Usage: source init.sh" && exit 1
 
