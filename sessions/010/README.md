@@ -144,7 +144,7 @@ In addition to Kafka pods, the Entity Operator (EO) pod is also deployed, which 
 If you want to deploy multiple Kafka clusters on the same namespace, make sure to have only one instance of these operators to avoid race conditions.
 
 ```sh
-$ kubectl create -f sessions/001/install
+$ kubectl create -f sessions/010/install.yaml
 kafkanodepool.kafka.strimzi.io/controller created
 kafkanodepool.kafka.strimzi.io/broker created
 kafka.kafka.strimzi.io/my-cluster created

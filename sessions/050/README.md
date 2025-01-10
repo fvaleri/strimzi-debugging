@@ -1,6 +1,6 @@
 ## Active-passive cluster mirroring
 
-First, use [session1](/sessions/001) to deploy a Kafka cluster on Kubernetes.
+First, use [this session](/sessions/010) to deploy a Kafka cluster on Kubernetes.
 
 At this point, we can deploy the target cluster and an MM2 instance.
 The recommended way of deploying the MM2 is near the target Kafka cluster (same subnet or zone), because the producer overhead is greater than the consumer overhead.
@@ -9,7 +9,7 @@ The recommended way of deploying the MM2 is near the target Kafka cluster (same 
 > When source and target clusters run on different namespaces or Kubernetes clusters, you have to copy the source `cluster-ca-cert` in the target namespace where MM2 is running.
 
 ```sh
-$ for f in sessions/005/install/*.yaml; do sed "s/SOURCE_NS/$NAMESPACE/g; s/TARGET_NS/$NAMESPACE/g" $f | kubectl create -f -; done
+$ export SOURCE_NS="$NAMESPACE" TARGET_NS="$NAMESPACE"; envsubst < sessions/050/install.yaml | kubectl apply -f -
 kafkanodepool.kafka.strimzi.io/combined created
 kafka.kafka.strimzi.io/my-cluster-tgt created
 kafkamirrormaker2.kafka.strimzi.io/my-mm2 created

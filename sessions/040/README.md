@@ -1,6 +1,6 @@
 ## Cloud-native CDC pipeline with Debezium
 
-First, use [session1](/sessions/001) to deploy a Kafka cluster on Kubernetes.
+First, use [this session](/sessions/010) to deploy a Kafka cluster on Kubernetes.
 When the cluster is ready, we deploy a MySQL instance (the external system), and Kafka Connect cluster.
 
 > [!IMPORTANT]  
@@ -8,7 +8,8 @@ When the cluster is ready, we deploy a MySQL instance (the external system), and
 > In production, this is not recommended, so you should use your own Connect image built from the Strimzi one.
 
 ```sh
-$ kubectl create -f sessions/004/install && kubectl wait --for=condition=Ready pod -l app=my-mysql --timeout=300s \
+$ kubectl create -f sessions/040/install.yaml \
+  && kubectl wait --for=condition=Ready pod -l app=my-mysql --timeout=300s \
   && kubectl exec my-mysql-0 -- sh -c 'mysql -u root < /tmp/sql/initdb.sql'
 persistentvolumeclaim/my-mysql-data created
 configmap/my-mysql-cfg created

@@ -1,12 +1,12 @@
 ## TLS authentication (mTLS) using an external listener
 
-First, use [session1](/sessions/001) to deploy a Kafka cluster on Kubernetes.
+First, use [this session](/sessions/010) to deploy a Kafka cluster on Kubernetes.
 We also add an external listener of type ingress with TLS authentication (OpenShift route is an easier alternative to ingress).
 
 Then, wait for the Cluster Operator to restart all pods one by one (rolling update).
 
 ```sh
-$ kubectl create -f sessions/002/install \
+$ kubectl create -f sessions/020/install.yaml \
   && kubectl patch k my-cluster --type merge -p '
     spec:
       kafka:
@@ -62,9 +62,9 @@ Then, we can try to send some messages.
 ```sh
 $ BOOTSTRAP_SERVERS=$(kubectl get k my-cluster -o yaml | yq '.status.listeners.[] | select(.name == "external").bootstrapServers')
   KEYSTORE_LOCATION="/tmp/keystore.p12" KEYSTORE_PASSWORD=$(kubectl get secret my-user -o jsonpath="{.data['user\.password']}" | base64 -d) \
-  TRUSTSTORE_LOCATION="/tmp/truststore.p12" TRUSTSTORE_PASSWORD=$(kubectl get secret my-cluster-cluster-ca-cert -o jsonpath="{.data['ca\.password']}" | base64 -d) \
-  ; kubectl get secret my-user -o jsonpath="{.data['user\.p12']}" | base64 -d >$KEYSTORE_LOCATION \
-  && kubectl get secret my-cluster-cluster-ca-cert -o jsonpath="{.data['ca\.p12']}" | base64 -d >$TRUSTSTORE_LOCATION
+  TRUSTSTORE_LOCATION="/tmp/truststore.p12" TRUSTSTORE_PASSWORD=$(kubectl get secret my-cluster-cluster-ca-cert -o jsonpath="{.data['ca\.password']}" | base64 -d); \
+  kubectl get secret my-user -o jsonpath="{.data['user\.p12']}" | base64 -d >$KEYSTORE_LOCATION && \
+  kubectl get secret my-cluster-cluster-ca-cert -o jsonpath="{.data['ca\.p12']}" | base64 -d >$TRUSTSTORE_LOCATION
   
 $ echo -e "security.protocol = SSL
 ssl.keystore.location = $KEYSTORE_LOCATION
@@ -159,7 +159,7 @@ DNS.1=*.my-cluster.f12i.io
   && openssl req -new -x509 -days 3650 -key /tmp/listener.key -out /tmp/bundle.crt -config <(echo "$CONFIG")
 ```
 
-Now we [deploy the Strimzi Cluster Operator and Kafka cluster](/sessions/001), and set the external listener.
+Now we [deploy the Strimzi Cluster Operator and Kafka cluster](/sessions/010), and set the external listener.
 Then, we deploy the secret containing the custom certificate and update the Kafka cluster configuration by adding a reference to that secret.
 
 ```sh

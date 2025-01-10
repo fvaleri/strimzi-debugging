@@ -1,7 +1,6 @@
 ## Schema registry in action
 
-First, use [session1](/sessions/001) to deploy a Kafka cluster on Kubernetes.
-We also add an external listener (see [session2](/sessions/002) for more details).
+First, use [this session](/sessions/010) to deploy a Kafka cluster on Kubernetes.
 
 ```sh
 $ kubectl patch k my-cluster --type merge -p '
@@ -23,7 +22,7 @@ kafka.kafka.strimzi.io/my-cluster patched
 Then, we deploy the Service Registry instance with the in-memory storage system.
 
 ```sh
-$ for f in sessions/003/install/*.yaml; do sed "s/namespace: .*/namespace: $NAMESPACE/g" $f | kubectl create -f - ; done
+$ sed "s/namespace: .*/namespace: $NAMESPACE/g" sessions/030/install.yaml | kubectl apply -f - 2>/dev/null
 customresourcedefinition.apiextensions.k8s.io/apicurioregistries.registry.apicur.io created
 serviceaccount/apicurio-registry-operator created
 role.rbac.authorization.k8s.io/apicurio-registry-operator-leader-election-role created
@@ -51,12 +50,15 @@ Now, we just need to tell our client application where it can find the Kafka clu
 We also need to provide the truststore location and password because we are connecting externally.
 
 ```sh
-$ kubectl get secret my-cluster-cluster-ca-cert -o jsonpath="{.data['ca\.p12']}" | base64 -d >/tmp/truststore.p12 \
-  && export KAFKA_VERSION BOOTSTRAP_SERVERS=$(kubectl get k my-cluster -o yaml | yq '.status.listeners.[] | select(.name == "external").bootstrapServers') \
-  SSL_TRUSTSTORE_LOCATION="/tmp/truststore.p12" SSL_TRUSTSTORE_PASSWORD=$(kubectl get secret my-cluster-cluster-ca-cert -o jsonpath="{.data['ca\.password']}" | base64 -d) \
-  REGISTRY_URL=http://$(kubectl get apicurioregistries my-registry -o jsonpath="{.status.info.host}")/apis/registry/v2 TOPIC_NAME="my-topic" ARTIFACT_GROUP="default"
+$ kubectl get secret my-cluster-cluster-ca-cert -o jsonpath="{.data['ca\.p12']}" | base64 -d >/tmp/truststore.p12 && export \
+  BOOTSTRAP_SERVERS=$(kubectl get k my-cluster -o yaml | yq '.status.listeners.[] | select(.name == "external").bootstrapServers') \
+  SSL_TRUSTSTORE_LOCATION="/tmp/truststore.p12" \
+  SSL_TRUSTSTORE_PASSWORD=$(kubectl get secret my-cluster-cluster-ca-cert -o jsonpath="{.data['ca\.password']}" | base64 -d) \
+  REGISTRY_URL=http://$(kubectl get apicurioregistries my-registry -o jsonpath="{.status.info.host}")/apis/registry/v2 \
+  TOPIC_NAME="my-topic" \
+  ARTIFACT_GROUP="default"
 
-$ mvn compile exec:java -f sessions/003/kafka-avro/pom.xml -q
+$ mvn compile exec:java -f sessions/030/kafka-avro/pom.xml -q
 Producing records
 Records produced
 Consuming all records
@@ -67,7 +69,7 @@ Record: Hello-1663594982041
 Record: Hello-1663594982042
 ```
 
-[Look at the code](/sessions/003/kafka-avro/src/main/java/it/fvaleri/example/Main.java) to see how the schema is registered and used.
+[Look at the code](/sessions/030/kafka-avro/src/main/java/it/fvaleri/example/Main.java) to see how the schema is registered and used.
 The registration happens at build time and the Maven plugin executes the following API request for every configured schema artifact.
 
 > [!NOTE]  
@@ -76,7 +78,7 @@ The registration happens at build time and the Maven plugin executes the followi
 ```sh
 $ curl -s -X POST -H "Content-Type: application/json" \
   -H "X-Registry-ArtifactId: my-topic-value" -H "X-Registry-ArtifactType: AVRO" \
-  -d @sessions/003/kafka-avro/src/main/resources/greeting.avsc \
+  -d @sessions/030/kafka-avro/src/main/resources/greeting.avsc \
   "$REGISTRY_URL/groups/default/artifacts?ifExists=RETURN_OR_UPDATE" | jq
 {
   "name": "Greeting",

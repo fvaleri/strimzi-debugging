@@ -1,15 +1,15 @@
 ## Transactional application (read-process-write)
 
-First, use [session1](/sessions/001) to deploy a Kafka cluster on localhost.
+First, use [this session](/sessions/010) to deploy a Kafka cluster on localhost.
 
 We run the transactional application included in this example on a different terminal (there is a new poll/read every 60 seconds).
-[Look at the code](/sessions/008/kafka-txn/src/main/java/it/fvaleri/example/Main.java) to see how the low-level transaction API is used.
+[Look at the code](/sessions/080/kafka-txn/src/main/java/it/fvaleri/example/Main.java) to see how the low-level transaction API is used.
 
 ```sh
 $ export KAFKA_VERSION BOOTSTRAP_SERVERS="localhost:9092" INSTANCE_ID="kafka-txn-0" \
   GROUP_ID="my-group" INPUT_TOPIC="input-topic" OUTPUT_TOPIC="output-topic"
 
-$ mvn clean compile exec:java -f sessions/008/kafka-txn/pom.xml -q
+$ mvn clean compile exec:java -f sessions/080/kafka-txn/pom.xml -q
 Starting instance kafka-txn-0
 Created topics: input-topic
 Waiting for new data

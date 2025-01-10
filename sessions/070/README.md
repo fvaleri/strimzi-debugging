@@ -1,6 +1,6 @@
 ## Scaling up the cluster with the reassign tool
 
-First, use [session1](/sessions/001) to deploy a Kafka cluster on Kubernetes.
+First, use [this session](/sessions/010) to deploy a Kafka cluster on Kubernetes.
 
 Then, we send some data.
 
@@ -97,7 +97,7 @@ exit
 
 ## Scaling up the cluster with Cruise Control
 
-First, use [session1](/sessions/001) to deploy a Kafka cluster on Kubernetes.
+First, use [this session](/sessions/010) to deploy a Kafka cluster on Kubernetes.
 
 Then, we deploy Cruise Control with the auto rebalance feature enabled.
 
