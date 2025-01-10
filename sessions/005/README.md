@@ -1,172 +1,131 @@
-## Active-passive cluster mirroring
+## Use Kafka Connect with Debezium
 
-First, use [session1](/sessions/001) to deploy a Kafka cluster on Kubernetes.
+First, use [this session](/sessions/001) to deploy a Kafka cluster on Kubernetes.
+When the cluster is ready, we deploy a MySQL instance (the external system), and Kafka Connect cluster.
 
-At this point, we can deploy the target cluster and an MM2 instance.
-The recommended way of deploying the MM2 is near the target Kafka cluster (same subnet or zone), because the producer overhead is greater than the consumer overhead.
-
-> [!IMPORTANT]
-> When source and target clusters run on different namespaces or Kubernetes clusters, you have to copy the source `cluster-ca-cert` in the target namespace where MM2 is running.
+> [!IMPORTANT]  
+> The Kafka Connect image uses Kaniko to build a custom image containing the configured MySQL connector.
+> In production, this is not recommended, so you should use your own Connect image built from the Strimzi one.
 
 ```sh
-$ for f in sessions/005/install/*.yaml; do sed "s/SOURCE_NS/$NAMESPACE/g; s/TARGET_NS/$NAMESPACE/g" $f | kubectl create -f -; done
-kafkanodepool.kafka.strimzi.io/combined created
-kafka.kafka.strimzi.io/my-cluster-tgt created
-kafkamirrormaker2.kafka.strimzi.io/my-mm2 created
-configmap/mirror-maker-2-metrics created
+$ kubectl create -f sessions/005/install/mysql.yaml \
+  && kubectl wait --for=condition=Ready pod -l app=my-mysql --timeout=300s \
+  && kubectl exec my-mysql-0 -- sh -c 'mysql -u root < /tmp/sql/initdb.sql'
+persistentvolumeclaim/my-mysql-data created
+configmap/my-mysql-cfg created
+configmap/my-mysql-env created
+configmap/my-mysql-init created
+statefulset.apps/my-mysql created
+service/my-mysql-svc created
+pod/my-mysql-0 condition met
+
+$ kubectl create -f sessions/005/install/connect.yaml
+kafkaconnect.kafka.strimzi.io/my-connect-cluster created
+kafkaconnector.kafka.strimzi.io/mysql-source-connector created
+
+$ kubectl get po,kt,kctr
+NAME                                              READY   STATUS    RESTARTS   AGE
+pod/my-cluster-broker-5                           1/1     Running   0          6m1s
+pod/my-cluster-broker-6                           1/1     Running   0          6m1s
+pod/my-cluster-broker-7                           1/1     Running   0          6m1s
+pod/my-cluster-controller-0                       1/1     Running   0          6m1s
+pod/my-cluster-controller-1                       1/1     Running   0          6m1s
+pod/my-cluster-controller-2                       1/1     Running   0          6m1s
+pod/my-cluster-entity-operator-7bc799c449-8jxmb   2/2     Running   0          5m27s
+pod/my-connect-cluster-connect-0                  1/1     Running   0          2m46s
+pod/my-mysql-0                                    1/1     Running   0          4m19s
+pod/strimzi-cluster-operator-d78fd875b-q9sds      1/1     Running   0          6m30s
+
+NAME                                   CLUSTER      PARTITIONS   REPLICATION FACTOR   READY
+kafkatopic.kafka.strimzi.io/my-topic   my-cluster   3            3                    True
+
+NAME                                                     CLUSTER              CONNECTOR CLASS                              MAX TASKS   READY
+kafkaconnector.kafka.strimzi.io/mysql-source-connector   my-connect-cluster   io.debezium.connector.mysql.MySqlConnector   1           True
 ```
 
-When both source and target clusters are up and running, we can start MM2 and check its status.
-MM2 runs on top of Kafka Connect with a set of configurable built-in connectors.
-The `MirrorSourceConnector` replicates remote topics, ACLs, and configurations of a single source cluster and emits offset syncs.
-The `MirrorCheckpointConnector` emits consumer group offsets checkpoints to enable failover points.
+As you may have guessed at this point, we are going to emit MySQL row changes and import them into Kafka, so that other applications can pick them up and process them.
+Let's check if the connector and its tasks are running fine by using the `KafkaConnector` resource, which is easier than interacting via REST requests.
 
 ```sh
-$ kubectl scale kmm2 my-mm2 --replicas 1
-kafkamirrormaker2.kafka.strimzi.io/my-mm2 scaled
-
-$ kubectl get po
-NAME                                          READY   STATUS    RESTARTS   AGE
-my-cluster-broker-7                           1/1     Running   0          11m
-my-cluster-broker-8                           1/1     Running   0          11m
-my-cluster-broker-9                           1/1     Running   0          11m
-my-cluster-controller-0                       1/1     Running   0          11m
-my-cluster-controller-1                       1/1     Running   0          11m
-my-cluster-controller-2                       1/1     Running   0          11m
-my-cluster-entity-operator-657b477d4f-sv77v   2/2     Running   0          10m
-my-cluster-tgt-combined-0                     1/1     Running   0          6m18s
-my-cluster-tgt-combined-1                     1/1     Running   0          6m18s
-my-cluster-tgt-combined-2                     1/1     Running   0          6m18s
-my-mm2-mirrormaker2-0                         1/1     Running   0          2m5s
-strimzi-cluster-operator-d78fd875b-ljmpl      1/1     Running   0          11m
-
-$ kubectl get kmm2 my-mm2 -o yaml | yq .status
+$ kubectl get kctr mysql-source-connector -o yaml | yq .status
 conditions:
-  - lastTransitionTime: "2024-10-12T10:14:20.521458310Z"
+  - lastTransitionTime: "2024-10-28T10:53:20.123553787Z"
     status: "True"
     type: Ready
-connectors:
-  - connector:
+connectorStatus:
+  connector:
+    state: RUNNING
+    worker_id: my-connect-cluster-connect-0.my-connect-cluster-connect.test.svc:8083
+  name: mysql-source-connector
+  tasks:
+    - id: 0
       state: RUNNING
-      worker_id: my-mm2-mirrormaker2-0.my-mm2-mirrormaker2.test.svc:8083
-    name: my-cluster->my-cluster-tgt.MirrorCheckpointConnector
-    tasks: []
-    type: source
-  - connector:
-      state: RUNNING
-      worker_id: my-mm2-mirrormaker2-0.my-mm2-mirrormaker2.test.svc:8083
-    name: my-cluster->my-cluster-tgt.MirrorSourceConnector
-    tasks:
-      - id: 0
-        state: RUNNING
-        worker_id: my-mm2-mirrormaker2-0.my-mm2-mirrormaker2.test.svc:8083
-      - id: 1
-        state: RUNNING
-        worker_id: my-mm2-mirrormaker2-0.my-mm2-mirrormaker2.test.svc:8083
-      - id: 2
-        state: RUNNING
-        worker_id: my-mm2-mirrormaker2-0.my-mm2-mirrormaker2.test.svc:8083
-    type: source
-labelSelector: strimzi.io/cluster=my-mm2,strimzi.io/name=my-mm2-mirrormaker2,strimzi.io/kind=KafkaMirrorMaker2
-observedGeneration: 2
-replicas: 1
-url: http://my-mm2-mirrormaker2-api.test.svc:8083
+      worker_id: my-connect-cluster-connect-0.my-connect-cluster-connect.test.svc:8083
+  type: source
+observedGeneration: 1
+tasksMax: 1
+topics:
+  - __debezium-heartbeat.my-mysql
+  - my-mysq
 ```
 
-Finally, we can send 1 million messages to the test topic in the source Kafka cluster.
-After some time, the log end offsets should match on both clusters.
-
-> [!NOTE]  
-> This is a controlled experiment, but the actual offsets tend to naturally diverge with time, because each Kafka cluster operates independently.
-> This is why we have offset mapping metadata.
+Debezium configuration is specific to each connector and it is documented in detail.
+The value of `server_id` must be unique for each server and replication client in the MySQL cluster.
+In this case, the MySQL user must have appropriate permissions on all databases for which the connector captures changes.
 
 ```sh
-$ kubectl-kafka bin/kafka-producer-perf-test.sh --topic my-topic --record-size 100 --num-records 1000000 \
-  --throughput -1 --producer-props acks=1 bootstrap.servers=my-cluster-kafka-bootstrap:9092
-837463 records sent, 167492.6 records/sec (15.97 MB/sec), 1207.8 ms avg latency, 2358.0 ms max latency.
-1000000 records sent, 174733.531365 records/sec (16.66 MB/sec), 1202.91 ms avg latency, 2358.00 ms max latency, 1298 ms 50th, 2138 ms 95th, 2266 ms 99th, 2332 ms 99.9th.
+$ kubectl get cm my-mysql-cfg -o yaml | yq .data
+my.cnf: |
+  !include /etc/my.cnf
+  [mysqld]
+  server_id = 111111  
+  log_bin = mysql-bin
+  binlog_format = ROW
+  binlog_row_image = FULL
+  binlog_rows_query_log_events = ON
+  expire_logs_days = 10
+  gtid_mode = ON
+  enforce_gtid_consistency = ON
 
-$ kubectl-kafka bin/kafka-get-offsets.sh --bootstrap-server my-cluster-kafka-bootstrap:9092 --topic my-topic --time -1
-my-topic:0:353737
-my-topic:1:358846
-my-topic:2:287417
+$ kubectl get cm my-mysql-init -o yaml | yq .data
+initdb.sql: |
+  use testdb;
+    CREATE TABLE IF NOT EXISTS customers (
+    id INTEGER NOT NULL AUTO_INCREMENT PRIMARY KEY,
+    first_name VARCHAR(255) NOT NULL,
+    last_name VARCHAR(255) NOT NULL,
+    email VARCHAR(255) NOT NULL UNIQUE
+  );
 
-$ kubectl-kafka bin/kafka-get-offsets.sh --bootstrap-server my-cluster-tgt-kafka-bootstrap:9092 --topic my-topic --time -1
-my-topic:0:353737
-my-topic:1:358846
-my-topic:2:287417
+  CREATE USER IF NOT EXISTS 'debezium'@'%' IDENTIFIED WITH caching_sha2_password BY 'changeit';
+  GRANT SELECT, RELOAD, SHOW DATABASES, REPLICATION SLAVE, REPLICATION CLIENT ON *.* TO 'debezium'@'%';
+  FLUSH PRIVILEGES;
 ```
 
-## Tuning MM2 for throughput
-
-High-volume message generation, as seen in web activity tracking, can result in a large number of messages.
-Additionally, even a source cluster with moderate throughput can create a significant volume of messages when mirroring large amounts of existing data.
-In this case MM2 replication is slow even if you have a fast network, because default producers are not optimized for throughput.
-
-Let's run a load test and see how fast we can replicate data with default settings.
-By looking at `MirrorSourceConnector` task metrics, we see that we are saturating the producer buffer (default: 16384 bytes), which is a bottleneck.
+Enough with describing the configuration, now let's create some changes using good old SQL.
 
 ```sh
-$ kubectl scale kmm2 my-mm2 --replicas 0
-kafkamirrormaker2.kafka.strimzi.io/my-mm2 scaled
-
-$ kubectl-kafka bin/kafka-producer-perf-test.sh --topic my-topic --record-size 100 --num-records 30000000 \
-  --throughput -1 --producer-props acks=1 bootstrap.servers=my-cluster-kafka-bootstrap:9092
-1040165 records sent, 207825.2 records/sec (19.82 MB/sec), 752.2 ms avg latency, 1588.0 ms max latency.
-...
-30000000 records sent, 642659.754504 records/sec (61.29 MB/sec), 137.34 ms avg latency, 2517.00 ms max latency, 39 ms 50th, 614 ms 95th, 1474 ms 99th, 2408 ms 99.9th.
+$ kubectl exec my-mysql-0 -- sh -c 'MYSQL_PWD="changeit" mysql -u admin testdb -e "
+  INSERT INTO customers (first_name, last_name, email) VALUES (\"John\", \"Doe\", \"jdoe@example.com\");
+  UPDATE customers SET first_name = \"Jane\" WHERE id = 1;
+  INSERT INTO customers (first_name, last_name, email) VALUES (\"Dylan\", \"Dog\", \"ddog@example.com\");
+  SELECT * FROM customers;"'
+id	first_name	last_name	email
+1	Jane	Doe	jdoe@example.com
+2	Dylan	Dog	ddog@example.com
 ```
 
-On my machine, it takes about 10 minutes to get back `NaN` from the following metrics, which means replication completed.
+The MySQL connector writes change events that occur in a table to a Kafka topic named like `serverName.databaseName.tableName`.
+We created 3 changes (insert-update-insert), so we have 3 records in that topic.
+It's interesting to look at some record properties: `op` is the change type (c=create, r=read for snapshot only, u=update, d=delete), `gtid` is the global transaction identifier that is unique in a MySQL cluster, `payload.source.ts_ms` is the timestamp when the change was applied, `payload.ts_ms` is the timestamp when Debezium processed that event. The notification lag is the difference with the source timestamp.
 
 ```sh
-$ kubectl scale kmm2 my-mm2 --replicas 1
-kafkamirrormaker2.kafka.strimzi.io/my-mm2 scaled
-
-$ kubectl exec $(kubectl get po | grep my-mm2 | awk '{print $1}') -- curl -s http://localhost:9404/metrics \
-  | grep -e 'kafka_producer_batch_size_avg{clientid="\\"connector-producer-my-cluster->my-cluster-tgt.MirrorSourceConnector' \
-    -e 'kafka_producer_request_latency_avg{clientid="\\"connector-producer-my-cluster->my-cluster-tgt.MirrorSourceConnector'
-kafka_producer_batch_size_avg{clientid="\"connector-producer-my-cluster->my-cluster-tgt.MirrorSourceConnector-0\""} 16277.085847267712
-kafka_producer_batch_size_avg{clientid="\"connector-producer-my-cluster->my-cluster-tgt.MirrorSourceConnector-1\""} 16278.264065335754
-kafka_producer_batch_size_avg{clientid="\"connector-producer-my-cluster->my-cluster-tgt.MirrorSourceConnector-2\""} 16277.15397200509
-kafka_producer_request_latency_avg{clientid="\"connector-producer-my-cluster->my-cluster-tgt.MirrorSourceConnector-0\""} 10.944482877896922
-kafka_producer_request_latency_avg{clientid="\"connector-producer-my-cluster->my-cluster-tgt.MirrorSourceConnector-1\""} 14.26193724420191
-kafka_producer_request_latency_avg{clientid="\"connector-producer-my-cluster->my-cluster-tgt.MirrorSourceConnector-2\""} 11.238677867056245
+$ kubectl_kafka bin/kafka-console-consumer.sh --bootstrap-server my-cluster-kafka-bootstrap:9092 \
+  --topic my-mysql.testdb.customers --from-beginning --max-messages 3
+Struct{after=Struct{id=2,first_name=Dylan,last_name=Dog,email=ddog@example.com},source=Struct{version=2.3.7.Final,connector=mysql,name=my-mysql,ts_ms=1730112871000,db=testdb,table=customers,server_id=111111,gtid=500bc4b7-951a-11ef-aae4-9e82de0bd73c:16,file=mysql-bin.000002,pos=2602,row=0,thread=61},op=c,ts_ms=1730112871209}
+Struct{after=Struct{id=1,first_name=John,last_name=Doe,email=jdoe@example.com},source=Struct{version=2.3.7.Final,connector=mysql,name=my-mysql,ts_ms=1730112871000,db=testdb,table=customers,server_id=111111,gtid=500bc4b7-951a-11ef-aae4-9e82de0bd73c:14,file=mysql-bin.000002,pos=1707,row=0,thread=61},op=c,ts_ms=1730112871199}
+Struct{before=Struct{id=1,first_name=John,last_name=Doe,email=jdoe@example.com},after=Struct{id=1,first_name=Jane,last_name=Doe,email=jdoe@example.com},source=Struct{version=2.3.7.Final,connector=mysql,name=my-mysql,ts_ms=1730112871000,db=testdb,table=customers,server_id=111111,gtid=500bc4b7-951a-11ef-aae4-9e82de0bd73c:15,file=mysql-bin.000002,pos=2120,row=0,thread=61},op=u,ts_ms=1730112871207}
+Processed a total of 3 messages
 ```
 
-We now increase the producer buffer to default value x20 by overriding its configuration.
-Every batch will include more data, so the same test should complete in about half of the time or even less.
-The request latency increases, but it is still within reasonable bounds.
-
-```sh
-$ kubectl get kmm2 my-mm2 -o yaml | yq '.spec.mirrors[0].sourceConnector.config |= ({"producer.override.batch.size": 327680} + .)' | kubectl apply -f -
-kafkamirrormaker2.kafka.strimzi.io/my-mm2 configured
-
-$ kubectl scale kmm2 my-mm2 --replicas 0
-kafkamirrormaker2.kafka.strimzi.io/my-mm2 scaled
-
-$ kubectl-kafka bin/kafka-producer-perf-test.sh --topic my-topic --record-size 100 --num-records 30000000 \
-  --throughput -1 --producer-props acks=1 bootstrap.servers=my-cluster-kafka-bootstrap:9092
-3402475 records sent, 680495.0 records/sec (64.90 MB/sec), 32.4 ms avg latency, 342.0 ms max latency.
-...
-30000000 records sent, 923105.326318 records/sec (88.03 MB/sec), 21.94 ms avg latency, 1495.00 ms max latency, 3 ms 50th, 66 ms 95th, 201 ms 99th, 1329 ms 99.9th.
-```
-
-On my machine, it now takes about 5 minutes.
-
-```sh
-$ kubectl scale kmm2 my-mm2 --replicas 1
-kafkamirrormaker2.kafka.strimzi.io/my-mm2 scaled
-
-$ kubectl exec $(kubectl get po | grep my-mm2 | awk '{print $1}') -- curl -s http://localhost:9404/metrics \
-  | grep -e 'kafka_producer_batch_size_avg{clientid="\\"connector-producer-my-cluster->my-cluster-tgt.MirrorSourceConnector' \
-    -e 'kafka_producer_request_latency_avg{clientid="\\"connector-producer-my-cluster->my-cluster-tgt.MirrorSourceConnector'
-kafka_producer_batch_size_avg{clientid="\"connector-producer-my-cluster->my-cluster-tgt.MirrorSourceConnector-0\""} 140310.91324200912
-kafka_producer_batch_size_avg{clientid="\"connector-producer-my-cluster->my-cluster-tgt.MirrorSourceConnector-1\""} 143986.90502793295
-kafka_producer_batch_size_avg{clientid="\"connector-producer-my-cluster->my-cluster-tgt.MirrorSourceConnector-2\""} 122895.43076923076
-kafka_producer_batch_size_avg{clientid="\"connector-producer-my-cluster->my-cluster-tgt.MirrorSourceConnector-3\""} 33464.164893617024
-kafka_producer_request_latency_avg{clientid="\"connector-producer-my-cluster->my-cluster-tgt.MirrorSourceConnector-0\""} 59.678899082568805
-kafka_producer_request_latency_avg{clientid="\"connector-producer-my-cluster->my-cluster-tgt.MirrorSourceConnector-1\""} 71.0561797752809
-kafka_producer_request_latency_avg{clientid="\"connector-producer-my-cluster->my-cluster-tgt.MirrorSourceConnector-2\""} 52.08247422680412
-kafka_producer_request_latency_avg{clientid="\"connector-producer-my-cluster->my-cluster-tgt.MirrorSourceConnector-3\""} 41.670212765957444
-```
+As an additional exercise, you can extend this data pipeline by configuring a sink connector and exporting these changes to an external system like Artemis Broker.

@@ -1,126 +1,163 @@
-## Transactional application (read-process-write)
+## Scaling up the cluster with the reassign tool
 
-First, use [session1](/sessions/001) to deploy a Kafka cluster on localhost.
+First, use [this session](/sessions/001) to deploy a Kafka cluster on Kubernetes.
 
-We run the transactional application included in this example on a different terminal (there is a new poll/read every 60 seconds).
-[Look at the code](/sessions/008/kafka-txn/src/main/java/it/fvaleri/example/Main.java) to see how the low-level transaction API is used.
-
-```sh
-$ export KAFKA_VERSION BOOTSTRAP_SERVERS="localhost:9092" INSTANCE_ID="kafka-txn-0" \
-  GROUP_ID="my-group" INPUT_TOPIC="input-topic" OUTPUT_TOPIC="output-topic"
-
-$ mvn clean compile exec:java -f sessions/008/kafka-txn/pom.xml -q
-Starting instance kafka-txn-0
-Created topics: input-topic
-Waiting for new data
-Waiting for new data
-Processing records and sending downstream
-Waiting for new data
-```
-
-Then, we send one sentence to the input topic and check the result from the output topic.
+Then, we send some data.
 
 ```sh
-$ $KAFKA_HOME/bin/kafka-console-producer.sh --bootstrap-server :9092 --topic input-topic
->this is a test
->^C
-
-$ $KAFKA_HOME/bin/kafka-console-consumer.sh --bootstrap-server :9092 --topic output-topic --from-beginning
-tset a si siht
-^CProcessed a total of 1 messages
+$ kubectl_kafka bin/kafka-producer-perf-test.sh --topic my-topic --record-size 100 --num-records 1000000 \
+  --throughput -1 --producer-props acks=1 bootstrap.servers=my-cluster-kafka-bootstrap:9092
+1000000 records sent, 233699.462491 records/sec (22.29 MB/sec), 866.05 ms avg latency, 1652.00 ms max latency, 827 ms 50th, 1500 ms 95th, 1595 ms 99th, 1614 ms 99.9th.  
 ```
 
-Now we can stop the application (Ctrl+C) and take a look at partition content.
-Our output topic has one partition, but what are the `__consumer_offsets` and `__transaction_state` coordinating partitions?
-We can pass the `group.id` and `transactional.id` to the following function define in `init.sh` to find out.
+When the cluster is ready, we want to scale it up and put some load on the new broker, which otherwise will sit idle waiting for new topic creation.
+Thanks to the Cluster Operator, we can scale the cluster up by simply raising the number of broker replicas in the Kafka custom resource (CR).
 
 ```sh
-$ kafka-cp my-group
-12
+$ kubectl patch knp kafka --type merge -p '
+    spec:
+      replicas: 4'
+kafkanodepool.kafka.strimzi.io/kafka patched
 
-$ kafka-cp kafka-txn-0
-30
+$ kubectl get po -l app.kubernetes.io/name=kafka
+NAME                 READY   STATUS    RESTARTS   AGE
+my-cluster-kafka-0   1/1     Running   0          2m8s
+my-cluster-kafka-1   1/1     Running   0          2m8s
+my-cluster-kafka-2   1/1     Running   0          2m8s
+my-cluster-kafka-3   1/1     Running   0          30s
 ```
 
-We now check what's happening inside all the partitions involved in this transaction.
-In `output-topic-0`, we see that the data batch is transactional (`isTransactional`) and contains the PID and epoch.
-This batch is followed by a control batch (`isControl`), which contains a single end transaction marker record (`endTxnMarker`).
-In `__consumer_offsets-12`, the CG offset commit batch (`key: offset_commit`) is followed by a similar control batch.
+One option is to use the `kafka-reassign-partitions.sh` tool to move existing data.
+We only have one topic here, but you may have hundreds of them, where some of them are busier than others.
+You would need a custom procedure to figure out which replica changes can be done in order to improve the balance, also considering available disk space and preferred replicas.
+The result of this procedure would be a `reassign.json` file describing the desired partition state for each topic that we can pass to the tool.
 
 ```sh
-$ $KAFKA_HOME/bin/kafka-dump-log.sh --deep-iteration --print-data-log --files /tmp/kafka-logs/output-topic-0/00000000000000000000.log
-Dumping /tmp/kafka-logs/output-topic-0/00000000000000000000.log
-Log starting offset: 0
-baseOffset: 0 lastOffset: 0 count: 1 baseSequence: 0 lastSequence: 0 producerId: 0 producerEpoch: 0 partitionLeaderEpoch: 0 isTransactional: true isControl: false deleteHorizonMs: OptionalLong.empty position: 0 CreateTime: 1680383687941 size: 82 magic: 2 compresscodec: none crc: 2785707995 isvalid: true
-| offset: 0 CreateTime: 1680383687941 keySize: -1 valueSize: 14 sequence: 0 headerKeys: [] payload: tset a si siht
-baseOffset: 1 lastOffset: 1 count: 1 baseSequence: -1 lastSequence: -1 producerId: 0 producerEpoch: 0 partitionLeaderEpoch: 0 isTransactional: true isControl: true deleteHorizonMs: OptionalLong.empty position: 82 CreateTime: 1680383688163 size: 78 magic: 2 compresscodec: none crc: 3360473936 isvalid: true
-| offset: 1 CreateTime: 1680383688163 keySize: 4 valueSize: 6 sequence: -1 headerKeys: [] endTxnMarker: COMMIT coordinatorEpoch: 0
+$ kubectl exec -it my-cluster-broker-5 -- bash
+[kafka@my-cluster-broker-5 kafka]$ /opt/kafka/bin/kafka-topics.sh --bootstrap-server my-cluster-kafka-bootstrap:9092 --topic my-topic --describe
+Topic: my-topic	TopicId: XbszKNVQSSKTPB3sGvRaGg	PartitionCount: 3	ReplicationFactor: 3	Configs: min.insync.replicas=2,message.format.version=3.0-IV1
+	Topic: my-topic	Partition: 0	Leader: 0	Replicas: 0,2,1	Isr: 0,2,1
+	Topic: my-topic	Partition: 1	Leader: 2	Replicas: 2,1,0	Isr: 2,1,0
+	Topic: my-topic	Partition: 2	Leader: 1	Replicas: 1,0,2	Isr: 1,0,2
 
-$ $KAFKA_HOME/bin/kafka-dump-log.sh --deep-iteration --print-data-log --offsets-decoder --files /tmp/kafka-logs/__consumer_offsets-12/00000000000000000000.log
-Dumping /tmp/kafka-logs/__consumer_offsets-12/00000000000000000000.log
-Starting offset: 0
-# ...
-baseOffset: 1 lastOffset: 1 count: 1 baseSequence: 0 lastSequence: 0 producerId: 0 producerEpoch: 0 partitionLeaderEpoch: 0 isTransactional: true isControl: false deleteHorizonMs: OptionalLong.empty position: 339 CreateTime: 1665506597950 size: 118 magic: 2 compresscodec: none crc: 4199759988 isvalid: true
-| offset: 1 CreateTime: 1680383688085 keySize: 26 valueSize: 24 sequence: 0 headerKeys: [] key: offset_commit::group=my-group,partition=input-topic-0 payload: offset=1
-baseOffset: 2 lastOffset: 2 count: 1 baseSequence: -1 lastSequence: -1 producerId: 0 producerEpoch: 0 partitionLeaderEpoch: 0 isTransactional: true isControl: true deleteHorizonMs: OptionalLong.empty position: 457 CreateTime: 1665506597998 size: 78 magic: 2 compresscodec: none crc: 3355926470 isvalid: true
-| offset: 2 CreateTime: 1680383688163 keySize: 4 valueSize: 6 sequence: -1 headerKeys: [] endTxnMarker: COMMIT coordinatorEpoch: 0
-# ...
+[kafka@my-cluster-broker-5 kafka]$ echo -e '{
+  "version": 1,
+  "partitions": [
+    {"topic": "my-topic", "partition": 0, "replicas": [3, 2, 1]},
+    {"topic": "my-topic", "partition": 1, "replicas": [2, 1, 3]},
+    {"topic": "my-topic", "partition": 2, "replicas": [1, 3, 2]}
+  ]
+}' >/tmp/reassign.json
+
+[kafka@my-cluster-broker-5 kafka]$/opt/kafka/bin/kafka-reassign-partitions.sh --bootstrap-server my-cluster-kafka-bootstrap:9092 \
+  --reassignment-json-file /tmp/reassign.json --throttle 10000000 --execute
+Current partition replica assignment
+
+{"version":1,"partitions":[{"topic":"my-topic","partition":0,"replicas":[0,2,1],"log_dirs":["any","any","any"]},{"topic":"my-topic","partition":1,"replicas":[2,1,0],"log_dirs":["any","any","any"]},{"topic":"my-topic","partition":2,"replicas":[1,0,2],"log_dirs":["any","any","any"]}]}
+
+Save this to use as the --reassignment-json-file option during rollback
+Warning: You must run --verify periodically, until the reassignment completes, to ensure the throttle is removed.
+The inter-broker throttle limit was set to 10000000 B/s
+Successfully started partition reassignments for my-topic-0,my-topic-1,my-topic-2
 ```
 
-That was straightforward, but how is the transaction state managed by the coordinator? 
-In `__transaction_state-20` record payloads, we can see all transaction state changes keyed by TID `kafka-txn-0` (we also have PID+epoch).
-The transaction starts in the `Empty` state, then we have two `Ongoing` state changes (one for each partition registration).
-Then, when the commit is called, we have `PrepareCommit` state change, which means the broker is now committed to the transaction.
-This happens in the last batch, where the state is changed to `CompleteCommit`, terminating the transaction.
-
-```sh
-$ $KAFKA_HOME/bin/kafka-dump-log.sh --deep-iteration --print-data-log --transaction-log-decoder --files /tmp/kafka-logs/__transaction_state-30/00000000000000000000.log
-Dumping /tmp/kafka-logs/__transaction_state-20/00000000000000000000.log
-Log starting offset: 0
-baseOffset: 0 lastOffset: 0 count: 1 baseSequence: -1 lastSequence: -1 producerId: -1 producerEpoch: -1 partitionLeaderEpoch: 0 isTransactional: false isControl: false deleteHorizonMs: OptionalLong.empty position: 0 CreateTime: 1680383478420 size: 122 magic: 2 compresscodec: none crc: 2867569944 isvalid: true
-| offset: 0 CreateTime: 1680383478420 keySize: 17 valueSize: 37 sequence: -1 headerKeys: [] key: transaction_metadata::transactionalId=kafka-txn-0 payload: producerId:0,producerEpoch:0,state=Empty,partitions=[],txnLastUpdateTimestamp=1680383478418,txnTimeoutMs=60000
-baseOffset: 1 lastOffset: 1 count: 1 baseSequence: -1 lastSequence: -1 producerId: -1 producerEpoch: -1 partitionLeaderEpoch: 0 isTransactional: false isControl: false deleteHorizonMs: OptionalLong.empty position: 122 CreateTime: 1680383687954 size: 145 magic: 2 compresscodec: none crc: 3735151334 isvalid: true
-| offset: 1 CreateTime: 1680383687954 keySize: 17 valueSize: 59 sequence: -1 headerKeys: [] key: transaction_metadata::transactionalId=kafka-txn-0 payload: producerId:0,producerEpoch:0,state=Ongoing,partitions=[output-topic-0],txnLastUpdateTimestamp=1680383687952,txnTimeoutMs=60000
-baseOffset: 2 lastOffset: 2 count: 1 baseSequence: -1 lastSequence: -1 producerId: -1 producerEpoch: -1 partitionLeaderEpoch: 0 isTransactional: false isControl: false deleteHorizonMs: OptionalLong.empty position: 267 CreateTime: 1680383687961 size: 174 magic: 2 compresscodec: none crc: 3698066654 isvalid: true
-| offset: 2 CreateTime: 1680383687961 keySize: 17 valueSize: 87 sequence: -1 headerKeys: [] key: transaction_metadata::transactionalId=kafka-txn-0 payload: producerId:0,producerEpoch:0,state=Ongoing,partitions=[output-topic-0,__consumer_offsets-12],txnLastUpdateTimestamp=1680383687960,txnTimeoutMs=60000
-baseOffset: 3 lastOffset: 3 count: 1 baseSequence: -1 lastSequence: -1 producerId: -1 producerEpoch: -1 partitionLeaderEpoch: 0 isTransactional: false isControl: false deleteHorizonMs: OptionalLong.empty position: 441 CreateTime: 1680383688149 size: 174 magic: 2 compresscodec: none crc: 1700234506 isvalid: true
-| offset: 3 CreateTime: 1680383688149 keySize: 17 valueSize: 87 sequence: -1 headerKeys: [] key: transaction_metadata::transactionalId=kafka-txn-0 payload: producerId:0,producerEpoch:0,state=PrepareCommit,partitions=[output-topic-0,__consumer_offsets-12],txnLastUpdateTimestamp=1680383688148,txnTimeoutMs=60000
-baseOffset: 4 lastOffset: 4 count: 1 baseSequence: -1 lastSequence: -1 producerId: -1 producerEpoch: -1 partitionLeaderEpoch: 0 isTransactional: false isControl: false deleteHorizonMs: OptionalLong.empty position: 615 CreateTime: 1680383688180 size: 122 magic: 2 compresscodec: none crc: 3020616838 isvalid: true
-| offset: 4 CreateTime: 1680383688180 keySize: 17 valueSize: 37 sequence: -1 headerKeys: [] key: transaction_metadata::transactionalId=kafka-txn-0 payload: producerId:0,producerEpoch:0,state=CompleteCommit,partitions=[],txnLastUpdateTimestamp=1680383688154,txnTimeoutMs=60000
-```
-
-## Transaction rollback
-
-When there is a hanging transaction the LSO is stuck, which means that transactional consumers of this partition can't make any progress (CURRENT-OFFSET==LSO).
-
-```sh
-# application log
-[Consumer clientId=my-client, groupId=my-group] The following partitions still have unstable offsets which are not cleared on the broker side: [__consumer_offsets-27], 
-this could be either transactional offsets waiting for completion, or normal offsets waiting for replication after appending to local log
-
-# consumer lag grows
-$ $KAFKA_HOME/bin/kafka-consumer-groups.sh --bootstrap-server :9092 --describe --group my-group
-GROUP     TOPIC                  PARTITION  CURRENT-OFFSET  LOG-END-OFFSET  LAG   CONSUMER-ID  HOST           CLIENT-ID
-my-group  __consumer_offsets-27  9          913095344       913097449       2105  my-client-0  /10.60.172.97  my-client
-```
-
-If the partition is part of a compacted topic like `__consumer_offsets`, compaction is also blocked, causing unbounded partition growth.
-
-```sh
-# last cleaned offset never changes
-$ grep "__consumer_offsets 27" /opt/kafka/data/kafka-0/cleaner-offset-checkpoint
-__consumer_offsets 27 913095344
-```
-
-In Kafka 3+ there is an official command line tool that you can use to identify and rollback hanging transactions.
+To prevent any impact on the cluster while moving partitions between brokers, we use the `--throttle` option with a limit of 10 MB/s.
 
 > [!IMPORTANT]  
-> The `CLUSTER_ACTION` operation type is required if authorization is enabled.
+> The `--throttle` option also applies throttling to the normal replication traffic between brokers.
+> We need to find the right balance to ensure that we can move data in a reasonable amount of time without slowing down replication too much.
+> Don't forget to call `--verify` at the end to disable replication throttling, which otherwise will continue to affect the cluster.
+
+We can start from a safe throttle value and then use the `kafka.server:type=FetcherLagMetrics,name=ConsumerLag,clientId=([-.\w]+),topic=([-.\w]+),partition=([0-9]+)` metric to observe how far the followers are lagging behind the leader for a given partition. 
+If this lag is growing or the reassignment is taking too much time, we can run the command again with the `--additional` option to increase the throttle value.
+
+After the reassignment is started, we use the `--verify` option to check the status of the reassignment process and disable the replication throttling.
+When the process is done, we can check if the topic configuration changes have been applied.
 
 ```sh
-$ $KAFKA_HOME/bin/kafka-transactions.sh --bootstrap-server :9092 find-hanging --broker 0
-Topic                  Partition   ProducerId  ProducerEpoch   StartOffset LastTimestamp               Duration(s)
-__consumer_offsets     27          171100      1               913095344   2022-06-06T03:16:47Z        209793
+[kafka@my-cluster-broker-5 kafka]$ /opt/kafka/bin/kafka-reassign-partitions.sh --bootstrap-server my-cluster-kafka-bootstrap:9092 \
+  --reassignment-json-file /tmp/reassign.json --verify
+Status of partition reassignment:
+Reassignment of partition my-topic-0 is completed.
+Reassignment of partition my-topic-1 is completed.
+Reassignment of partition my-topic-2 is completed.
 
-$KAFKA_HOME/bin/kafka-transactions.sh --bootstrap-server :9092 abort --topic __consumer_offsets --partition 27 --start-offset 913095344
+Clearing broker-level throttles on brokers 0,1,2,3
+Clearing topic-level throttles on topic my-topic
+
+[kafka@my-cluster-broker-5 kafka]$ /opt/kafka/bin/kafka-topics.sh --bootstrap-server my-cluster-kafka-bootstrap:9092 --topic my-topic --describe
+Topic: my-topic	TopicId: XbszKNVQSSKTPB3sGvRaGg	PartitionCount: 3	ReplicationFactor: 3	Configs: min.insync.replicas=2,message.format.version=3.0-IV1
+	Topic: my-topic	Partition: 0	Leader: 3	Replicas: 3,2,1	Isr: 2,1,3
+	Topic: my-topic	Partition: 1	Leader: 2	Replicas: 2,1,3	Isr: 2,1,3
+	Topic: my-topic	Partition: 2	Leader: 1	Replicas: 1,3,2	Isr: 1,2,3
+
+[kafka@my-cluster-broker-5 kafka]$ exit
+exit
+```
+
+## Scaling up the cluster with Cruise Control
+
+First, use [this session](/sessions/001) to deploy a Kafka cluster on Kubernetes.
+
+When the cluster is ready, we send some data and check how partitions are distributed among the brokers.
+
+```sh
+$ kubectl_kafka bin/kafka-producer-perf-test.sh --topic my-topic --record-size 100 --num-records 10000000 \
+  --throughput -1 --producer-props acks=1 bootstrap.servers=my-cluster-kafka-bootstrap:9092
+...
+10000000 records sent, 165387.668695 records/sec (15.77 MB/sec), 1750.32 ms avg latency, 5498.00 ms max latency, 1504 ms 50th, 3831 ms 95th, 4697 ms 99th, 5377 ms 99.9th.
+
+$ kubectl_kafka bin/kafka-topics.sh --bootstrap-server my-cluster-kafka-bootstrap:9092 --describe --topic my-topic
+Topic: my-topic	TopicId: Gkti6y9fQjiYCU02tkwTFg	PartitionCount: 3	ReplicationFactor: 3	Configs: min.insync.replicas=2,retention.bytes=1073741824
+	Topic: my-topic	Partition: 0	Leader: 9	Replicas: 9,7,8	Isr: 7,8,9	Elr: 	LastKnownElr: 
+	Topic: my-topic	Partition: 1	Leader: 7	Replicas: 7,8,9	Isr: 7,8,9	Elr: 	LastKnownElr: 
+	Topic: my-topic	Partition: 2	Leader: 8	Replicas: 8,9,7	Isr: 7,8,9	Elr: 	LastKnownElr: 
+```
+
+Then, we deploy Cruise Control with the auto-rebalancing feature enabled.
+
+> [!NOTE]  
+> The auto-rebalancing feature will automatically generate and execute KafkaRebalance resources on cluster scale up and down.
+> Each mode can be customized by adding custom KafkaRebalance templates.
+
+The Cluster Operator will trigger a rolling update to add the metrics reporter plugin to brokers, and then it will deploy Cruise Control.
+
+```sh
+$ kubectl patch k my-cluster --type merge -p '
+    spec:
+      cruiseControl: 
+        autoRebalance:
+          - mode: add-brokers
+          - mode: remove-brokers'
+kafka.kafka.strimzi.io/my-cluster patched
+```
+
+Wait some time for Cruise Control to build the workload model and then scale up the Kafka cluster, adding two more brokers.
+
+```sh
+$ kubectl patch knp broker --type merge -p '
+    spec:
+      replicas: 5'
+kafkanodepool.kafka.strimzi.io/broker patched
+```
+
+Follow the KafkaRebalance execution from command line.
+
+```sh
+$ kubectl get kr -w
+NAME                                      CLUSTER      TEMPLATE   STATUS     
+my-cluster-auto-rebalancing-add-brokers   my-cluster              PendingProposal
+my-cluster-auto-rebalancing-add-brokers   my-cluster              ProposalReady
+my-cluster-auto-rebalancing-add-brokers   my-cluster              Rebalancing
+my-cluster-auto-rebalancing-add-brokers   my-cluster              Ready
+```
+
+When KafkaRebalance is ready, we can see that new brokers contain some of the existing replicas.
+
+```sh
+$ kubectl_kafka bin/kafka-topics.sh --bootstrap-server my-cluster-kafka-bootstrap:9092 --describe --topic my-topicic
+Topic: my-topic	TopicId: Gkti6y9fQjiYCU02tkwTFg	PartitionCount: 3	ReplicationFactor: 3	Configs: min.insync.replicas=2,retention.bytes=1073741824
+    Topic: my-topic Partition: 0    Leader: 9   Replicas: 9,10,11   Isr: 10,9,11    Elr:    LastKnownElr: 
+    Topic: my-topic Partition: 1    Leader: 11  Replicas: 11,10,9   Isr: 10,9,11    Elr:    LastKnownElr: 
+    Topic: my-topic Partition: 2    Leader: 8   Replicas: 8,9,7     Isr: 7,8,9      Elr:    LastKnownElr: 
 ```
