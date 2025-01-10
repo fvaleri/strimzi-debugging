@@ -4490,7 +4490,7 @@ metadata:
     apicur.io/type: operator
     apicur.io/version: 1.1.0
   name: apicurio-registry-operator
-  namespace: apicurio-registry-operator-namespace
+  namespace: ${NAMESPACE}
 ---
 apiVersion: rbac.authorization.k8s.io/v1
 kind: Role
@@ -4500,7 +4500,7 @@ metadata:
     apicur.io/type: operator
     apicur.io/version: 1.1.0
   name: apicurio-registry-operator-leader-election-role
-  namespace: apicurio-registry-operator-namespace
+  namespace: ${NAMESPACE}
 rules:
   - apiGroups:
       - ""
@@ -4643,7 +4643,7 @@ metadata:
     apicur.io/type: operator
     apicur.io/version: 1.1.0
   name: apicurio-registry-operator-leader-election-rolebinding
-  namespace: apicurio-registry-operator-namespace
+  namespace: ${NAMESPACE}
 roleRef:
   apiGroup: rbac.authorization.k8s.io
   kind: Role
@@ -4651,7 +4651,7 @@ roleRef:
 subjects:
   - kind: ServiceAccount
     name: apicurio-registry-operator
-    namespace: apicurio-registry-operator-namespace
+    namespace: ${NAMESPACE}
 ---
 apiVersion: rbac.authorization.k8s.io/v1
 kind: ClusterRoleBinding
@@ -4668,7 +4668,7 @@ roleRef:
 subjects:
   - kind: ServiceAccount
     name: apicurio-registry-operator
-    namespace: apicurio-registry-operator-namespace
+    namespace: ${NAMESPACE}
 ---
 apiVersion: apps/v1
 kind: Deployment
@@ -4679,7 +4679,7 @@ metadata:
     apicur.io/version: 1.1.0
     name: apicurio-registry-operator
   name: apicurio-registry-operator
-  namespace: apicurio-registry-operator-namespace
+  namespace: ${NAMESPACE}
 spec:
   replicas: 1
   selector:
@@ -4745,7 +4745,7 @@ spec:
               memory: 100Mi
             requests:
               cpu: 100m
-              memory: 50Mi
+              memory: 100Mi
           securityContext:
             allowPrivilegeEscalation: false
             capabilities:

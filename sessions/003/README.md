@@ -1,147 +1,211 @@
-## Schema registry in action
+## Get diagnostic data
 
-First, use [session1](/sessions/001) to deploy a Kafka cluster on Kubernetes.
-We also add an external listener (see [session2](/sessions/002) for more details).
+First, use [this session](/sessions/001) to deploy a Kafka cluster on Kubernetes.
+
+When debugging issues, you usually need to retrieve various artifacts from the environment, which can be a lot of effort.
+Fortunately, Strimzi provides a must-gather script that can be used to download all relevant artifacts and logs from a specific Kafka cluster.
+
+> [!NOTE]  
+> You can add the `--secrets=all` option to also get secret values.
+
+```sh
+$ curl -s https://raw.githubusercontent.com/strimzi/strimzi-kafka-operator/main/tools/report.sh \
+  | bash -s -- --namespace=test --cluster=my-cluster --out-dir=~/Downloads
+deployments
+    deployment.apps/my-cluster-entity-operator
+statefulsets
+replicasets
+    replicaset.apps/my-cluster-entity-operator-bb7c65dd4
+configmaps
+    configmap/my-cluster-broker-5
+    configmap/my-cluster-broker-6
+    configmap/my-cluster-broker-5
+    configmap/my-cluster-controller-0
+    configmap/my-cluster-controller-1
+    configmap/my-cluster-controller-2
+    configmap/my-cluster-entity-topic-operator-config
+    configmap/my-cluster-entity-user-operator-config
+secrets
+    secret/my-cluster-clients-ca
+    secret/my-cluster-clients-ca-cert
+    secret/my-cluster-cluster-ca
+    secret/my-cluster-cluster-ca-cert
+    secret/my-cluster-cluster-operator-certs
+    secret/my-cluster-entity-topic-operator-certs
+    secret/my-cluster-entity-user-operator-certs
+    secret/my-cluster-kafka-brokers
+services
+    service/my-cluster-kafka-bootstrap
+    service/my-cluster-kafka-brokers
+poddisruptionbudgets
+    poddisruptionbudget.policy/my-cluster-kafka
+roles
+    role.rbac.authorization.k8s.io/my-cluster-entity-operator
+rolebindings
+    rolebinding.rbac.authorization.k8s.io/my-cluster-entity-topic-operator-role
+    rolebinding.rbac.authorization.k8s.io/my-cluster-entity-user-operator-role
+networkpolicies
+    networkpolicy.networking.k8s.io/my-cluster-entity-operator
+    networkpolicy.networking.k8s.io/my-cluster-network-policy-kafka
+pods
+    pod/my-cluster-broker-5
+    pod/my-cluster-broker-6
+    pod/my-cluster-broker-5
+    pod/my-cluster-controller-0
+    pod/my-cluster-controller-1
+    pod/my-cluster-controller-2
+    pod/my-cluster-entity-operator-bb7c65dd4-9zdmk
+persistentvolumeclaims
+    persistentvolumeclaim/data-my-cluster-broker-5
+    persistentvolumeclaim/data-my-cluster-broker-6
+    persistentvolumeclaim/data-my-cluster-broker-5
+    persistentvolumeclaim/data-my-cluster-controller-0
+    persistentvolumeclaim/data-my-cluster-controller-1
+    persistentvolumeclaim/data-my-cluster-controller-2
+ingresses
+routes
+clusterroles
+    clusterrole.rbac.authorization.k8s.io/strimzi-cluster-operator-global
+    clusterrole.rbac.authorization.k8s.io/strimzi-cluster-operator-leader-election
+    clusterrole.rbac.authorization.k8s.io/strimzi-cluster-operator-namespaced
+    clusterrole.rbac.authorization.k8s.io/strimzi-cluster-operator-watched
+    clusterrole.rbac.authorization.k8s.io/strimzi-entity-operator
+    clusterrole.rbac.authorization.k8s.io/strimzi-kafka-broker
+    clusterrole.rbac.authorization.k8s.io/strimzi-kafka-client
+clusterrolebindings
+    clusterrolebinding.rbac.authorization.k8s.io/strimzi-cluster-operator
+    clusterrolebinding.rbac.authorization.k8s.io/strimzi-cluster-operator-kafka-broker-delegation
+    clusterrolebinding.rbac.authorization.k8s.io/strimzi-cluster-operator-kafka-client-delegation
+clusteroperator
+    deployment.apps/strimzi-cluster-operator
+    replicaset.apps/strimzi-cluster-operator-6596f469c9
+    pod/strimzi-cluster-operator-6596f469c9-smsw2
+    configmap/strimzi-cluster-operator
+draincleaner
+customresources
+    kafkanodepools.kafka.strimzi.io
+        broker
+        controller
+    kafkas.kafka.strimzi.io
+        my-cluster
+    kafkatopics.kafka.strimzi.io
+        my-topic
+    strimzipodsets.core.strimzi.io
+        my-cluster-broker
+        my-cluster-controller
+events
+logs
+    my-cluster-broker-5
+    my-cluster-broker-6
+    my-cluster-broker-5
+    my-cluster-controller-0
+    my-cluster-controller-1
+    my-cluster-controller-2
+    my-cluster-entity-operator-bb7c65dd4-9zdmk
+Report file report-17-03-2025_12-26-05.zip created
+```
+
+## Get heap dumps
+
+It is also possible to collect broker JVM heap dumps and other advanced diagnostic data (thread dumps, flame graphs, etc).
+
+> [!WARNING]
+> Taking a heap dump is a heavy operation that can cause the Java application to hang.
+> It is not recommended in production, unless it is not possible to reproduce the memory issue in a test environment.
+
+Debugging locally can often be easier and faster.
+However, some issues only manifest in Kubernetes due to factors like networking, resource limits, or interactions with other components.
+Even if you try to match your local setup to the Kubernetes configuration, subtle differences (e.g. service discovery, security settings, or operator-managed logic) might lead to different behavior.
+
+Create an additional volume of the desired size using a PVC.
+
+```sh
+$ echo -e "apiVersion: v1
+kind: PersistentVolumeClaim
+metadata:
+  name: my-pvc
+spec:
+  accessModes:
+    - ReadWriteOnce
+  resources:
+    requests:
+      storage: 10Gi
+  storageClassName: standard" | kubectl create -f -
+persistentvolumeclaim/my-pvc created
+```
+
+Mount the new volume using the additional volume feature within Kafka template (rolling update).
+It is required to use `/mnt` mount point.
+
+> [!WARNING]
+> Adding a custom volume triggers pod restarts, which can make it difficult to capture an issue that has already occurred.
+> If the issue cannot be easily reproduced in a test environment, configuring the volume in advance could help avoid the pod restarts when you need them most.
 
 ```sh
 $ kubectl patch k my-cluster --type merge -p '
     spec:
       kafka:
-        listeners:
-          - name: external
-            port: 9094
-            type: ingress
-            tls: true
-            configuration:
-              class: nginx
-              hostTemplate: broker-{nodeId}.my-cluster.f12i.io
-              bootstrap:
-                host: bootstrap.my-cluster.f12i.io'
+        template:
+            pod:
+              volumes:
+                - name: my-volume
+                  persistentVolumeClaim:
+                    claimName: my-pvc
+            kafkaContainer:
+              volumeMounts:
+                - name: my-volume
+                  mountPath: "/mnt/data"'
 kafka.kafka.strimzi.io/my-cluster patched
 ```
 
-Then, we deploy the Service Registry instance with the in-memory storage system.
+When the rolling update completes, create a broker heap dump and copy the output file to localhost.
 
 ```sh
-$ for f in sessions/003/install/*.yaml; do sed "s/namespace: .*/namespace: $NAMESPACE/g" $f | kubectl create -f - ; done
-customresourcedefinition.apiextensions.k8s.io/apicurioregistries.registry.apicur.io created
-serviceaccount/apicurio-registry-operator created
-role.rbac.authorization.k8s.io/apicurio-registry-operator-leader-election-role created
-clusterrole.rbac.authorization.k8s.io/apicurio-registry-operator-role created
-rolebinding.rbac.authorization.k8s.io/apicurio-registry-operator-leader-election-rolebinding created
-clusterrolebinding.rbac.authorization.k8s.io/apicurio-registry-operator-rolebinding created
-deployment.apps/apicurio-registry-operator created
-apicurioregistry.registry.apicur.io/my-registry created
+$ PID="$(kubectl exec my-cluster-broker-5 -- jcmd | grep "kafka.Kafka" | awk '{print $1}')"
 
-$ kubectl get po
-NAME                                          READY   STATUS    RESTARTS   AGE
-apicurio-registry-operator-9448ffc74-b6whl    1/1     Running   0          69s
-my-cluster-broker-7                           1/1     Running   0          4m54s
-my-cluster-broker-8                           1/1     Running   0          4m27s
-my-cluster-broker-9                           1/1     Running   0          5m19s
-my-cluster-controller-0                       1/1     Running   0          7m32s
-my-cluster-controller-1                       1/1     Running   0          7m32s
-my-cluster-controller-2                       1/1     Running   0          7m32s
-my-cluster-entity-operator-67b8cc5c87-74qlb   2/2     Running   0          6m59s
-my-registry-deployment-858c7dc76b-gjkcs       1/1     Running   0          66s
-strimzi-cluster-operator-d78fd875b-dcjxw      1/1     Running   0          8m36s
+$ kubectl exec my-cluster-broker-5 -- jcmd "$PID" VM.flags
+724:
+-XX:CICompilerCount=4 -XX:ConcGCThreads=3 -XX:G1ConcRefinementThreads=10 -XX:G1EagerReclaimRemSetThreshold=32 -XX:G1HeapRegionSize=4194304
+-XX:GCDrainStackTargetSize=64 -XX:+HeapDumpOnOutOfMemoryError -XX:HeapDumpPath=/mnt/data/oome.hprof -XX:InitialHeapSize=5368709120
+-XX:+ManagementServer -XX:MarkStackSize=4194304 -XX:MaxHeapSize=5368709120 -XX:MaxNewSize=3221225472 -XX:MinHeapDeltaBytes=4194304
+-XX:MinHeapSize=5368709120 -XX:NonNMethodCodeHeapSize=5839372 -XX:NonProfiledCodeHeapSize=122909434 -XX:ProfiledCodeHeapSize=122909434
+-XX:ReservedCodeCacheSize=251658240 -XX:+SegmentedCodeCache -XX:SoftMaxHeapSize=5368709120 -XX:-THPStackMitigation
+-XX:+UseCompressedClassPointers -XX:+UseCompressedOops -XX:+UseFastUnorderedTimeStamps -XX:+UseG1GC
+
+$ kubectl exec my-cluster-broker-5 -- jcmd "$PID" GC.heap_dump /mnt/data/heap.hprof
+724:
+Dumping heap to /mnt/data/heap.hprof ...
+Heap dump file created [179236580 bytes in 0.664 secs]
+
+$ kubectl cp my-cluster-broker-5:/mnt/data/heap.hprof "$HOME"/Downloads/heap.hprof
+tar: Removing leading `/' from member names
 ```
 
-Now, we just need to tell our client application where it can find the Kafka cluster by setting the bootstrap URL and the schema registry REST endpoint.
-We also need to provide the truststore location and password because we are connecting externally.
+If the pod is crash looping, the dump can still be recovered by spinning up a temporary pod and mounting the volume.
 
 ```sh
-$ kubectl get secret my-cluster-cluster-ca-cert -o jsonpath="{.data['ca\.p12']}" | base64 -d >/tmp/truststore.p12 \
-  && export KAFKA_VERSION BOOTSTRAP_SERVERS=$(kubectl get k my-cluster -o yaml | yq '.status.listeners.[] | select(.name == "external").bootstrapServers') \
-  SSL_TRUSTSTORE_LOCATION="/tmp/truststore.p12" SSL_TRUSTSTORE_PASSWORD=$(kubectl get secret my-cluster-cluster-ca-cert -o jsonpath="{.data['ca\.password']}" | base64 -d) \
-  REGISTRY_URL=http://$(kubectl get apicurioregistries my-registry -o jsonpath="{.status.info.host}")/apis/registry/v2 TOPIC_NAME="my-topic" ARTIFACT_GROUP="default"
+$ kubectl run my-pod --restart "Never" --image "foo" --overrides "{
+  \"spec\": {
+    \"containers\": [
+      {
+        \"name\": \"busybox\",
+        \"image\": \"busybox\",
+        \"imagePullPolicy\": \"IfNotPresent\",
+        \"command\": [\"/bin/sh\", \"-c\", \"trap : TERM INT; sleep infinity & wait\"],
+        \"volumeMounts\": [
+          {\"name\": \"data\", \"mountPath\": \"/mnt/data\"}
+        ]
+      }
+    ],
+    \"volumes\": [
+      {\"name\": \"data\", \"persistentVolumeClaim\": {\"claimName\": \"my-pvc\"}}
+    ]
+  }
+}"
 
-$ mvn compile exec:java -f sessions/003/kafka-avro/pom.xml -q
-Producing records
-Records produced
-Consuming all records
-Record: Hello-1663594981476
-Record: Hello-1663594982041
-Record: Hello-1663594982041
-Record: Hello-1663594982041
-Record: Hello-1663594982042
+$ kubectl exec my-pod -- ls -lh /mnt/data
+total 171M   
+-rw-------    1 1001     root      170.9M Mar 17 14:38 heap.hprof
 ```
 
-[Look at the code](/sessions/003/kafka-avro/src/main/java/it/fvaleri/example/Main.java) to see how the schema is registered and used.
-The registration happens at build time and the Maven plugin executes the following API request for every configured schema artifact.
-
-> [!NOTE]  
-> We are using the `default` group id, but you can specify a custom name.
-
-```sh
-$ curl -s -X POST -H "Content-Type: application/json" \
-  -H "X-Registry-ArtifactId: my-topic-value" -H "X-Registry-ArtifactType: AVRO" \
-  -d @sessions/003/kafka-avro/src/main/resources/greeting.avsc \
-  "$REGISTRY_URL/groups/default/artifacts?ifExists=RETURN_OR_UPDATE" | jq
-{
-  "name": "Greeting",
-  "createdBy": "",
-  "createdOn": "2022-09-30T06:31:36+0000",
-  "modifiedBy": "",
-  "modifiedOn": "2022-09-30T06:31:36+0000",
-  "id": "my-topic-value",
-  "version": "1",
-  "type": "AVRO",
-  "globalId": 4,
-  "state": "ENABLED",
-  "contentId": 6
-}
-```
-
-Finally, we use the REST API to confirm that our schema was registered correctly.
-We can also look at the schema content and metadata, which may be useful for debugging.
-
-```sh
-$ curl -s "$REGISTRY_URL/search/artifacts" | jq
-{
-  "artifacts": [
-    {
-      "id": "my-topic-value",
-      "name": "Greeting",
-      "createdOn": "2022-09-19T13:42:59+0000",
-      "createdBy": "",
-      "type": "AVRO",
-      "state": "ENABLED",
-      "modifiedOn": "2022-09-19T13:42:59+0000",
-      "modifiedBy": ""
-    }
-  ],
-  "count": 1
-}
-
-$ curl -s "$REGISTRY_URL/groups/default/artifacts/my-topic-value" | jq
-{
-  "type": "record",
-  "name": "Greeting",
-  "fields": [
-    {
-      "name": "Message",
-      "type": "string"
-    },
-    {
-      "name": "Time",
-      "type": "long"
-    }
-  ]
-}
-
-$ curl -s "$REGISTRY_URL/groups/default/artifacts/my-topic-value/meta" | jq
-{
-  "name": "Greeting",
-  "createdBy": "",
-  "createdOn": "2022-09-19T13:42:59+0000",
-  "modifiedBy": "",
-  "modifiedOn": "2022-09-19T13:42:59+0000",
-  "id": "my-topic-value",
-  "version": "1",
-  "type": "AVRO",
-  "globalId": 1,
-  "state": "ENABLED",
-  "contentId": 1
-}
-```
+For the heap dump analysis you can use a tool like Eclipse Memory Analyzer.

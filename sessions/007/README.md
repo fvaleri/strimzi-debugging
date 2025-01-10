@@ -1,164 +1,175 @@
-## Scaling up the cluster with the reassign tool
+## Use Mirror Maker 2 for disaster recovery
 
-First, use [session1](/sessions/001) to deploy a Kafka cluster on Kubernetes.
+First, use [this session](/sessions/001) to deploy a Kafka cluster on Kubernetes.
 
-Then, we send some data.
+At this point, we can deploy the target cluster.
+
+```sh
+$ kubectl create -f sessions/007/instal/target.yaml
+kafkanodepool.kafka.strimzi.io/combined created
+kafka.kafka.strimzi.io/my-cluster-tgt created
+```
+
+When the target cluster is ready, we can deploy Mirror Maker 2 (MM2).
+The recommended way of deploying the MM2 is near the target Kafka cluster (same subnet or zone), because the producer overhead is greater than the consumer overhead.
+
+> [!IMPORTANT]
+> When source and target clusters run on different namespaces or Kubernetes clusters, you have to copy the source `cluster-ca-cert` in the target namespace where MM2 is running.
+
+```sh
+$ export SOURCE_NS="$NAMESPACE" TARGET_NS="$NAMESPACE"; envsubst < sessions/007/mm2.yaml | kubectl create -f -
+kafkamirrormaker2.kafka.strimzi.io/my-mm2-cluster created
+configmap/mirror-maker-2-metrics created
+```
+
+MM2 runs on top of Kafka Connect with a set of configurable built-in connectors.
+The `MirrorSourceConnector` replicates remote topics, ACLs, and configurations of a single source cluster and emits offset syncs.
+The `MirrorCheckpointConnector` emits consumer group offsets checkpoints to enable failover points.
+
+```sh
+$ kubectl get po
+NAME                                          READY   STATUS    RESTARTS   AGE
+my-cluster-broker-5                           1/1     Running   0          11m
+my-cluster-broker-6                           1/1     Running   0          11m
+my-cluster-broker-7                           1/1     Running   0          11m
+my-cluster-controller-0                       1/1     Running   0          11m
+my-cluster-controller-1                       1/1     Running   0          11m
+my-cluster-controller-2                       1/1     Running   0          11m
+my-cluster-entity-operator-657b477d4f-sv77v   2/2     Running   0          10m
+my-cluster-tgt-combined-0                     1/1     Running   0          6m18s
+my-cluster-tgt-combined-1                     1/1     Running   0          6m18s
+my-cluster-tgt-combined-2                     1/1     Running   0          6m18s
+my-mm2-cluster-mirrormaker2-0                 1/1     Running   0          2m5s
+strimzi-cluster-operator-d78fd875b-ljmpl      1/1     Running   0          11m
+
+$ kubectl get kmm2 my-mm2-cluster -o yaml | yq .status
+conditions:
+  - lastTransitionTime: "2024-10-12T10:14:20.521458310Z"
+    status: "True"
+    type: Ready
+connectors:
+  - connector:
+      state: RUNNING
+      worker_id: my-mm2-cluster-mirrormaker2-0.my-mm2-cluster-mirrormaker2.test.svc:8083
+    name: my-cluster->my-cluster-tgt.MirrorCheckpointConnector
+    tasks: []
+    type: source
+  - connector:
+      state: RUNNING
+      worker_id: my-mm2-cluster-mirrormaker2-0.my-mm2-cluster-mirrormaker2.test.svc:8083
+    name: my-cluster->my-cluster-tgt.MirrorSourceConnector
+    tasks:
+      - id: 0
+        state: RUNNING
+        worker_id: my-mm2-cluster-mirrormaker2-0.my-mm2-cluster-mirrormaker2.test.svc:8083
+      - id: 1
+        state: RUNNING
+        worker_id: my-mm2-cluster-mirrormaker2-0.my-mm2-cluster-mirrormaker2.test.svc:8083
+      - id: 2
+        state: RUNNING
+        worker_id: my-mm2-cluster-mirrormaker2-0.my-mm2-cluster-mirrormaker2.test.svc:8083
+    type: source
+labelSelector: strimzi.io/cluster=my-mm2-cluster,strimzi.io/name=my-mm2-cluster-mirrormaker2,strimzi.io/kind=KafkaMirrorMaker2
+observedGeneration: 2
+replicas: 1
+url: http://my-mm2-cluster-mirrormaker2-api.test.svc:8083
+```
+
+In order to test message replication, we can send 1 million messages to the test topic in the source Kafka cluster.
+
+> [!WARNING]
+> Message replication is asynchronous, so there is always a delta of messaging that is at risk in case of disaster.
+ 
+After some time, the log end offsets should match on both clusters.
+In real world scenarios, the actual offsets tend to naturally diverge with time, because each Kafka cluster operates independently.
 
 ```sh
 $ kubectl-kafka bin/kafka-producer-perf-test.sh --topic my-topic --record-size 100 --num-records 1000000 \
   --throughput -1 --producer-props acks=1 bootstrap.servers=my-cluster-kafka-bootstrap:9092
-1000000 records sent, 233699.462491 records/sec (22.29 MB/sec), 866.05 ms avg latency, 1652.00 ms max latency, 827 ms 50th, 1500 ms 95th, 1595 ms 99th, 1614 ms 99.9th.  
+837463 records sent, 167492.6 records/sec (15.97 MB/sec), 1207.8 ms avg latency, 2358.0 ms max latency.
+1000000 records sent, 174733.531365 records/sec (16.66 MB/sec), 1202.91 ms avg latency, 2358.00 ms max latency, 1298 ms 50th, 2138 ms 95th, 2266 ms 99th, 2332 ms 99.9th.
+
+$ kubectl-kafka bin/kafka-get-offsets.sh --bootstrap-server my-cluster-kafka-bootstrap:9092 --topic my-topic --time -1
+my-topic:0:353737
+my-topic:1:358846
+my-topic:2:287417
+
+$ kubectl-kafka bin/kafka-get-offsets.sh --bootstrap-server my-cluster-tgt-kafka-bootstrap:9092 --topic my-topic --time -1
+my-topic:0:353737
+my-topic:1:358846
+my-topic:2:287417
 ```
 
-When the cluster is ready, we want to scale it up and put some load on the new broker, which otherwise will sit idle waiting for new topic creation.
-Thanks to the Cluster Operator, we can scale the cluster up by simply raising the number of broker replicas in the Kafka custom resource (CR).
+## Tuning MM2 for throughput
+
+High-volume message generation, as seen in web activity tracking, can result in a large number of messages.
+Additionally, even a source cluster with moderate throughput can create a significant volume of messages when mirroring large amounts of existing data.
+In this case MM2 replication is slow even if you have a fast network, because default producers are not optimized for throughput.
+
+Let's run a load test and see how fast we can replicate data with default settings.
+By looking at `MirrorSourceConnector` task metrics, we see that we are saturating the producer buffer (default: 16384 bytes), which is a bottleneck.
 
 ```sh
-$ kubectl patch knp kafka --type merge -p '
-    spec:
-      replicas: 4'
-kafkanodepool.kafka.strimzi.io/kafka patched
+$ kubectl scale kmm2 my-mm2-cluster --replicas 0
+kafkamirrormaker2.kafka.strimzi.io/my-mm2-cluster scaled
 
-$ kubectl get po -l app.kubernetes.io/name=kafka
-NAME                 READY   STATUS    RESTARTS   AGE
-my-cluster-kafka-0   1/1     Running   0          2m8s
-my-cluster-kafka-1   1/1     Running   0          2m8s
-my-cluster-kafka-2   1/1     Running   0          2m8s
-my-cluster-kafka-3   1/1     Running   0          30s
-```
-
-One option is to use the `kafka-reassign-partitions.sh` tool to move existing data.
-We only have one topic here, but you may have hundreds of them, where some of them are busier than others.
-You would need a custom procedure to figure out which replica changes can be done in order to improve the balance, also considering available disk space and preferred replicas.
-The result of this procedure would be a `reassign.json` file describing the desired partition state for each topic that we can pass to the tool.
-
-```sh
-$ kubectl run rebalancing -itq --rm --restart="Never" --image="apache/kafka:$KAFKA_VERSION" -- bash
-rebalancing:/$ /opt/kafka/bin/kafka-topics.sh --bootstrap-server my-cluster-kafka-bootstrap:9092 --topic my-topic --describe
-Topic: my-topic	TopicId: XbszKNVQSSKTPB3sGvRaGg	PartitionCount: 3	ReplicationFactor: 3	Configs: min.insync.replicas=2,message.format.version=3.0-IV1
-	Topic: my-topic	Partition: 0	Leader: 0	Replicas: 0,2,1	Isr: 0,2,1
-	Topic: my-topic	Partition: 1	Leader: 2	Replicas: 2,1,0	Isr: 2,1,0
-	Topic: my-topic	Partition: 2	Leader: 1	Replicas: 1,0,2	Isr: 1,0,2
-
-rebalancing:/$ echo -e '{
-  "version": 1,
-  "partitions": [
-    {"topic": "my-topic", "partition": 0, "replicas": [3, 2, 1]},
-    {"topic": "my-topic", "partition": 1, "replicas": [2, 1, 3]},
-    {"topic": "my-topic", "partition": 2, "replicas": [1, 3, 2]}
-  ]
-}' >/tmp/reassign.json
-
-rebalancing:/$ /opt/kafka/bin/kafka-reassign-partitions.sh --bootstrap-server my-cluster-kafka-bootstrap:9092 \
-  --reassignment-json-file /tmp/reassign.json --throttle 10000000 --execute
-Current partition replica assignment
-
-{"version":1,"partitions":[{"topic":"my-topic","partition":0,"replicas":[0,2,1],"log_dirs":["any","any","any"]},{"topic":"my-topic","partition":1,"replicas":[2,1,0],"log_dirs":["any","any","any"]},{"topic":"my-topic","partition":2,"replicas":[1,0,2],"log_dirs":["any","any","any"]}]}
-
-Save this to use as the --reassignment-json-file option during rollback
-Warning: You must run --verify periodically, until the reassignment completes, to ensure the throttle is removed.
-The inter-broker throttle limit was set to 10000000 B/s
-Successfully started partition reassignments for my-topic-0,my-topic-1,my-topic-2
-```
-
-To prevent any impact on the cluster while moving partitions between brokers, we use the `--throttle` option with a limit of 10 MB/s.
-
-> [!IMPORTANT]  
-> The `--throttle` option also applies throttling to the normal replication traffic between brokers.
-> We need to find the right balance to ensure that we can move data in a reasonable amount of time without slowing down replication too much.
-> Don't forget to call `--verify` at the end to disable replication throttling, which otherwise will continue to affect the cluster.
-
-We can start from a safe throttle value and then use the `kafka.server:type=FetcherLagMetrics,name=ConsumerLag,clientId=([-.\w]+),topic=([-.\w]+),partition=([0-9]+)` metric to observe how far the followers are lagging behind the leader for a given partition. 
-If this lag is growing or the reassignment is taking too much time, we can run the command again with the `--additional` option to increase the throttle value.
-
-After the reassignment is started, we use the `--verify` option to check the status of the reassignment process and disable the replication throttling.
-When the process is done, we can check if the topic configuration changes have been applied.
-
-```sh
-rebalancing:/$ /opt/kafka/bin/kafka-reassign-partitions.sh --bootstrap-server my-cluster-kafka-bootstrap:9092 \
-  --reassignment-json-file /tmp/reassign.json --verify
-Status of partition reassignment:
-Reassignment of partition my-topic-0 is completed.
-Reassignment of partition my-topic-1 is completed.
-Reassignment of partition my-topic-2 is completed.
-
-Clearing broker-level throttles on brokers 0,1,2,3
-Clearing topic-level throttles on topic my-topic
-
-rebalancing:/$ /opt/kafka/bin/kafka-topics.sh --bootstrap-server my-cluster-kafka-bootstrap:9092 --topic my-topic --describe
-Topic: my-topic	TopicId: XbszKNVQSSKTPB3sGvRaGg	PartitionCount: 3	ReplicationFactor: 3	Configs: min.insync.replicas=2,message.format.version=3.0-IV1
-	Topic: my-topic	Partition: 0	Leader: 3	Replicas: 3,2,1	Isr: 2,1,3
-	Topic: my-topic	Partition: 1	Leader: 2	Replicas: 2,1,3	Isr: 2,1,3
-	Topic: my-topic	Partition: 2	Leader: 1	Replicas: 1,3,2	Isr: 1,2,3
-
-[strimzi@rkc-1664115586 kafka]$ exit
-exit
-```
-
-## Scaling up the cluster with Cruise Control
-
-First, use [session1](/sessions/001) to deploy a Kafka cluster on Kubernetes.
-
-Then, we deploy Cruise Control with the auto rebalance feature enabled.
-
-> [!NOTE]  
-> The auto rebalance feature will automatically generate and execute KafkaRebalance resources on cluster scale up and down.
-> Each auto rebalance mode can be customized by adding custom KafkaRebalance templates.
-
-The Cluster Operator will trigger a rolling update to add the metrics reporter plugin to brokers, and then it will deploy Cruise Control.
-
-```sh
-$ kubectl patch k my-cluster --type merge -p '
-    spec:
-      cruiseControl: 
-        autoRebalance:
-          - mode: add-brokers
-          - mode: remove-brokers'
-kafka.kafka.strimzi.io/my-cluster patched
-```
-
-When Cruise Control is ready, we send some data and check how the topic partitions are distributed between the brokers.
-
-```sh
-$ kubectl-kafka bin/kafka-producer-perf-test.sh --topic my-topic --record-size 100 --num-records 10000000 \
+$ kubectl-kafka bin/kafka-producer-perf-test.sh --topic my-topic --record-size 100 --num-records 30000000 \
   --throughput -1 --producer-props acks=1 bootstrap.servers=my-cluster-kafka-bootstrap:9092
+1040165 records sent, 207825.2 records/sec (19.82 MB/sec), 752.2 ms avg latency, 1588.0 ms max latency.
 ...
-10000000 records sent, 165387.668695 records/sec (15.77 MB/sec), 1750.32 ms avg latency, 5498.00 ms max latency, 1504 ms 50th, 3831 ms 95th, 4697 ms 99th, 5377 ms 99.9th.
-
-$ kubectl-kafka bin/kafka-topics.sh --bootstrap-server my-cluster-kafka-bootstrap:9092 --describe --topic my-topic
-Topic: my-topic	TopicId: Gkti6y9fQjiYCU02tkwTFg	PartitionCount: 3	ReplicationFactor: 3	Configs: min.insync.replicas=2,retention.bytes=1073741824
-	Topic: my-topic	Partition: 0	Leader: 9	Replicas: 9,7,8	Isr: 7,8,9	Elr: 	LastKnownElr: 
-	Topic: my-topic	Partition: 1	Leader: 7	Replicas: 7,8,9	Isr: 7,8,9	Elr: 	LastKnownElr: 
-	Topic: my-topic	Partition: 2	Leader: 8	Replicas: 8,9,7	Isr: 7,8,9	Elr: 	LastKnownElr: 
+30000000 records sent, 642659.754504 records/sec (61.29 MB/sec), 137.34 ms avg latency, 2517.00 ms max latency, 39 ms 50th, 614 ms 95th, 1474 ms 99th, 2408 ms 99.9th.
 ```
 
-At this point we scale up the Kafka cluster, adding two more brokers.
+On my machine, it takes about 10 minutes to get back `NaN` from the following metrics, which means replication completed.
 
 ```sh
-$ kubectl patch knp broker --type merge -p '
-    spec:
-      replicas: 5'
-kafkanodepool.kafka.strimzi.io/broker patched
+$ kubectl scale kmm2 my-mm2-cluster --replicas 1
+kafkamirrormaker2.kafka.strimzi.io/my-mm2-cluster scaled
+
+$ kubectl exec $(kubectl get po | grep my-mm2-cluster | awk '{print $1}') -- curl -s http://localhost:9404/metrics \
+  | grep -e 'kafka_producer_batch_size_avg{clientid="\\"connector-producer-my-cluster->my-cluster-tgt.MirrorSourceConnector' \
+    -e 'kafka_producer_request_latency_avg{clientid="\\"connector-producer-my-cluster->my-cluster-tgt.MirrorSourceConnector'
+kafka_producer_batch_size_avg{clientid="\"connector-producer-my-cluster->my-cluster-tgt.MirrorSourceConnector-0\""} 16277.085847267712
+kafka_producer_batch_size_avg{clientid="\"connector-producer-my-cluster->my-cluster-tgt.MirrorSourceConnector-1\""} 16278.264065335754
+kafka_producer_batch_size_avg{clientid="\"connector-producer-my-cluster->my-cluster-tgt.MirrorSourceConnector-2\""} 16277.15397200509
+kafka_producer_request_latency_avg{clientid="\"connector-producer-my-cluster->my-cluster-tgt.MirrorSourceConnector-0\""} 10.944482877896922
+kafka_producer_request_latency_avg{clientid="\"connector-producer-my-cluster->my-cluster-tgt.MirrorSourceConnector-1\""} 14.26193724420191
+kafka_producer_request_latency_avg{clientid="\"connector-producer-my-cluster->my-cluster-tgt.MirrorSourceConnector-2\""} 11.238677867056245
 ```
 
-After some time, we check if the KafkaRebalance resource is automatically created and executed.
+We now increase the producer buffer to default value x20 by overriding its configuration.
+Every batch will include more data, so the same test should complete in about half of the time or even less.
+The request latency increases, but it is still within reasonable bounds.
 
 ```sh
-$ kubectl get kr -w
-NAME                                      CLUSTER      TEMPLATE   STATUS
-my-cluster-auto-rebalancing-add-brokers   my-cluster              
-my-cluster-auto-rebalancing-add-brokers   my-cluster              PendingProposal
-my-cluster-auto-rebalancing-add-brokers   my-cluster              ProposalReady
-my-cluster-auto-rebalancing-add-brokers   my-cluster              Rebalancing
-my-cluster-auto-rebalancing-add-brokers   my-cluster              Ready
+$ kubectl get kmm2 my-mm2-cluster -o yaml | yq '.spec.mirrors[0].sourceConnector.config |= ({"producer.override.batch.size": 327680} + .)' | kubectl apply -f -
+kafkamirrormaker2.kafka.strimzi.io/my-mm2-cluster configured
+
+$ kubectl scale kmm2 my-mm2-cluster --replicas 0
+kafkamirrormaker2.kafka.strimzi.io/my-mm2-cluster scaled
+
+$ kubectl-kafka bin/kafka-producer-perf-test.sh --topic my-topic --record-size 100 --num-records 30000000 \
+  --throughput -1 --producer-props acks=1 bootstrap.servers=my-cluster-kafka-bootstrap:9092
+3402475 records sent, 680495.0 records/sec (64.90 MB/sec), 32.4 ms avg latency, 342.0 ms max latency.
+...
+30000000 records sent, 923105.326318 records/sec (88.03 MB/sec), 21.94 ms avg latency, 1495.00 ms max latency, 3 ms 50th, 66 ms 95th, 201 ms 99th, 1329 ms 99.9th.
 ```
 
-When the KafkaRebalance is ready, we can see that the new broker contains some of the existing replicas.
+On my machine, it now takes about 5 minutes.
 
 ```sh
-$ kubectl-kafka bin/kafka-topics.sh --bootstrap-server my-cluster-kafka-bootstrap:9092 --describe --topic my-topicic
-Topic: my-topic	TopicId: Gkti6y9fQjiYCU02tkwTFg	PartitionCount: 3	ReplicationFactor: 3	Configs: min.insync.replicas=2,retention.bytes=1073741824
-    Topic: my-topic Partition: 0    Leader: 9   Replicas: 9,10,11   Isr: 10,9,11    Elr:    LastKnownElr: 
-    Topic: my-topic Partition: 1    Leader: 11  Replicas: 11,10,9   Isr: 10,9,11    Elr:    LastKnownElr: 
-    Topic: my-topic Partition: 2    Leader: 8   Replicas: 8,9,7     Isr: 7,8,9      Elr:    LastKnownElr: 
+$ kubectl scale kmm2 my-mm2-cluster --replicas 1
+kafkamirrormaker2.kafka.strimzi.io/my-mm2-cluster scaled
+
+$ kubectl exec $(kubectl get po | grep my-mm2-cluster | awk '{print $1}') -- curl -s http://localhost:9404/metrics \
+  | grep -e 'kafka_producer_batch_size_avg{clientid="\\"connector-producer-my-cluster->my-cluster-tgt.MirrorSourceConnector' \
+    -e 'kafka_producer_request_latency_avg{clientid="\\"connector-producer-my-cluster->my-cluster-tgt.MirrorSourceConnector'
+kafka_producer_batch_size_avg{clientid="\"connector-producer-my-cluster->my-cluster-tgt.MirrorSourceConnector-0\""} 140310.91324200912
+kafka_producer_batch_size_avg{clientid="\"connector-producer-my-cluster->my-cluster-tgt.MirrorSourceConnector-1\""} 143986.90502793295
+kafka_producer_batch_size_avg{clientid="\"connector-producer-my-cluster->my-cluster-tgt.MirrorSourceConnector-2\""} 122895.43076923076
+kafka_producer_batch_size_avg{clientid="\"connector-producer-my-cluster->my-cluster-tgt.MirrorSourceConnector-3\""} 33464.164893617024
+kafka_producer_request_latency_avg{clientid="\"connector-producer-my-cluster->my-cluster-tgt.MirrorSourceConnector-0\""} 59.678899082568805
+kafka_producer_request_latency_avg{clientid="\"connector-producer-my-cluster->my-cluster-tgt.MirrorSourceConnector-1\""} 71.0561797752809
+kafka_producer_request_latency_avg{clientid="\"connector-producer-my-cluster->my-cluster-tgt.MirrorSourceConnector-2\""} 52.08247422680412
+kafka_producer_request_latency_avg{clientid="\"connector-producer-my-cluster->my-cluster-tgt.MirrorSourceConnector-3\""} 41.670212765957444
 ```

@@ -1,203 +1,103 @@
-## TLS authentication (mTLS) using an external listener
+## Monitor Kafka metrics
 
-First, use [session1](/sessions/001) to deploy a Kafka cluster on Kubernetes.
-We also add an external listener of type ingress with TLS authentication (OpenShift route is an easier alternative to ingress).
+First, use [this session](/sessions/001) to deploy a Kafka cluster on Kubernetes.
 
-Then, wait for the Cluster Operator to restart all pods one by one (rolling update).
-
-```sh
-$ kubectl create -f sessions/002/install \
-  && kubectl patch k my-cluster --type merge -p '
-    spec:
-      kafka:
-        listeners:
-          - name: external
-            port: 9094
-            type: ingress
-            tls: true
-            authentication:
-              type: tls
-            configuration:
-              class: nginx
-              hostTemplate: broker-{nodeId}.my-cluster.f12i.io
-              bootstrap:
-                host: bootstrap.my-cluster.f12i.io'
-kafkauser.kafka.strimzi.io/my-user created            
-kafka.kafka.strimzi.io/my-cluster patched
-```
-
-The previous command adds a new authentication element to the external listener, which is the endpoint used by clients connecting from outside using TLS.
-It also creates a Kafka user resource with a matching configuration.
+When the cluster is ready, install Prometheus, Grafana and Strimzi dashboards.
+Only the Cluster Operator and Kafka dashboards are included, but you can easily add the other components.
 
 ```sh
-$ kubectl get ingress
-NAME                         CLASS   HOSTS                              ADDRESS        PORTS     AGE
-my-cluster-broker-7          nginx   broker-7.my-cluster.f12i.io        192.168.49.2   80, 443   104s
-my-cluster-broker-8          nginx   broker-8.my-cluster.f12i.io        192.168.49.2   80, 443   104s
-my-cluster-broker-9          nginx   broker-9.my-cluster.f12i.io        192.168.49.2   80, 443   104s
-my-cluster-kafka-bootstrap   nginx   bootstrap.my-cluster.f12i.io       192.168.49.2   80, 443   104s
-
-$ kubectl get ku my-user -o yaml | yq .spec
-authentication:
-  type: tls
+$ for f in sessions/002/install/*.yaml; do
+  echo ">>> Installing $f"
+  envsubst < "$f" | kubectl apply -f -
+  sleep 5
+done
+>>> Installing sessions/002/install/010-metrics-server.yaml
+serviceaccount/metrics-server unchanged
+clusterrole.rbac.authorization.k8s.io/system:aggregated-metrics-reader unchanged
+rolebinding.rbac.authorization.k8s.io/metrics-server-auth-reader unchanged
+clusterrolebinding.rbac.authorization.k8s.io/metrics-server:system:auth-delegator unchanged
+clusterrole.rbac.authorization.k8s.io/system:metrics-server unchanged
+clusterrolebinding.rbac.authorization.k8s.io/system:metrics-server unchanged
+service/metrics-server unchanged
+deployment.apps/metrics-server configured
+apiservice.apiregistration.k8s.io/v1beta1.metrics.k8s.io unchanged
+>>> Installing sessions/002/install/020-prometheus-operator.yaml
+namespace/prometheus created
+customresourcedefinition.apiextensions.k8s.io/alertmanagers.monitoring.coreos.com created
+customresourcedefinition.apiextensions.k8s.io/podmonitors.monitoring.coreos.com created
+customresourcedefinition.apiextensions.k8s.io/prometheuses.monitoring.coreos.com created
+customresourcedefinition.apiextensions.k8s.io/prometheusrules.monitoring.coreos.com created
+customresourcedefinition.apiextensions.k8s.io/servicemonitors.monitoring.coreos.com created
+customresourcedefinition.apiextensions.k8s.io/thanosrulers.monitoring.coreos.com created
+serviceaccount/prometheus-operator created
+clusterrole.rbac.authorization.k8s.io/prometheus-operator unchanged
+clusterrolebinding.rbac.authorization.k8s.io/prometheus-operator unchanged
+service/prometheus-operator created
+deployment.apps/prometheus-operator created
+>>> Installing sessions/002/install/021-prometheus-server.yaml
+namespace/prometheus unchanged
+serviceaccount/prometheus created
+clusterrole.rbac.authorization.k8s.io/prometheus unchanged
+clusterrolebinding.rbac.authorization.k8s.io/prometheus unchanged
+service/prometheus created
+ingress.networking.k8s.io/prometheus created
+prometheus.monitoring.coreos.com/prometheus created
+secret/additional-scrape-configs created
+alertmanager.monitoring.coreos.com/alertmanager created
+service/alertmanager created
+ingress.networking.k8s.io/alertmanager created
+secret/alertmanager-alertmanager created
+>>> Installing sessions/002/install/022-prometheus-strimzi.yaml
+podmonitor.monitoring.coreos.com/strimzi-cluster-operator-metrics-test created
+podmonitor.monitoring.coreos.com/strimzi-entity-operator-metrics-test created
+podmonitor.monitoring.coreos.com/strimzi-bridge-metrics-test created
+podmonitor.monitoring.coreos.com/strimzi-kafka-and-cruise-control-metrics-test created
+>>> Installing sessions/002/install/030-grafana-operator.yaml
+namespace/grafana created
+customresourcedefinition.apiextensions.k8s.io/grafanadashboards.integreatly.org created
+customresourcedefinition.apiextensions.k8s.io/grafanadatasources.integreatly.org created
+customresourcedefinition.apiextensions.k8s.io/grafananotificationchannels.integreatly.org created
+customresourcedefinition.apiextensions.k8s.io/grafanas.integreatly.org created
+serviceaccount/controller-manager created
+role.rbac.authorization.k8s.io/leader-election-role created
+clusterrole.rbac.authorization.k8s.io/manager-role configured
+clusterrole.rbac.authorization.k8s.io/metrics-reader unchanged
+clusterrole.rbac.authorization.k8s.io/proxy-role unchanged
+rolebinding.rbac.authorization.k8s.io/leader-election-rolebinding created
+clusterrolebinding.rbac.authorization.k8s.io/manager-rolebinding unchanged
+clusterrolebinding.rbac.authorization.k8s.io/proxy-rolebinding unchanged
+service/controller-manager-metrics-service created
+configmap/manager-config created
+deployment.apps/controller-manager created
+>>> Installing sessions/002/install/031-grafana-server.yaml
+namespace/grafana unchanged
+grafana.integreatly.org/grafana created
+service/grafana created
+ingress.networking.k8s.io/grafana created
+grafanadatasource.integreatly.org/prometheus created
+>>> Installing sessions/002/install/032-grafana-strimzi.yaml
+grafanadashboard.integreatly.org/strimzi-operators created
+grafanadashboard.integreatly.org/strimzi-kafka created
+>>> Installing sessions/002/install/040-kube-state-metrics.yaml
+serviceaccount/kube-state-metrics unchanged
+clusterrole.rbac.authorization.k8s.io/kube-state-metrics unchanged
+clusterrolebinding.rbac.authorization.k8s.io/kube-state-metrics unchanged
+deployment.apps/kube-state-metrics unchanged
+service/kube-state-metrics unchanged
+podmonitor.monitoring.coreos.com/kube-state-metrics created
+grafanadashboard.integreatly.org/kube-state-metrics created
+>>> Installing sessions/002/install/050-node-exporter.yaml
+service/node-exporter created
+daemonset.apps/node-exporter created
+servicemonitor.monitoring.coreos.com/node-exporter created
+grafanadashboard.integreatly.org/node-exporter created
 ```
 
-Once the rolling update completes, and if it's all configured correctly, you should be able to see the broker certificate running the following command.
+When all Grafana is ready, you can access the dashboards from [http://grafana.f12i.io](http://grafana.f12i.io).
 
 > [!IMPORTANT]  
-> You need to enable the Nginx ingress controller with `--enable-ssl-passthrough` flag, and add host mappings to `/etc/hosts`.
+> Make sure to add ingress mappings to `/etc/hosts`.
+> Example: `192.168.49.2 prometheus.f12i.io grafana.f12i.io`
 
-```sh
-$ openssl s_client -connect broker-7.my-cluster.f12i.io:443 -servername bootstrap.my-cluster.f12i.io -showcerts
-...
-Server certificate
-subject=O=io.strimzi, CN=my-cluster-kafka
-issuer=O=io.strimzi, CN=cluster-ca v0
-...
-```
-
-External clients have to retrieve the bootstrap URL from the passthrough route, configure their keystore and truststore.
-Then, we can try to send some messages.
-
-```sh
-$ BOOTSTRAP_SERVERS=$(kubectl get k my-cluster -o yaml | yq '.status.listeners.[] | select(.name == "external").bootstrapServers')
-  KEYSTORE_LOCATION="/tmp/keystore.p12" KEYSTORE_PASSWORD=$(kubectl get secret my-user -o jsonpath="{.data['user\.password']}" | base64 -d) \
-  TRUSTSTORE_LOCATION="/tmp/truststore.p12" TRUSTSTORE_PASSWORD=$(kubectl get secret my-cluster-cluster-ca-cert -o jsonpath="{.data['ca\.password']}" | base64 -d) \
-  ; kubectl get secret my-user -o jsonpath="{.data['user\.p12']}" | base64 -d >$KEYSTORE_LOCATION \
-  && kubectl get secret my-cluster-cluster-ca-cert -o jsonpath="{.data['ca\.p12']}" | base64 -d >$TRUSTSTORE_LOCATION
-  
-$ echo -e "security.protocol = SSL
-ssl.keystore.location = $KEYSTORE_LOCATION
-ssl.keystore.password = $KEYSTORE_PASSWORD
-ssl.truststore.location = $TRUSTSTORE_LOCATION
-ssl.truststore.password = $TRUSTSTORE_PASSWORD" >/tmp/client.properties
-
-$ $KAFKA_HOME/bin/kafka-console-producer.sh --bootstrap-server $BOOTSTRAP_SERVERS --topic my-topic --producer.config /tmp/client.properties
->hello
->world
->^C
-```
-
-When dealing with TLS issues, it is useful to look inside the certificate to verify its configuration and expiration.
-For example, let's get the cluster CA certificate which is used to sign all server certificates.
-We can use use `kubectl` to do so, but let's suppose we have a must-gather script output.
-Use the command from the first session to generate a new report from the current cluster.
-
-```sh
-$ unzip -p ~/Downloads/report-12-10-2024_11-31-59.zip reports/secrets/my-cluster-cluster-ca-cert.yaml \
-  | yq '.data."ca.crt"' | base64 -d | openssl x509 -inform pem -noout -text
-Certificate:
-    Data:
-        Version: 3 (0x2)
-        Serial Number:
-            26:9e:a1:7d:4d:34:cb:6b:ec:98:03:46:fb:7a:82:ad:68:80:bd:8e
-        Signature Algorithm: sha512WithRSAEncryption
-        Issuer: O=io.strimzi, CN=cluster-ca v0
-        Validity
-            Not Before: Sep  8 16:28:42 2022 GMT
-            Not After : Sep  8 16:28:42 2023 GMT
-        Subject: O=io.strimzi, CN=cluster-ca v0
-        Subject Public Key Info:
-            Public Key Algorithm: rsaEncryption
-                Public-Key: (4096 bit)
-                Modulus:
-                    ...
-                Exponent: 65537 (0x10001)
-        X509v3 extensions:
-            X509v3 Subject Key Identifier: 
-                2D:1D:63:F6:20:57:33:7D:59:73:DF:15:74:A2:A8:3D:E1:5B:3E:38
-            X509v3 Basic Constraints: critical
-                CA:TRUE, pathlen:0
-            X509v3 Key Usage: critical
-                Certificate Sign, CRL Sign
-    Signature Algorithm: sha512WithRSAEncryption
-    Signature Value:
-        ...
-```
-
-If this is not enough to spot the issue, we can add the `-Djavax.net.debug=ssl:handshake` Java option to the client in order to get more details.
-As an additional exercise, try to get the clients CA and user certificates to verify if the first signs the second.
-
-## Custom TLS certificates
-
-Often, security policies don't allow you to run a Kafka cluster with self-signed certificates in production.
-Configure the listeners to use a custom certificate signed by an external or well-known CA.
-
-Custom certificates are not managed by the operator, so you will be in charge of the renewal process, which requires an update to the listener secret.
-A rolling update will start automatically in order to make the new certificate available.
-This example only shows TLS encryption, but you can add a custom client certificate for TLS authentication by setting `type: tls-external` in the `KafkaUser` custom resource and creating the user secret (subject can only contain `CN=$USER_NAME`).
-
-Typically, the security team will provide a certificate bundle which includes the whole trust chain (i.e. root CA + intermediate CA + listener certificate) and a private key.
-If that's not the case, you can easily create the bundle from individual certificates in PEM format, because you need to trust the whole chain, if any.
-
-```sh
-$ cat /tmp/listener.crt /tmp/intermca.crt /tmp/rootca.crt >/tmp/bundle.crt
-```
-
-Here we generate our own certificate bundle with only one self-signed certificate, pretending it was handed over by the security team.
-We also use a wildcard certificate so that we don't need to specify all broker SANs.
-
-> [!IMPORTANT]  
-> The custom server certificate for a listener must not be a CA and it must include a SAN for each broker address, plus one for the bootstrap address.
-
-```sh
-$ CONFIG="
-[req]
-prompt=no
-distinguished_name=dn
-x509_extensions=ext
-[dn]
-countryName=IT
-stateOrProvinceName=Rome
-organizationName=Fede
-commonName=my-cluster
-[ext]
-subjectAltName=@san
-[san]
-DNS.1=*.my-cluster.f12i.io
-" && openssl genrsa -out /tmp/listener.key 2048 \
-  && openssl req -new -x509 -days 3650 -key /tmp/listener.key -out /tmp/bundle.crt -config <(echo "$CONFIG")
-```
-
-Now we [deploy the Strimzi Cluster Operator and Kafka cluster](/sessions/001), and set the external listener.
-Then, we deploy the secret containing the custom certificate and update the Kafka cluster configuration by adding a reference to that secret.
-
-```sh
-$ kubectl create secret generic ext-listener-crt \
-  --from-file=/tmp/bundle.crt --from-file=/tmp/listener.key
-secret/ext-listener-crt created
-  
-$ kubectl patch k my-cluster --type merge -p '
-  spec:
-    kafka:
-      listeners:
-        - name: external
-          port: 9094
-          type: ingress
-          tls: true
-          configuration:
-            class: nginx
-            hostTemplate: broker-{nodeId}.my-cluster.f12i.io
-            bootstrap:
-              host: bootstrap.my-cluster.f12i.io
-            brokerCertChainAndKey:
-              secretName: ext-listener-crt
-              certificate: bundle.crt
-              key: listener.key'
-kafka.kafka.strimzi.io/my-cluster patched
-```
-
-When the rolling update is completed, clients just need to trust the external CA and they will be able to connect.
-In our case, we don't have a CA, so we just need to trust the self-signed certificate.
-
-```sh
-$ PUBLIC_CRT=$(</tmp/bundle.crt) && PUBLIC_CRT=$(echo "$PUBLIC_CRT" |sed ':a;N;$!ba; s;\n; \\\n;g') \
-  && echo -e "security.protocol=SSL
-ssl.truststore.type=PEM
-ssl.truststore.certificates=$PUBLIC_CRT" >/tmp/client.properties
-
-$ $KAFKA_HOME/bin/kafka-console-producer.sh --producer.config /tmp/client.properties --bootstrap-server $BOOTSTRAP_SERVERS --topic my-topic
->hello
->world
->^C
-```
+It is also possible to create alerting rules to provide notifications about specific conditions observed in metrics.
+This is managed by Prometheus Alertmanager, but it is not described here.
