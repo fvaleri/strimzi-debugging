@@ -1,0 +1,59 @@
+apiVersion: kafka.strimzi.io/v1beta2
+kind: KafkaTopic
+metadata:
+  name: input-topic
+  labels:
+    strimzi.io/cluster: my-cluster
+spec:
+  partitions: 1
+  replicas: 3
+  config:
+    retention.ms: 7200000
+    segment.bytes: 1073741824
+---
+apiVersion: kafka.strimzi.io/v1beta2
+kind: KafkaTopic
+metadata:
+  name: output-topic
+  labels:
+    strimzi.io/cluster: my-cluster
+spec:
+  partitions: 1
+  replicas: 3
+  config:
+    retention.ms: 7200000
+    segment.bytes: 1073741824
+---
+# using sts because we need a stable identity (pod names)
+apiVersion: apps/v1
+kind: StatefulSet
+metadata:
+  name: kafka-txn
+spec:
+  replicas: 3
+  serviceName: kafka-txn
+  selector:
+    matchLabels:
+      app: kafka-txn
+  template:
+    metadata:
+      labels:
+        app: kafka-txn
+    spec:
+      containers:
+        - name: kafka-txn
+          image: ghcr.io/fvaleri/kafka-txn:latest
+          imagePullPolicy: Always
+          env:
+            - name: BOOTSTRAP_SERVERS
+              value: "my-cluster-kafka-bootstrap:9092"
+            - name: GROUP_ID
+              value: "my-group"
+            - name: INSTANCE_ID
+              valueFrom:
+                fieldRef:
+                  fieldPath: metadata.name
+            - name: INPUT_TOPIC
+              value: "input-topic"
+            - name: OUTPUT_TOPIC
+              value: "output-topic"

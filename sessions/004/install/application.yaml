@@ -1,0 +1,35 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: kafka-avro
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: kafka-avro
+  template:
+    metadata:
+      labels:
+        app: kafka-avro
+    spec:
+      containers:
+        - name: kafka-avro
+          image: ghcr.io/fvaleri/kafka-avro:latest
+          imagePullPolicy: Always
+          securityContext:
+            allowPrivilegeEscalation: false
+            capabilities:
+              drop:
+                - ALL
+            runAsNonRoot: true
+            seccompProfile:
+              type: RuntimeDefault
+          env:
+            - name: BOOTSTRAP_SERVERS
+              value: "${BOOTSTRAP_SERVERS}"
+            - name: REGISTRY_URL
+              value: "${REGISTRY_URL}"
+            - name: ARTIFACT_GROUP
+              value: "${ARTIFACT_GROUP}"
+            - name: TOPIC_NAME
+              value: "${TOPIC_NAME}"

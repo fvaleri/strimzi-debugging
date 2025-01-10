@@ -1,9 +1,9 @@
 apiVersion: registry.apicur.io/v1
 kind: ApicurioRegistry
 metadata:
-  name: my-registry
+  name: my-schema-registry
 spec:
   configuration:
     persistence: mem
   deployment:
-    host: my-registry.f12i.io  
+    host: my-schema-registry.f12i.io
