@@ -30,20 +30,20 @@ clusterrole.rbac.authorization.k8s.io/apicurio-registry-operator-role created
 rolebinding.rbac.authorization.k8s.io/apicurio-registry-operator-leader-election-rolebinding created
 clusterrolebinding.rbac.authorization.k8s.io/apicurio-registry-operator-rolebinding created
 deployment.apps/apicurio-registry-operator created
-apicurioregistry.registry.apicur.io/my-registry created
+apicurioregistry.registry.apicur.io/my-schema-registry created
 
 $ kubectl get po
-NAME                                          READY   STATUS    RESTARTS   AGE
-apicurio-registry-operator-9448ffc74-b6whl    1/1     Running   0          69s
-my-cluster-broker-7                           1/1     Running   0          4m54s
-my-cluster-broker-8                           1/1     Running   0          4m27s
-my-cluster-broker-9                           1/1     Running   0          5m19s
-my-cluster-controller-0                       1/1     Running   0          7m32s
-my-cluster-controller-1                       1/1     Running   0          7m32s
-my-cluster-controller-2                       1/1     Running   0          7m32s
-my-cluster-entity-operator-67b8cc5c87-74qlb   2/2     Running   0          6m59s
-my-registry-deployment-858c7dc76b-gjkcs       1/1     Running   0          66s
-strimzi-cluster-operator-d78fd875b-dcjxw      1/1     Running   0          8m36s
+NAME                                              READY   STATUS    RESTARTS   AGE
+apicurio-registry-operator-9448ffc74-b6whl        1/1     Running   0          69s
+my-cluster-broker-7                               1/1     Running   0          4m54s
+my-cluster-broker-8                               1/1     Running   0          4m27s
+my-cluster-broker-9                               1/1     Running   0          5m19s
+my-cluster-controller-0                           1/1     Running   0          7m32s
+my-cluster-controller-1                           1/1     Running   0          7m32s
+my-cluster-controller-2                           1/1     Running   0          7m32s
+my-cluster-entity-operator-67b8cc5c87-74qlb       2/2     Running   0          6m59s
+my-schema-registry-deployment-858c7dc76b-gjkcs    1/1     Running   0          66s
+strimzi-cluster-operator-d78fd875b-dcjxw          1/1     Running   0          8m36s
 ```
 
 Now, we just need to tell our client application where it can find the Kafka cluster by setting the bootstrap URL and the schema registry REST endpoint.
@@ -54,7 +54,7 @@ $ kubectl get secret my-cluster-cluster-ca-cert -o jsonpath="{.data['ca\.p12']}"
   BOOTSTRAP_SERVERS=$(kubectl get k my-cluster -o yaml | yq '.status.listeners.[] | select(.name == "external").bootstrapServers') \
   SSL_TRUSTSTORE_LOCATION="/tmp/truststore.p12" \
   SSL_TRUSTSTORE_PASSWORD=$(kubectl get secret my-cluster-cluster-ca-cert -o jsonpath="{.data['ca\.password']}" | base64 -d) \
-  REGISTRY_URL=http://$(kubectl get apicurioregistries my-registry -o jsonpath="{.status.info.host}")/apis/registry/v2 \
+  REGISTRY_URL=http://$(kubectl get apicurioregistries my-schema-registry -o jsonpath="{.status.info.host}")/apis/registry/v2 \
   TOPIC_NAME="my-topic" \
   ARTIFACT_GROUP="default"
 
