@@ -9,7 +9,7 @@ The recommended way of deploying the MM2 is near the target Kafka cluster (same 
 > When source and target clusters run on different namespaces or Kubernetes clusters, you have to copy the source `cluster-ca-cert` in the target namespace where MM2 is running.
 
 ```sh
-$ export SOURCE_NS="$NAMESPACE" TARGET_NS="$NAMESPACE"; envsubst < sessions/050/install.yaml | kubectl apply -f -
+$ export SOURCE_NS="$NAMESPACE" TARGET_NS="$NAMESPACE"; envsubst < sessions/050/install.yaml | kubectl create -f -
 kafkanodepool.kafka.strimzi.io/combined created
 kafka.kafka.strimzi.io/my-cluster-tgt created
 kafkamirrormaker2.kafka.strimzi.io/my-mm2 created

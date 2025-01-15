@@ -22,7 +22,7 @@ kafka.kafka.strimzi.io/my-cluster patched
 Then, we deploy the Service Registry instance with the in-memory storage system.
 
 ```sh
-$ sed "s/namespace: .*/namespace: $NAMESPACE/g" sessions/030/install.yaml | kubectl apply -f - 2>/dev/null
+$ envsubst < sessions/030/install.yaml | kubectl create -f -
 customresourcedefinition.apiextensions.k8s.io/apicurioregistries.registry.apicur.io created
 serviceaccount/apicurio-registry-operator created
 role.rbac.authorization.k8s.io/apicurio-registry-operator-leader-election-role created
