@@ -12,7 +12,7 @@ The recommended way of deploying the MM2 is near the target Kafka cluster (same 
 $ export SOURCE_NS="$NAMESPACE" TARGET_NS="$NAMESPACE"; envsubst < sessions/050/install.yaml | kubectl create -f -
 kafkanodepool.kafka.strimzi.io/combined created
 kafka.kafka.strimzi.io/my-cluster-tgt created
-kafkamirrormaker2.kafka.strimzi.io/my-mm2 created
+kafkamirrormaker2.kafka.strimzi.io/my-mm2-cluster created
 configmap/mirror-maker-2-metrics created
 ```
 
@@ -22,8 +22,8 @@ The `MirrorSourceConnector` replicates remote topics, ACLs, and configurations o
 The `MirrorCheckpointConnector` emits consumer group offsets checkpoints to enable failover points.
 
 ```sh
-$ kubectl scale kmm2 my-mm2 --replicas 1
-kafkamirrormaker2.kafka.strimzi.io/my-mm2 scaled
+$ kubectl scale kmm2 my-mm2-cluster --replicas 1
+kafkamirrormaker2.kafka.strimzi.io/my-mm2-cluster scaled
 
 $ kubectl get po
 NAME                                          READY   STATUS    RESTARTS   AGE
@@ -37,10 +37,10 @@ my-cluster-entity-operator-657b477d4f-sv77v   2/2     Running   0          10m
 my-cluster-tgt-combined-0                     1/1     Running   0          6m18s
 my-cluster-tgt-combined-1                     1/1     Running   0          6m18s
 my-cluster-tgt-combined-2                     1/1     Running   0          6m18s
-my-mm2-mirrormaker2-0                         1/1     Running   0          2m5s
+my-mm2-cluster-mirrormaker2-0                 1/1     Running   0          2m5s
 strimzi-cluster-operator-d78fd875b-ljmpl      1/1     Running   0          11m
 
-$ kubectl get kmm2 my-mm2 -o yaml | yq .status
+$ kubectl get kmm2 my-mm2-cluster -o yaml | yq .status
 conditions:
   - lastTransitionTime: "2024-10-12T10:14:20.521458310Z"
     status: "True"
@@ -48,29 +48,29 @@ conditions:
 connectors:
   - connector:
       state: RUNNING
-      worker_id: my-mm2-mirrormaker2-0.my-mm2-mirrormaker2.test.svc:8083
+      worker_id: my-mm2-cluster-mirrormaker2-0.my-mm2-cluster-mirrormaker2.test.svc:8083
     name: my-cluster->my-cluster-tgt.MirrorCheckpointConnector
     tasks: []
     type: source
   - connector:
       state: RUNNING
-      worker_id: my-mm2-mirrormaker2-0.my-mm2-mirrormaker2.test.svc:8083
+      worker_id: my-mm2-cluster-mirrormaker2-0.my-mm2-cluster-mirrormaker2.test.svc:8083
     name: my-cluster->my-cluster-tgt.MirrorSourceConnector
     tasks:
       - id: 0
         state: RUNNING
-        worker_id: my-mm2-mirrormaker2-0.my-mm2-mirrormaker2.test.svc:8083
+        worker_id: my-mm2-cluster-mirrormaker2-0.my-mm2-cluster-mirrormaker2.test.svc:8083
       - id: 1
         state: RUNNING
-        worker_id: my-mm2-mirrormaker2-0.my-mm2-mirrormaker2.test.svc:8083
+        worker_id: my-mm2-cluster-mirrormaker2-0.my-mm2-cluster-mirrormaker2.test.svc:8083
       - id: 2
         state: RUNNING
-        worker_id: my-mm2-mirrormaker2-0.my-mm2-mirrormaker2.test.svc:8083
+        worker_id: my-mm2-cluster-mirrormaker2-0.my-mm2-cluster-mirrormaker2.test.svc:8083
     type: source
-labelSelector: strimzi.io/cluster=my-mm2,strimzi.io/name=my-mm2-mirrormaker2,strimzi.io/kind=KafkaMirrorMaker2
+labelSelector: strimzi.io/cluster=my-mm2-cluster,strimzi.io/name=my-mm2-cluster-mirrormaker2,strimzi.io/kind=KafkaMirrorMaker2
 observedGeneration: 2
 replicas: 1
-url: http://my-mm2-mirrormaker2-api.test.svc:8083
+url: http://my-mm2-cluster-mirrormaker2-api.test.svc:8083
 ```
 
 Finally, we can send 1 million messages to the test topic in the source Kafka cluster.
@@ -107,8 +107,8 @@ Let's run a load test and see how fast we can replicate data with default settin
 By looking at `MirrorSourceConnector` task metrics, we see that we are saturating the producer buffer (default: 16384 bytes), which is a bottleneck.
 
 ```sh
-$ kubectl scale kmm2 my-mm2 --replicas 0
-kafkamirrormaker2.kafka.strimzi.io/my-mm2 scaled
+$ kubectl scale kmm2 my-mm2-cluster --replicas 0
+kafkamirrormaker2.kafka.strimzi.io/my-mm2-cluster scaled
 
 $ kubectl-kafka bin/kafka-producer-perf-test.sh --topic my-topic --record-size 100 --num-records 30000000 \
   --throughput -1 --producer-props acks=1 bootstrap.servers=my-cluster-kafka-bootstrap:9092
@@ -120,10 +120,10 @@ $ kubectl-kafka bin/kafka-producer-perf-test.sh --topic my-topic --record-size 1
 On my machine, it takes about 10 minutes to get back `NaN` from the following metrics, which means replication completed.
 
 ```sh
-$ kubectl scale kmm2 my-mm2 --replicas 1
-kafkamirrormaker2.kafka.strimzi.io/my-mm2 scaled
+$ kubectl scale kmm2 my-mm2-cluster --replicas 1
+kafkamirrormaker2.kafka.strimzi.io/my-mm2-cluster scaled
 
-$ kubectl exec $(kubectl get po | grep my-mm2 | awk '{print $1}') -- curl -s http://localhost:9404/metrics \
+$ kubectl exec $(kubectl get po | grep my-mm2-cluster | awk '{print $1}') -- curl -s http://localhost:9404/metrics \
   | grep -e 'kafka_producer_batch_size_avg{clientid="\\"connector-producer-my-cluster->my-cluster-tgt.MirrorSourceConnector' \
     -e 'kafka_producer_request_latency_avg{clientid="\\"connector-producer-my-cluster->my-cluster-tgt.MirrorSourceConnector'
 kafka_producer_batch_size_avg{clientid="\"connector-producer-my-cluster->my-cluster-tgt.MirrorSourceConnector-0\""} 16277.085847267712
@@ -139,11 +139,11 @@ Every batch will include more data, so the same test should complete in about ha
 The request latency increases, but it is still within reasonable bounds.
 
 ```sh
-$ kubectl get kmm2 my-mm2 -o yaml | yq '.spec.mirrors[0].sourceConnector.config |= ({"producer.override.batch.size": 327680} + .)' | kubectl apply -f -
-kafkamirrormaker2.kafka.strimzi.io/my-mm2 configured
+$ kubectl get kmm2 my-mm2-cluster -o yaml | yq '.spec.mirrors[0].sourceConnector.config |= ({"producer.override.batch.size": 327680} + .)' | kubectl apply -f -
+kafkamirrormaker2.kafka.strimzi.io/my-mm2-cluster configured
 
-$ kubectl scale kmm2 my-mm2 --replicas 0
-kafkamirrormaker2.kafka.strimzi.io/my-mm2 scaled
+$ kubectl scale kmm2 my-mm2-cluster --replicas 0
+kafkamirrormaker2.kafka.strimzi.io/my-mm2-cluster scaled
 
 $ kubectl-kafka bin/kafka-producer-perf-test.sh --topic my-topic --record-size 100 --num-records 30000000 \
   --throughput -1 --producer-props acks=1 bootstrap.servers=my-cluster-kafka-bootstrap:9092
@@ -155,10 +155,10 @@ $ kubectl-kafka bin/kafka-producer-perf-test.sh --topic my-topic --record-size 1
 On my machine, it now takes about 5 minutes.
 
 ```sh
-$ kubectl scale kmm2 my-mm2 --replicas 1
-kafkamirrormaker2.kafka.strimzi.io/my-mm2 scaled
+$ kubectl scale kmm2 my-mm2-cluster --replicas 1
+kafkamirrormaker2.kafka.strimzi.io/my-mm2-cluster scaled
 
-$ kubectl exec $(kubectl get po | grep my-mm2 | awk '{print $1}') -- curl -s http://localhost:9404/metrics \
+$ kubectl exec $(kubectl get po | grep my-mm2-cluster | awk '{print $1}') -- curl -s http://localhost:9404/metrics \
   | grep -e 'kafka_producer_batch_size_avg{clientid="\\"connector-producer-my-cluster->my-cluster-tgt.MirrorSourceConnector' \
     -e 'kafka_producer_request_latency_avg{clientid="\\"connector-producer-my-cluster->my-cluster-tgt.MirrorSourceConnector'
 kafka_producer_batch_size_avg{clientid="\"connector-producer-my-cluster->my-cluster-tgt.MirrorSourceConnector-0\""} 140310.91324200912
