@@ -6,7 +6,7 @@ metadata:
     # must match the cluster name
     strimzi.io/cluster: my-cluster
   annotations:
-    strimzi.io/next-node-ids: "[0-6]"
+    strimzi.io/next-node-ids: "[0-4]"
 spec:
   replicas: 3
   roles:
@@ -14,7 +14,7 @@ spec:
   resources:
     # set requests==limits to have Guaranteed QoS
     limits:
-      cpu: 500m
+      cpu: 1000m
       memory: 1Gi
     requests:
       cpu: 500m
@@ -32,7 +32,7 @@ metadata:
     # must match the cluster name
     strimzi.io/cluster: my-cluster
   annotations:
-    strimzi.io/next-node-ids: "[7-99]"
+    strimzi.io/next-node-ids: "[5-29]"
 spec:
   replicas: 3
   roles:
@@ -43,7 +43,7 @@ spec:
       cpu: 1000m
       memory: 2Gi
     requests:
-      cpu: 1000m
+      cpu: 500m
       memory: 2Gi
   storage:
     size: 10Gi
@@ -60,6 +60,7 @@ metadata:
 spec:
   kafka:
     #version: x.y.z
+    #metadataVersion: x.y-IVx
     config:
       num.partitions: 3
       default.replication.factor: 3

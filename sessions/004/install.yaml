@@ -77,6 +77,10 @@ spec:
           image: quay.io/centos7/mysql-80-centos7:20230712
           resources:
             limits:
+              cpu: 1000m
+              memory: 1Gi
+            requests:
+              cpu: 500m
               memory: 1Gi
           envFrom:
             - secretRef:
@@ -158,11 +162,11 @@ spec:
       log4j.logger.org.apache.kafka.connect.runtime.WorkerSinkTask: INFO
   resources:
     limits:
-      cpu: 2000m
-      memory: 2Gi
+      cpu: 3000m
+      memory: 3Gi
     requests:
       cpu: 1000m
-      memory: 1Gi
+      memory: 3Gi
   build:
     output:
       type: docker

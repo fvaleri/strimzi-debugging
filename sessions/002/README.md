@@ -1,12 +1,12 @@
 ## TLS authentication (mTLS) using an external listener
 
-First, use [this session](/sessions/010) to deploy a Kafka cluster on Kubernetes.
+First, use [this session](/sessions/001) to deploy a Kafka cluster on Kubernetes.
 We also add an external listener of type ingress with TLS authentication (OpenShift route is an easier alternative to ingress).
 
 Then, wait for the Cluster Operator to restart all pods one by one (rolling update).
 
 ```sh
-$ kubectl create -f sessions/020/install.yaml \
+$ kubectl create -f sessions/002/install.yaml \
   && kubectl patch k my-cluster --type merge -p '
     spec:
       kafka:
@@ -32,9 +32,9 @@ It also creates a Kafka user resource with a matching configuration.
 ```sh
 $ kubectl get ingress
 NAME                         CLASS   HOSTS                              ADDRESS        PORTS     AGE
+my-cluster-broker-5          nginx   broker-5.my-cluster.f12i.io        192.168.49.2   80, 443   104s
+my-cluster-broker-6          nginx   broker-6.my-cluster.f12i.io        192.168.49.2   80, 443   104s
 my-cluster-broker-7          nginx   broker-7.my-cluster.f12i.io        192.168.49.2   80, 443   104s
-my-cluster-broker-8          nginx   broker-8.my-cluster.f12i.io        192.168.49.2   80, 443   104s
-my-cluster-broker-9          nginx   broker-9.my-cluster.f12i.io        192.168.49.2   80, 443   104s
 my-cluster-kafka-bootstrap   nginx   bootstrap.my-cluster.f12i.io       192.168.49.2   80, 443   104s
 
 $ kubectl get ku my-user -o yaml | yq .spec
@@ -48,7 +48,7 @@ Once the rolling update completes, and if it's all configured correctly, you sho
 > You need to enable the Nginx ingress controller with `--enable-ssl-passthrough` flag, and add host mappings to `/etc/hosts`.
 
 ```sh
-$ openssl s_client -connect broker-7.my-cluster.f12i.io:443 -servername bootstrap.my-cluster.f12i.io -showcerts
+$ openssl s_client -connect broker-5.my-cluster.f12i.io:443 -servername bootstrap.my-cluster.f12i.io -showcerts
 ...
 Server certificate
 subject=O=io.strimzi, CN=my-cluster-kafka
@@ -159,7 +159,7 @@ DNS.1=*.my-cluster.f12i.io
   && openssl req -new -x509 -days 3650 -key /tmp/listener.key -out /tmp/bundle.crt -config <(echo "$CONFIG")
 ```
 
-Now we [deploy the Strimzi Cluster Operator and Kafka cluster](/sessions/010), and set the external listener.
+Now we [deploy the Strimzi Cluster Operator and Kafka cluster](/sessions/001), and set the external listener.
 Then, we deploy the secret containing the custom certificate and update the Kafka cluster configuration by adding a reference to that secret.
 
 ```sh

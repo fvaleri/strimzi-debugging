@@ -11,10 +11,10 @@ We use the latest upstream Kafka release because the downstream release is just 
 ```sh
 $ source init.sh
 Configuring Kafka on localhost
-Downloading Kafka to /tmp/kafka-[version]
+Downloading Kafka to /tmp/kafka-x.x.x
 Configuring Strimzi on Kubernetes
 namespace/test created
-Downloading Strimzi to /tmp/strimzi-[version].yaml
+Downloading Strimzi to /tmp/strimzi-x.x.x.yaml
 Done
 
 $ KAFKA_CID="$($KAFKA_HOME/bin/kafka-storage.sh random-uuid)"; \
@@ -144,7 +144,7 @@ In addition to Kafka pods, the Entity Operator (EO) pod is also deployed, which 
 If you want to deploy multiple Kafka clusters on the same namespace, make sure to have only one instance of these operators to avoid race conditions.
 
 ```sh
-$ kubectl create -f sessions/010/install.yaml
+$ kubectl create -f sessions/001/install.yaml
 kafkanodepool.kafka.strimzi.io/controller created
 kafkanodepool.kafka.strimzi.io/broker created
 kafka.kafka.strimzi.io/my-cluster created
@@ -152,28 +152,28 @@ kafkatopic.kafka.strimzi.io/my-topic created
 
 $ kubectl get sps,knp,k,kt,po
 NAME                                                  PODS   READY PODS   CURRENT PODS   AGE
-strimzipodset.core.strimzi.io/my-cluster-broker       3      3            3              60s
-strimzipodset.core.strimzi.io/my-cluster-controller   3      3            3              60s
+strimzipodset.core.strimzi.io/my-cluster-broker       3      3            3              65s
+strimzipodset.core.strimzi.io/my-cluster-controller   3      3            3              65s
 
 NAME                                        DESIRED REPLICAS   ROLES            NODEIDS
-kafkanodepool.kafka.strimzi.io/broker       3                  ["broker"]       [7,8,9]
+kafkanodepool.kafka.strimzi.io/broker       3                  ["broker"]       [5,6,7]
 kafkanodepool.kafka.strimzi.io/controller   3                  ["controller"]   [0,1,2]
 
 NAME                                DESIRED KAFKA REPLICAS   DESIRED ZK REPLICAS   READY   METADATA STATE   WARNINGS
-kafka.kafka.strimzi.io/my-cluster                                                  True    KRaft            
+kafka.kafka.strimzi.io/my-cluster                                                                           
 
 NAME                                   CLUSTER      PARTITIONS   REPLICATION FACTOR   READY
 kafkatopic.kafka.strimzi.io/my-topic   my-cluster   3            3                    True
 
 NAME                                             READY   STATUS    RESTARTS   AGE
-pod/my-cluster-broker-7                          1/1     Running   0          59s
-pod/my-cluster-broker-8                          1/1     Running   0          59s
-pod/my-cluster-broker-9                          1/1     Running   0          59s
-pod/my-cluster-controller-0                      1/1     Running   0          59s
-pod/my-cluster-controller-1                      1/1     Running   0          59s
-pod/my-cluster-controller-2                      1/1     Running   0          59s
-pod/my-cluster-entity-operator-5bfb48dbc-6fjl9   2/2     Running   0          26s
-pod/strimzi-cluster-operator-7fb8ff4bd-4ds5g     1/1     Running   0          82s
+pod/my-cluster-broker-5                          1/1     Running   0          64s
+pod/my-cluster-broker-6                          1/1     Running   0          64s
+pod/my-cluster-broker-5                          1/1     Running   0          64s
+pod/my-cluster-controller-0                      1/1     Running   0          63s
+pod/my-cluster-controller-1                      1/1     Running   0          63s
+pod/my-cluster-controller-2                      1/1     Running   0          63s
+pod/my-cluster-entity-operator-bb7c65dd4-9zdmk   2/2     Running   0          31s
+pod/strimzi-cluster-operator-6596f469c9-smsw2    1/1     Running   0          2m5s
 ```
 
 When the Kafka cluster is ready, we produce and consume some messages.
@@ -207,11 +207,11 @@ deployments
     deployment.apps/my-cluster-entity-operator
 statefulsets
 replicasets
-    replicaset.apps/my-cluster-entity-operator-57c4d54c94
+    replicaset.apps/my-cluster-entity-operator-bb7c65dd4
 configmaps
-    configmap/my-cluster-broker-7
-    configmap/my-cluster-broker-8
-    configmap/my-cluster-broker-9
+    configmap/my-cluster-broker-5
+    configmap/my-cluster-broker-6
+    configmap/my-cluster-broker-5
     configmap/my-cluster-controller-0
     configmap/my-cluster-controller-1
     configmap/my-cluster-controller-2
@@ -240,17 +240,17 @@ networkpolicies
     networkpolicy.networking.k8s.io/my-cluster-entity-operator
     networkpolicy.networking.k8s.io/my-cluster-network-policy-kafka
 pods
-    pod/my-cluster-broker-7  
-    pod/my-cluster-broker-8  
-    pod/my-cluster-broker-9  
+    pod/my-cluster-broker-5
+    pod/my-cluster-broker-6
+    pod/my-cluster-broker-5
     pod/my-cluster-controller-0
     pod/my-cluster-controller-1
     pod/my-cluster-controller-2
-    pod/my-cluster-entity-operator-57c4d54c94-m87qg
+    pod/my-cluster-entity-operator-bb7c65dd4-9zdmk
 persistentvolumeclaims
-    persistentvolumeclaim/data-my-cluster-broker-7
-    persistentvolumeclaim/data-my-cluster-broker-8
-    persistentvolumeclaim/data-my-cluster-broker-9
+    persistentvolumeclaim/data-my-cluster-broker-5
+    persistentvolumeclaim/data-my-cluster-broker-6
+    persistentvolumeclaim/data-my-cluster-broker-5
     persistentvolumeclaim/data-my-cluster-controller-0
     persistentvolumeclaim/data-my-cluster-controller-1
     persistentvolumeclaim/data-my-cluster-controller-2
@@ -270,8 +270,8 @@ clusterrolebindings
     clusterrolebinding.rbac.authorization.k8s.io/strimzi-cluster-operator-kafka-client-delegation
 clusteroperator
     deployment.apps/strimzi-cluster-operator
-    replicaset.apps/strimzi-cluster-operator-7fb8ff4bd
-    pod/strimzi-cluster-operator-7fb8ff4bd-vf4zl
+    replicaset.apps/strimzi-cluster-operator-6596f469c9
+    pod/strimzi-cluster-operator-6596f469c9-smsw2
     configmap/strimzi-cluster-operator
 draincleaner
 customresources
@@ -287,12 +287,12 @@ customresources
         my-cluster-controller
 events
 logs
-    my-cluster-broker-7
-    my-cluster-broker-8
-    my-cluster-broker-9
+    my-cluster-broker-5
+    my-cluster-broker-6
+    my-cluster-broker-5
     my-cluster-controller-0
     my-cluster-controller-1
     my-cluster-controller-2
-    my-cluster-entity-operator-57c4d54c94-m87qg
-Report file report-12-10-2024_11-31-59.zip created
+    my-cluster-entity-operator-bb7c65dd4-9zdmk
+Report file report-17-03-2025_12-26-05.zip created
 ```

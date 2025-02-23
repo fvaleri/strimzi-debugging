@@ -1,6 +1,6 @@
 ## Schema registry in action
 
-First, use [this session](/sessions/010) to deploy a Kafka cluster on Kubernetes.
+First, use [this session](/sessions/001) to deploy a Kafka cluster on Kubernetes.
 
 ```sh
 $ kubectl patch k my-cluster --type merge -p '
@@ -22,7 +22,7 @@ kafka.kafka.strimzi.io/my-cluster patched
 Then, we deploy the Service Registry instance with the in-memory storage system.
 
 ```sh
-$ envsubst < sessions/030/install.yaml | kubectl create -f -
+$ envsubst < sessions/003/install.yaml | kubectl create -f -
 customresourcedefinition.apiextensions.k8s.io/apicurioregistries.registry.apicur.io created
 serviceaccount/apicurio-registry-operator created
 role.rbac.authorization.k8s.io/apicurio-registry-operator-leader-election-role created
@@ -35,9 +35,9 @@ apicurioregistry.registry.apicur.io/my-schema-registry created
 $ kubectl get po
 NAME                                              READY   STATUS    RESTARTS   AGE
 apicurio-registry-operator-9448ffc74-b6whl        1/1     Running   0          69s
-my-cluster-broker-7                               1/1     Running   0          4m54s
-my-cluster-broker-8                               1/1     Running   0          4m27s
-my-cluster-broker-9                               1/1     Running   0          5m19s
+my-cluster-broker-5                               1/1     Running   0          4m54s
+my-cluster-broker-6                               1/1     Running   0          4m27s
+my-cluster-broker-7                               1/1     Running   0          5m19s
 my-cluster-controller-0                           1/1     Running   0          7m32s
 my-cluster-controller-1                           1/1     Running   0          7m32s
 my-cluster-controller-2                           1/1     Running   0          7m32s
@@ -58,7 +58,7 @@ $ kubectl get secret my-cluster-cluster-ca-cert -o jsonpath="{.data['ca\.p12']}"
   TOPIC_NAME="my-topic" \
   ARTIFACT_GROUP="default"
 
-$ mvn compile exec:java -f sessions/030/kafka-avro/pom.xml -q
+$ mvn compile exec:java -f sessions/003/kafka-avro/pom.xml -q
 Producing records
 Records produced
 Consuming all records
@@ -69,7 +69,7 @@ Record: Hello-1663594982041
 Record: Hello-1663594982042
 ```
 
-[Look at the code](/sessions/030/kafka-avro/src/main/java/it/fvaleri/example/Main.java) to see how the schema is registered and used.
+[Look at the code](/sessions/003/kafka-avro/src/main/java/it/fvaleri/example/Main.java) to see how the schema is registered and used.
 The registration happens at build time and the Maven plugin executes the following API request for every configured schema artifact.
 
 > [!NOTE]  
@@ -78,8 +78,8 @@ The registration happens at build time and the Maven plugin executes the followi
 ```sh
 $ curl -s -X POST -H "Content-Type: application/json" \
   -H "X-Registry-ArtifactId: my-topic-value" -H "X-Registry-ArtifactType: AVRO" \
-  -d @sessions/030/kafka-avro/src/main/resources/greeting.avsc \
-  "$REGISTRY_URL/groups/default/artifacts?ifExists=RETURN_OR_UPDATE" | jq
+  -d @sessions/003/kafka-avro/src/main/resources/greeting.avsc \
+  "$REGISTRY_URL/groups/default/artifacts?ifExists=RETURN_OR_UPDATE" | yq -Pj
 {
   "name": "Greeting",
   "createdBy": "",
@@ -99,7 +99,7 @@ Finally, we use the REST API to confirm that our schema was registered correctly
 We can also look at the schema content and metadata, which may be useful for debugging.
 
 ```sh
-$ curl -s "$REGISTRY_URL/search/artifacts" | jq
+$ curl -s "$REGISTRY_URL/search/artifacts" | yq -Pj
 {
   "artifacts": [
     {
@@ -116,7 +116,7 @@ $ curl -s "$REGISTRY_URL/search/artifacts" | jq
   "count": 1
 }
 
-$ curl -s "$REGISTRY_URL/groups/default/artifacts/my-topic-value" | jq
+$ curl -s "$REGISTRY_URL/groups/default/artifacts/my-topic-value" | yq -Pj
 {
   "type": "record",
   "name": "Greeting",
@@ -132,7 +132,7 @@ $ curl -s "$REGISTRY_URL/groups/default/artifacts/my-topic-value" | jq
   ]
 }
 
-$ curl -s "$REGISTRY_URL/groups/default/artifacts/my-topic-value/meta" | jq
+$ curl -s "$REGISTRY_URL/groups/default/artifacts/my-topic-value/meta" | yq -Pj
 {
   "name": "Greeting",
   "createdBy": "",

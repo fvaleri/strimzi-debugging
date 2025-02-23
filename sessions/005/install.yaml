@@ -16,7 +16,7 @@ spec:
       cpu: 500m
       memory: 1Gi
     requests:
-      cpu: 500m
+      cpu: 250m
       memory: 1Gi
   storage:
     size: 5Gi
@@ -117,11 +117,11 @@ spec:
       log4j.logger.org.apache.kafka.connect.runtime.WorkerSinkTask: INFO
   resources:
     limits:
-      cpu: 1000m
+      cpu: 3000m
       memory: 3Gi
     requests:
-      cpu: 500m
-      memory: 1Gi
+      cpu: 1000m
+      memory: 3Gi
   # expose JMX metrics in Prometheus format on port 9404
   metricsConfig:
     type: jmxPrometheusExporter

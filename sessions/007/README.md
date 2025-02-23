@@ -1,6 +1,6 @@
 ## Scaling up the cluster with the reassign tool
 
-First, use [this session](/sessions/010) to deploy a Kafka cluster on Kubernetes.
+First, use [this session](/sessions/001) to deploy a Kafka cluster on Kubernetes.
 
 Then, we send some data.
 
@@ -97,27 +97,9 @@ exit
 
 ## Scaling up the cluster with Cruise Control
 
-First, use [this session](/sessions/010) to deploy a Kafka cluster on Kubernetes.
+First, use [this session](/sessions/001) to deploy a Kafka cluster on Kubernetes.
 
-Then, we deploy Cruise Control with the auto rebalance feature enabled.
-
-> [!NOTE]  
-> The auto rebalance feature will automatically generate and execute KafkaRebalance resources on cluster scale up and down.
-> Each auto rebalance mode can be customized by adding custom KafkaRebalance templates.
-
-The Cluster Operator will trigger a rolling update to add the metrics reporter plugin to brokers, and then it will deploy Cruise Control.
-
-```sh
-$ kubectl patch k my-cluster --type merge -p '
-    spec:
-      cruiseControl: 
-        autoRebalance:
-          - mode: add-brokers
-          - mode: remove-brokers'
-kafka.kafka.strimzi.io/my-cluster patched
-```
-
-When Cruise Control is ready, we send some data and check how the topic partitions are distributed between the brokers.
+When the cluster is ready, we send some data and check how partitions are distributed among the brokers.
 
 ```sh
 $ kubectl-kafka bin/kafka-producer-perf-test.sh --topic my-topic --record-size 100 --num-records 10000000 \
@@ -132,7 +114,25 @@ Topic: my-topic	TopicId: Gkti6y9fQjiYCU02tkwTFg	PartitionCount: 3	ReplicationFac
 	Topic: my-topic	Partition: 2	Leader: 8	Replicas: 8,9,7	Isr: 7,8,9	Elr: 	LastKnownElr: 
 ```
 
-At this point we scale up the Kafka cluster, adding two more brokers.
+Then, we deploy Cruise Control with the auto-rebalancing feature enabled.
+
+> [!NOTE]  
+> The auto-rebalancing feature will automatically generate and execute KafkaRebalance resources on cluster scale up and down.
+> Each mode can be customized by adding custom KafkaRebalance templates.
+
+The Cluster Operator will trigger a rolling update to add the metrics reporter plugin to brokers, and then it will deploy Cruise Control.
+
+```sh
+$ kubectl patch k my-cluster --type merge -p '
+    spec:
+      cruiseControl: 
+        autoRebalance:
+          - mode: add-brokers
+          - mode: remove-brokers'
+kafka.kafka.strimzi.io/my-cluster patched
+```
+
+Wait some time for Cruise Control to build the workload model and then scale up the Kafka cluster, adding two more brokers.
 
 ```sh
 $ kubectl patch knp broker --type merge -p '
@@ -141,19 +141,18 @@ $ kubectl patch knp broker --type merge -p '
 kafkanodepool.kafka.strimzi.io/broker patched
 ```
 
-After some time, we check if the KafkaRebalance resource is automatically created and executed.
+Follow the KafkaRebalance execution from command line.
 
 ```sh
 $ kubectl get kr -w
-NAME                                      CLUSTER      TEMPLATE   STATUS
-my-cluster-auto-rebalancing-add-brokers   my-cluster              
+NAME                                      CLUSTER      TEMPLATE   STATUS     
 my-cluster-auto-rebalancing-add-brokers   my-cluster              PendingProposal
 my-cluster-auto-rebalancing-add-brokers   my-cluster              ProposalReady
 my-cluster-auto-rebalancing-add-brokers   my-cluster              Rebalancing
 my-cluster-auto-rebalancing-add-brokers   my-cluster              Ready
 ```
 
-When the KafkaRebalance is ready, we can see that the new broker contains some of the existing replicas.
+When KafkaRebalance is ready, we can see that new brokers contain some of the existing replicas.
 
 ```sh
 $ kubectl-kafka bin/kafka-topics.sh --bootstrap-server my-cluster-kafka-bootstrap:9092 --describe --topic my-topicic
