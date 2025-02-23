@@ -77,6 +77,10 @@ spec:
           image: quay.io/centos7/mysql-80-centos7:20230712
           resources:
             limits:
+              cpu: 1000m
+              memory: 1Gi
+            requests:
+              cpu: 500m
               memory: 1Gi
           envFrom:
             - secretRef:
@@ -162,7 +166,7 @@ spec:
       memory: 2Gi
     requests:
       cpu: 1000m
-      memory: 1Gi
+      memory: 2Gi
   build:
     output:
       type: docker
