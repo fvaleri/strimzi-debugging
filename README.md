@@ -12,3 +12,4 @@ Any feedback or contribution is appreciated.
 6. [Quota plugin and volume recovery](/sessions/006)
 7. [Rebalance clusters with Cruise Control](/sessions/007)
 8. [Transactions and how to rollback](/sessions/008)
+9. [Diagnostic data collection](/sessions/009)
