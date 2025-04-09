@@ -1,6 +1,6 @@
 #!/usr/bin/env bash
 
-STRIMZI_VERSION="0.45.0" && export STRIMZI_VERSION
+STRIMZI_VERSION="0.45.0"
 NAMESPACE="test" && export NAMESPACE
 
 [[ "${BASH_SOURCE[0]}" -ef "$0" ]] && echo "Usage: source init.sh" && exit 1
@@ -53,6 +53,7 @@ if [[ ! -f "$STRIMZI_FILE" ]]; then
 fi
 sed -E "s/namespace: .*/namespace: $NAMESPACE/g ; s/memory: .*/memory: 500Mi/g" "$STRIMZI_FILE" \
   | kubectl create -f - --dry-run=client -o yaml | kubectl replace --force -f - &>/dev/null
+kubectl set env deploy/strimzi-cluster-operator STRIMZI_FULL_RECONCILIATION_INTERVAL_MS="30000" &>/dev/null
 
 kubectl wait --for=condition=Available deploy strimzi-cluster-operator --timeout=300s
 echo "Done"
