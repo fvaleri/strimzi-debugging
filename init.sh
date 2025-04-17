@@ -1,7 +1,8 @@
 #!/usr/bin/env bash
 
-STRIMZI_VERSION="0.45.0"
 NAMESPACE="test" && export NAMESPACE
+STRIMZI_VERSION="0.45.0" && export STRIMZI_VERSION
+INGRESS_DOMAIN="f12i.io" && export INGRESS_DOMAIN
 
 [[ "${BASH_SOURCE[0]}" -ef "$0" ]] && echo "Usage: source init.sh" && exit 1
 
@@ -41,9 +42,14 @@ kubectl wait --for=delete ns/"$NAMESPACE" --timeout=120s &>/dev/null && kubectl 
 # set privileged SecurityStandard label for this namespace
 kubectl label ns "$NAMESPACE" pod-security.kubernetes.io/enforce=privileged --overwrite &>/dev/null
 
-# PersistentVolumes cleanup
+# clean PersistentVolumes
 # shellcheck disable=SC2046
 kubectl delete pv $(kubectl get pv 2>/dev/null | grep "my-cluster" | awk '{print $1}') --ignore-not-found --force &>/dev/null
+
+# clean monitoring stack
+kubectl delete ns grafana prometheus --ignore-not-found --force --wait=false &>/dev/null
+kubectl delete crd $(kubectl get crd | grep integreatly.org | awk '{print $1}') &>/dev/null
+kubectl delete crd $(kubectl get crd | grep monitoring.coreos.com | awk '{print $1}') &>/dev/null
 
 # deploy Strimzi
 STRIMZI_FILE="/tmp/strimzi-$STRIMZI_VERSION.yaml"

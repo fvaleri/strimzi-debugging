@@ -1,214 +1,211 @@
-## Configure TLS authentication
+## Get diagnostic data
 
 First, use [this session](/sessions/001) to deploy a Kafka cluster on Kubernetes.
 
-We also add an external listener of type ingress with TLS authentication.
-Then, wait for the Cluster Operator to restart all pods one by one (rolling update).
+When debugging issues, you usually need to retrieve various artifacts from the environment, which can be a lot of effort.
+Fortunately, Strimzi provides a must-gather script that can be used to download all relevant artifacts and logs from a specific Kafka cluster.
 
-> [!IMPORTANT]  
-> You need to enable the Nginx ingress controller with `--enable-ssl-passthrough` flag, and add host mappings to `/etc/hosts`.
+> [!NOTE]  
+> You can add the `--secrets=all` option to also get secret values.
 
 ```sh
-$ kubectl create -f sessions/003/install.yaml \
-  && kubectl patch k my-cluster --type merge -p '
+$ curl -s https://raw.githubusercontent.com/strimzi/strimzi-kafka-operator/main/tools/report.sh \
+  | bash -s -- --namespace=test --cluster=my-cluster --out-dir=~/Downloads
+deployments
+    deployment.apps/my-cluster-entity-operator
+statefulsets
+replicasets
+    replicaset.apps/my-cluster-entity-operator-bb7c65dd4
+configmaps
+    configmap/my-cluster-broker-5
+    configmap/my-cluster-broker-6
+    configmap/my-cluster-broker-5
+    configmap/my-cluster-controller-0
+    configmap/my-cluster-controller-1
+    configmap/my-cluster-controller-2
+    configmap/my-cluster-entity-topic-operator-config
+    configmap/my-cluster-entity-user-operator-config
+secrets
+    secret/my-cluster-clients-ca
+    secret/my-cluster-clients-ca-cert
+    secret/my-cluster-cluster-ca
+    secret/my-cluster-cluster-ca-cert
+    secret/my-cluster-cluster-operator-certs
+    secret/my-cluster-entity-topic-operator-certs
+    secret/my-cluster-entity-user-operator-certs
+    secret/my-cluster-kafka-brokers
+services
+    service/my-cluster-kafka-bootstrap
+    service/my-cluster-kafka-brokers
+poddisruptionbudgets
+    poddisruptionbudget.policy/my-cluster-kafka
+roles
+    role.rbac.authorization.k8s.io/my-cluster-entity-operator
+rolebindings
+    rolebinding.rbac.authorization.k8s.io/my-cluster-entity-topic-operator-role
+    rolebinding.rbac.authorization.k8s.io/my-cluster-entity-user-operator-role
+networkpolicies
+    networkpolicy.networking.k8s.io/my-cluster-entity-operator
+    networkpolicy.networking.k8s.io/my-cluster-network-policy-kafka
+pods
+    pod/my-cluster-broker-5
+    pod/my-cluster-broker-6
+    pod/my-cluster-broker-5
+    pod/my-cluster-controller-0
+    pod/my-cluster-controller-1
+    pod/my-cluster-controller-2
+    pod/my-cluster-entity-operator-bb7c65dd4-9zdmk
+persistentvolumeclaims
+    persistentvolumeclaim/data-my-cluster-broker-5
+    persistentvolumeclaim/data-my-cluster-broker-6
+    persistentvolumeclaim/data-my-cluster-broker-5
+    persistentvolumeclaim/data-my-cluster-controller-0
+    persistentvolumeclaim/data-my-cluster-controller-1
+    persistentvolumeclaim/data-my-cluster-controller-2
+ingresses
+routes
+clusterroles
+    clusterrole.rbac.authorization.k8s.io/strimzi-cluster-operator-global
+    clusterrole.rbac.authorization.k8s.io/strimzi-cluster-operator-leader-election
+    clusterrole.rbac.authorization.k8s.io/strimzi-cluster-operator-namespaced
+    clusterrole.rbac.authorization.k8s.io/strimzi-cluster-operator-watched
+    clusterrole.rbac.authorization.k8s.io/strimzi-entity-operator
+    clusterrole.rbac.authorization.k8s.io/strimzi-kafka-broker
+    clusterrole.rbac.authorization.k8s.io/strimzi-kafka-client
+clusterrolebindings
+    clusterrolebinding.rbac.authorization.k8s.io/strimzi-cluster-operator
+    clusterrolebinding.rbac.authorization.k8s.io/strimzi-cluster-operator-kafka-broker-delegation
+    clusterrolebinding.rbac.authorization.k8s.io/strimzi-cluster-operator-kafka-client-delegation
+clusteroperator
+    deployment.apps/strimzi-cluster-operator
+    replicaset.apps/strimzi-cluster-operator-6596f469c9
+    pod/strimzi-cluster-operator-6596f469c9-smsw2
+    configmap/strimzi-cluster-operator
+draincleaner
+customresources
+    kafkanodepools.kafka.strimzi.io
+        broker
+        controller
+    kafkas.kafka.strimzi.io
+        my-cluster
+    kafkatopics.kafka.strimzi.io
+        my-topic
+    strimzipodsets.core.strimzi.io
+        my-cluster-broker
+        my-cluster-controller
+events
+logs
+    my-cluster-broker-5
+    my-cluster-broker-6
+    my-cluster-broker-5
+    my-cluster-controller-0
+    my-cluster-controller-1
+    my-cluster-controller-2
+    my-cluster-entity-operator-bb7c65dd4-9zdmk
+Report file report-17-03-2025_12-26-05.zip created
+```
+
+## Get heap dumps
+
+It is also possible to collect broker JVM heap dumps and other advanced diagnostic data (thread dumps, flame graphs, etc).
+
+> [!WARNING]
+> Taking a heap dump is a heavy operation that can cause the Java application to hang.
+> It is not recommended in production, unless it is not possible to reproduce the memory issue in a test environment.
+
+Debugging locally can often be easier and faster.
+However, some issues only manifest in Kubernetes due to factors like networking, resource limits, or interactions with other components.
+Even if you try to match your local setup to the Kubernetes configuration, subtle differences (e.g. service discovery, security settings, or operator-managed logic) might lead to different behavior.
+
+Create an additional volume of the desired size using a PVC.
+
+```sh
+$ echo -e "apiVersion: v1
+kind: PersistentVolumeClaim
+metadata:
+  name: my-pvc
+spec:
+  accessModes:
+    - ReadWriteOnce
+  resources:
+    requests:
+      storage: 10Gi
+  storageClassName: standard" | kubectl create -f -
+persistentvolumeclaim/my-pvc created
+```
+
+Mount the new volume using the additional volume feature within Kafka template (rolling update).
+It is required to use `/mnt` mount point.
+
+> [!WARNING]
+> Adding a custom volume triggers pod restarts, which can make it difficult to capture an issue that has already occurred.
+> If the issue cannot be easily reproduced in a test environment, configuring the volume in advance could help avoid the pod restarts when you need them most.
+
+```sh
+$ kubectl patch k my-cluster --type merge -p '
     spec:
       kafka:
-        listeners:
-          - name: external
-            port: 9094
-            type: ingress
-            tls: true
-            authentication:
-              type: tls
-            configuration:
-              class: nginx
-              hostTemplate: broker-{nodeId}.my-cluster.f12i.io
-              bootstrap:
-                host: bootstrap.my-cluster.f12i.io'
-kafkauser.kafka.strimzi.io/my-user created            
+        template:
+            pod:
+              volumes:
+                - name: my-volume
+                  persistentVolumeClaim:
+                    claimName: my-pvc
+            kafkaContainer:
+              volumeMounts:
+                - name: my-volume
+                  mountPath: "/mnt/data"'
 kafka.kafka.strimzi.io/my-cluster patched
 ```
 
-The previous command adds a new authentication element to the external listener, which is the endpoint used by clients connecting from outside using TLS.
-It also creates a Kafka user resource with a matching configuration.
+When the rolling update completes, create a broker heap dump and copy the output file to localhost.
 
 ```sh
-$ kubectl get ingress
-NAME                         CLASS   HOSTS                              ADDRESS        PORTS     AGE
-my-cluster-broker-5          nginx   broker-5.my-cluster.f12i.io        192.168.49.2   80, 443   104s
-my-cluster-broker-6          nginx   broker-6.my-cluster.f12i.io        192.168.49.2   80, 443   104s
-my-cluster-broker-7          nginx   broker-7.my-cluster.f12i.io        192.168.49.2   80, 443   104s
-my-cluster-kafka-bootstrap   nginx   bootstrap.my-cluster.f12i.io       192.168.49.2   80, 443   104s
+$ PID="$(kubectl exec my-cluster-broker-5 -- jcmd | grep "kafka.Kafka" | awk '{print $1}')"
 
-$ kubectl get ku my-user -o yaml | yq .spec
-authentication:
-  type: tls
+$ kubectl exec my-cluster-broker-5 -- jcmd "$PID" VM.flags
+724:
+-XX:CICompilerCount=4 -XX:ConcGCThreads=3 -XX:G1ConcRefinementThreads=10 -XX:G1EagerReclaimRemSetThreshold=32 -XX:G1HeapRegionSize=4194304
+-XX:GCDrainStackTargetSize=64 -XX:+HeapDumpOnOutOfMemoryError -XX:HeapDumpPath=/mnt/data/oome.hprof -XX:InitialHeapSize=5368709120
+-XX:+ManagementServer -XX:MarkStackSize=4194304 -XX:MaxHeapSize=5368709120 -XX:MaxNewSize=3221225472 -XX:MinHeapDeltaBytes=4194304
+-XX:MinHeapSize=5368709120 -XX:NonNMethodCodeHeapSize=5839372 -XX:NonProfiledCodeHeapSize=122909434 -XX:ProfiledCodeHeapSize=122909434
+-XX:ReservedCodeCacheSize=251658240 -XX:+SegmentedCodeCache -XX:SoftMaxHeapSize=5368709120 -XX:-THPStackMitigation
+-XX:+UseCompressedClassPointers -XX:+UseCompressedOops -XX:+UseFastUnorderedTimeStamps -XX:+UseG1GC
+
+$ kubectl exec my-cluster-broker-5 -- jcmd "$PID" GC.heap_dump /mnt/data/heap.hprof
+724:
+Dumping heap to /mnt/data/heap.hprof ...
+Heap dump file created [179236580 bytes in 0.664 secs]
+
+$ kubectl cp my-cluster-broker-5:/mnt/data/heap.hprof "$HOME"/Downloads/heap.hprof
+tar: Removing leading `/' from member names
 ```
 
-When the rolling update is completed, you should be able to see the broker certificate running the following command.
+If the pod is crash looping, the dump can still be recovered by spinning up a temporary pod and mounting the volume.
 
 ```sh
-$ openssl s_client -connect broker-5.my-cluster.f12i.io:443 -servername bootstrap.my-cluster.f12i.io -showcerts
-...
-Server certificate
-subject=O=io.strimzi, CN=my-cluster-kafka
-issuer=O=io.strimzi, CN=cluster-ca v0
-...
+$ kubectl run my-pod --restart "Never" --image "foo" --overrides "{
+  \"spec\": {
+    \"containers\": [
+      {
+        \"name\": \"busybox\",
+        \"image\": \"busybox\",
+        \"imagePullPolicy\": \"IfNotPresent\",
+        \"command\": [\"/bin/sh\", \"-c\", \"trap : TERM INT; sleep infinity & wait\"],
+        \"volumeMounts\": [
+          {\"name\": \"data\", \"mountPath\": \"/mnt/data\"}
+        ]
+      }
+    ],
+    \"volumes\": [
+      {\"name\": \"data\", \"persistentVolumeClaim\": {\"claimName\": \"my-pvc\"}}
+    ]
+  }
+}"
+
+$ kubectl exec my-pod -- ls -lh /mnt/data
+total 171M   
+-rw-------    1 1001     root      170.9M Mar 17 14:38 heap.hprof
 ```
 
-Then, we can try to send some messages using an external Kafka client.
-Here we are using the console producer tool included in every Kafka distribution.
-
-```sh
-$ export BOOTSTRAP_SERVERS=$(kubectl get k my-cluster -o yaml | yq '.status.listeners.[] | select(.name == "external").bootstrapServers'); 
-  kubectl get k my-cluster -o yaml | yq '.status.listeners.[] | select(.name == "external").certificates[0]' > /tmp/cluster-ca.crt ; \
-  kubectl get secret my-user -o jsonpath="{.data['user\.crt']}" | base64 -d > /tmp/user.crt ; \
-  kubectl get secret my-user -o jsonpath="{.data['user\.key']}" | base64 -d > /tmp/user.key
-
-$ CLUSTER_CA_CRT=$(</tmp/cluster-ca.crt) && CLUSTER_CA_CRT=$(echo "$CLUSTER_CA_CRT" |sed ':a;N;$!ba; s;\n; \\\n;g') \
-  USER_CRT=$(</tmp/user.crt) && USER_CRT=$(echo "$USER_CRT" |sed ':a;N;$!ba; s;\n; \\\n;g') \
-  USER_KEY=$(</tmp/user.key) && USER_KEY=$(echo "$USER_KEY" |sed ':a;N;$!ba; s;\n; \\\n;g')
-
-$ echo -e "security.protocol = SSL
-ssl.truststore.type=PEM
-ssl.truststore.certificates=$CLUSTER_CA_CRT
-ssl.keystore.type=PEM
-ssl.keystore.certificate.chain=$USER_CRT
-ssl.keystore.key=$USER_KEY" >/tmp/client.properties
-
-$ $KAFKA_HOME/bin/kafka-console-producer.sh --bootstrap-server $BOOTSTRAP_SERVERS --topic my-topic --producer.config /tmp/client.properties
->hello
->world
->^C
-
-$KAFKA_HOME/bin/kafka-console-consumer.sh --bootstrap-server $BOOTSTRAP_SERVERS --topic my-topic --from-beginning --max-messages 2 --consumer.config /tmp/client.properties
-hello
-world
-Processed a total of 2 messages
-```
-
-When dealing with TLS issues, it is useful to look inside the certificate to verify its configuration and expiration.
-For example, let's get the cluster CA certificate which is used to sign all server certificates.
-We can use use `kubectl` to do so, but let's suppose we have a must-gather script output.
-Use the command from the first session to generate a new report from the current cluster.
-
-```sh
-$ unzip -p ~/Downloads/report-12-10-2024_11-31-59.zip reports/secrets/my-cluster-cluster-ca-cert.yaml \
-  | yq '.data."ca.crt"' | base64 -d | openssl x509 -inform pem -noout -text
-Certificate:
-    Data:
-        Version: 3 (0x2)
-        Serial Number:
-            26:9e:a1:7d:4d:34:cb:6b:ec:98:03:46:fb:7a:82:ad:68:80:bd:8e
-        Signature Algorithm: sha512WithRSAEncryption
-        Issuer: O=io.strimzi, CN=cluster-ca v0
-        Validity
-            Not Before: Sep  8 16:28:42 2022 GMT
-            Not After : Sep  8 16:28:42 2023 GMT
-        Subject: O=io.strimzi, CN=cluster-ca v0
-        Subject Public Key Info:
-            Public Key Algorithm: rsaEncryption
-                Public-Key: (4096 bit)
-                Modulus:
-                    ...
-                Exponent: 65537 (0x10001)
-        X509v3 extensions:
-            X509v3 Subject Key Identifier: 
-                2D:1D:63:F6:20:57:33:7D:59:73:DF:15:74:A2:A8:3D:E1:5B:3E:38
-            X509v3 Basic Constraints: critical
-                CA:TRUE, pathlen:0
-            X509v3 Key Usage: critical
-                Certificate Sign, CRL Sign
-    Signature Algorithm: sha512WithRSAEncryption
-    Signature Value:
-        ...
-```
-
-If this is not enough to spot the issue, we can add the `-Djavax.net.debug=ssl:handshake` Java option to the client in order to get more details.
-As an additional exercise, try to get the clients CA and user certificates to verify if the first signs the second.
-
-## Use custom TLS certificates
-
-Often, security policies don't allow you to run a Kafka cluster with self-signed certificates in production.
-Configure the listeners to use a custom certificate signed by an external or well-known CA.
-
-Custom certificates are not managed by the operator, so you will be in charge of the renewal process, which requires an update to the listener secret.
-A rolling update will start automatically in order to make the new certificate available.
-This example only shows TLS encryption, but you can add a custom client certificate for TLS authentication by setting `type: tls-external` in the `KafkaUser` custom resource and creating the user secret (subject can only contain `CN=$USER_NAME`).
-
-Typically, the security team will provide a certificate bundle which includes the whole trust chain (i.e. root CA + intermediate CA + listener certificate) and a private key.
-If that's not the case, you can easily create the bundle from individual certificates in PEM format, because you need to trust the whole chain, if any.
-
-```sh
-$ cat /tmp/listener.crt /tmp/intermca.crt /tmp/rootca.crt >/tmp/bundle.crt
-```
-
-Here we generate our own certificate bundle with only one self-signed certificate, pretending it was handed over by the security team.
-We also use a wildcard certificate so that we don't need to specify all broker SANs.
-
-> [!IMPORTANT]  
-> The custom server certificate for a listener must not be a CA and it must include a SAN for each broker address, plus one for the bootstrap address.
-> Alternatively, you can use a wildcard certificate to include all addresses with one SAN entry.
-
-```sh
-$ CONFIG="
-[req]
-prompt=no
-distinguished_name=dn
-x509_extensions=ext
-[dn]
-countryName=IT
-stateOrProvinceName=Rome
-organizationName=Fede
-commonName=my-cluster
-[ext]
-subjectAltName=@san
-[san]
-DNS.1=*.my-cluster.f12i.io
-" && openssl genrsa -out /tmp/listener.key 2048 \
-  && openssl req -new -x509 -days 3650 -key /tmp/listener.key -out /tmp/bundle.crt -config <(echo "$CONFIG")
-```
-
-Now we [deploy the Strimzi Cluster Operator and Kafka cluster](/sessions/001), and set the external listener.
-Then, we deploy the secret containing the custom certificate and update the Kafka cluster configuration by adding a reference to that secret.
-
-```sh
-$ kubectl create secret generic ext-listener-crt \
-  --from-file=/tmp/bundle.crt --from-file=/tmp/listener.key
-secret/ext-listener-crt created
-  
-$ kubectl patch k my-cluster --type merge -p '
-  spec:
-    kafka:
-      listeners:
-        - name: external
-          port: 9094
-          type: ingress
-          tls: true
-          configuration:
-            class: nginx
-            hostTemplate: broker-{nodeId}.my-cluster.f12i.io
-            bootstrap:
-              host: bootstrap.my-cluster.f12i.io
-            brokerCertChainAndKey:
-              secretName: ext-listener-crt
-              certificate: bundle.crt
-              key: listener.key'
-kafka.kafka.strimzi.io/my-cluster patched
-```
-
-When the rolling update is completed, clients just need to trust the external CA and they will be able to connect.
-In our case, we don't have a CA, so we just need to trust the self-signed certificate.
-
-```sh
-$ PUBLIC_CRT=$(</tmp/bundle.crt) && PUBLIC_CRT=$(echo "$PUBLIC_CRT" |sed ':a;N;$!ba; s;\n; \\\n;g')
-
-$ echo -e "security.protocol=SSL
-ssl.truststore.type=PEM
-ssl.truststore.certificates=$PUBLIC_CRT" >/tmp/client.properties
-
-$ $KAFKA_HOME/bin/kafka-console-producer.sh --bootstrap-server $BOOTSTRAP_SERVERS --topic my-topic --producer.config /tmp/client.properties 
->hello
->world
->^C
-```
+For the heap dump analysis you can use a tool like Eclipse Memory Analyzer.

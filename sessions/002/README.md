@@ -1,211 +1,103 @@
-## Get diagnostic data
+## Monitor Kafka metrics
 
 First, use [this session](/sessions/001) to deploy a Kafka cluster on Kubernetes.
 
-When debugging issues, you usually need to retrieve various artifacts from the environment, which can be a lot of effort.
-Fortunately, Strimzi provides a must-gather script that can be used to download all relevant artifacts and logs from a specific Kafka cluster.
-
-> [!NOTE]  
-> You can add the `--secrets=all` option to also get secret values.
+When the cluster is ready, install Prometheus, Grafana and Strimzi dashboards.
+Only the Cluster Operator and Kafka dashboards are included, but you can easily add the other components.
 
 ```sh
-$ curl -s https://raw.githubusercontent.com/strimzi/strimzi-kafka-operator/main/tools/report.sh \
-  | bash -s -- --namespace=test --cluster=my-cluster --out-dir=~/Downloads
-deployments
-    deployment.apps/my-cluster-entity-operator
-statefulsets
-replicasets
-    replicaset.apps/my-cluster-entity-operator-bb7c65dd4
-configmaps
-    configmap/my-cluster-broker-5
-    configmap/my-cluster-broker-6
-    configmap/my-cluster-broker-5
-    configmap/my-cluster-controller-0
-    configmap/my-cluster-controller-1
-    configmap/my-cluster-controller-2
-    configmap/my-cluster-entity-topic-operator-config
-    configmap/my-cluster-entity-user-operator-config
-secrets
-    secret/my-cluster-clients-ca
-    secret/my-cluster-clients-ca-cert
-    secret/my-cluster-cluster-ca
-    secret/my-cluster-cluster-ca-cert
-    secret/my-cluster-cluster-operator-certs
-    secret/my-cluster-entity-topic-operator-certs
-    secret/my-cluster-entity-user-operator-certs
-    secret/my-cluster-kafka-brokers
-services
-    service/my-cluster-kafka-bootstrap
-    service/my-cluster-kafka-brokers
-poddisruptionbudgets
-    poddisruptionbudget.policy/my-cluster-kafka
-roles
-    role.rbac.authorization.k8s.io/my-cluster-entity-operator
-rolebindings
-    rolebinding.rbac.authorization.k8s.io/my-cluster-entity-topic-operator-role
-    rolebinding.rbac.authorization.k8s.io/my-cluster-entity-user-operator-role
-networkpolicies
-    networkpolicy.networking.k8s.io/my-cluster-entity-operator
-    networkpolicy.networking.k8s.io/my-cluster-network-policy-kafka
-pods
-    pod/my-cluster-broker-5
-    pod/my-cluster-broker-6
-    pod/my-cluster-broker-5
-    pod/my-cluster-controller-0
-    pod/my-cluster-controller-1
-    pod/my-cluster-controller-2
-    pod/my-cluster-entity-operator-bb7c65dd4-9zdmk
-persistentvolumeclaims
-    persistentvolumeclaim/data-my-cluster-broker-5
-    persistentvolumeclaim/data-my-cluster-broker-6
-    persistentvolumeclaim/data-my-cluster-broker-5
-    persistentvolumeclaim/data-my-cluster-controller-0
-    persistentvolumeclaim/data-my-cluster-controller-1
-    persistentvolumeclaim/data-my-cluster-controller-2
-ingresses
-routes
-clusterroles
-    clusterrole.rbac.authorization.k8s.io/strimzi-cluster-operator-global
-    clusterrole.rbac.authorization.k8s.io/strimzi-cluster-operator-leader-election
-    clusterrole.rbac.authorization.k8s.io/strimzi-cluster-operator-namespaced
-    clusterrole.rbac.authorization.k8s.io/strimzi-cluster-operator-watched
-    clusterrole.rbac.authorization.k8s.io/strimzi-entity-operator
-    clusterrole.rbac.authorization.k8s.io/strimzi-kafka-broker
-    clusterrole.rbac.authorization.k8s.io/strimzi-kafka-client
-clusterrolebindings
-    clusterrolebinding.rbac.authorization.k8s.io/strimzi-cluster-operator
-    clusterrolebinding.rbac.authorization.k8s.io/strimzi-cluster-operator-kafka-broker-delegation
-    clusterrolebinding.rbac.authorization.k8s.io/strimzi-cluster-operator-kafka-client-delegation
-clusteroperator
-    deployment.apps/strimzi-cluster-operator
-    replicaset.apps/strimzi-cluster-operator-6596f469c9
-    pod/strimzi-cluster-operator-6596f469c9-smsw2
-    configmap/strimzi-cluster-operator
-draincleaner
-customresources
-    kafkanodepools.kafka.strimzi.io
-        broker
-        controller
-    kafkas.kafka.strimzi.io
-        my-cluster
-    kafkatopics.kafka.strimzi.io
-        my-topic
-    strimzipodsets.core.strimzi.io
-        my-cluster-broker
-        my-cluster-controller
-events
-logs
-    my-cluster-broker-5
-    my-cluster-broker-6
-    my-cluster-broker-5
-    my-cluster-controller-0
-    my-cluster-controller-1
-    my-cluster-controller-2
-    my-cluster-entity-operator-bb7c65dd4-9zdmk
-Report file report-17-03-2025_12-26-05.zip created
+$ for f in sessions/002/install/*.yaml; do
+  echo ">>> Installing $f"
+  envsubst < "$f" | kubectl apply -f -
+  sleep 5
+done
+>>> Installing sessions/002/install/010-metrics-server.yaml
+serviceaccount/metrics-server unchanged
+clusterrole.rbac.authorization.k8s.io/system:aggregated-metrics-reader unchanged
+rolebinding.rbac.authorization.k8s.io/metrics-server-auth-reader unchanged
+clusterrolebinding.rbac.authorization.k8s.io/metrics-server:system:auth-delegator unchanged
+clusterrole.rbac.authorization.k8s.io/system:metrics-server unchanged
+clusterrolebinding.rbac.authorization.k8s.io/system:metrics-server unchanged
+service/metrics-server unchanged
+deployment.apps/metrics-server configured
+apiservice.apiregistration.k8s.io/v1beta1.metrics.k8s.io unchanged
+>>> Installing sessions/002/install/020-prometheus-operator.yaml
+namespace/prometheus created
+customresourcedefinition.apiextensions.k8s.io/alertmanagers.monitoring.coreos.com created
+customresourcedefinition.apiextensions.k8s.io/podmonitors.monitoring.coreos.com created
+customresourcedefinition.apiextensions.k8s.io/prometheuses.monitoring.coreos.com created
+customresourcedefinition.apiextensions.k8s.io/prometheusrules.monitoring.coreos.com created
+customresourcedefinition.apiextensions.k8s.io/servicemonitors.monitoring.coreos.com created
+customresourcedefinition.apiextensions.k8s.io/thanosrulers.monitoring.coreos.com created
+serviceaccount/prometheus-operator created
+clusterrole.rbac.authorization.k8s.io/prometheus-operator unchanged
+clusterrolebinding.rbac.authorization.k8s.io/prometheus-operator unchanged
+service/prometheus-operator created
+deployment.apps/prometheus-operator created
+>>> Installing sessions/002/install/021-prometheus-server.yaml
+namespace/prometheus unchanged
+serviceaccount/prometheus created
+clusterrole.rbac.authorization.k8s.io/prometheus unchanged
+clusterrolebinding.rbac.authorization.k8s.io/prometheus unchanged
+service/prometheus created
+ingress.networking.k8s.io/prometheus created
+prometheus.monitoring.coreos.com/prometheus created
+secret/additional-scrape-configs created
+alertmanager.monitoring.coreos.com/alertmanager created
+service/alertmanager created
+ingress.networking.k8s.io/alertmanager created
+secret/alertmanager-alertmanager created
+>>> Installing sessions/002/install/022-prometheus-strimzi.yaml
+podmonitor.monitoring.coreos.com/strimzi-cluster-operator-metrics-test created
+podmonitor.monitoring.coreos.com/strimzi-entity-operator-metrics-test created
+podmonitor.monitoring.coreos.com/strimzi-bridge-metrics-test created
+podmonitor.monitoring.coreos.com/strimzi-kafka-and-cruise-control-metrics-test created
+>>> Installing sessions/002/install/030-grafana-operator.yaml
+namespace/grafana created
+customresourcedefinition.apiextensions.k8s.io/grafanadashboards.integreatly.org created
+customresourcedefinition.apiextensions.k8s.io/grafanadatasources.integreatly.org created
+customresourcedefinition.apiextensions.k8s.io/grafananotificationchannels.integreatly.org created
+customresourcedefinition.apiextensions.k8s.io/grafanas.integreatly.org created
+serviceaccount/controller-manager created
+role.rbac.authorization.k8s.io/leader-election-role created
+clusterrole.rbac.authorization.k8s.io/manager-role configured
+clusterrole.rbac.authorization.k8s.io/metrics-reader unchanged
+clusterrole.rbac.authorization.k8s.io/proxy-role unchanged
+rolebinding.rbac.authorization.k8s.io/leader-election-rolebinding created
+clusterrolebinding.rbac.authorization.k8s.io/manager-rolebinding unchanged
+clusterrolebinding.rbac.authorization.k8s.io/proxy-rolebinding unchanged
+service/controller-manager-metrics-service created
+configmap/manager-config created
+deployment.apps/controller-manager created
+>>> Installing sessions/002/install/031-grafana-server.yaml
+namespace/grafana unchanged
+grafana.integreatly.org/grafana created
+service/grafana created
+ingress.networking.k8s.io/grafana created
+grafanadatasource.integreatly.org/prometheus created
+>>> Installing sessions/002/install/032-grafana-strimzi.yaml
+grafanadashboard.integreatly.org/strimzi-operators created
+grafanadashboard.integreatly.org/strimzi-kafka created
+>>> Installing sessions/002/install/040-kube-state-metrics.yaml
+serviceaccount/kube-state-metrics unchanged
+clusterrole.rbac.authorization.k8s.io/kube-state-metrics unchanged
+clusterrolebinding.rbac.authorization.k8s.io/kube-state-metrics unchanged
+deployment.apps/kube-state-metrics unchanged
+service/kube-state-metrics unchanged
+podmonitor.monitoring.coreos.com/kube-state-metrics created
+grafanadashboard.integreatly.org/kube-state-metrics created
+>>> Installing sessions/002/install/050-node-exporter.yaml
+service/node-exporter created
+daemonset.apps/node-exporter created
+servicemonitor.monitoring.coreos.com/node-exporter created
+grafanadashboard.integreatly.org/node-exporter created
 ```
 
-## Get heap dumps
+When all Grafana is ready, you can access the dashboards from [http://grafana.f12i.io](http://grafana.f12i.io).
 
-It is also possible to collect broker JVM heap dumps and other advanced diagnostic data (thread dumps, flame graphs, etc).
+> [!IMPORTANT]  
+> Make sure to add ingress mappings to `/etc/hosts`.
+> Example: `192.168.49.2 prometheus.f12i.io grafana.f12i.io`
 
-> [!WARNING]
-> Taking a heap dump is a heavy operation that can cause the Java application to hang.
-> It is not recommended in production, unless it is not possible to reproduce the memory issue in a test environment.
-
-Debugging locally can often be easier and faster.
-However, some issues only manifest in Kubernetes due to factors like networking, resource limits, or interactions with other components.
-Even if you try to match your local setup to the Kubernetes configuration, subtle differences (e.g. service discovery, security settings, or operator-managed logic) might lead to different behavior.
-
-Create an additional volume of the desired size using a PVC.
-
-```sh
-$ echo -e "apiVersion: v1
-kind: PersistentVolumeClaim
-metadata:
-  name: my-pvc
-spec:
-  accessModes:
-    - ReadWriteOnce
-  resources:
-    requests:
-      storage: 10Gi
-  storageClassName: standard" | kubectl create -f -
-persistentvolumeclaim/my-pvc created
-```
-
-Mount the new volume using the additional volume feature within Kafka template (rolling update).
-It is required to use `/mnt` mount point.
-
-> [!WARNING]
-> Adding a custom volume triggers pod restarts, which can make it difficult to capture an issue that has already occurred.
-> If the issue cannot be easily reproduced in a test environment, configuring the volume in advance could help avoid the pod restarts when you need them most.
-
-```sh
-$ kubectl patch k my-cluster --type merge -p '
-    spec:
-      kafka:
-        template:
-            pod:
-              volumes:
-                - name: my-volume
-                  persistentVolumeClaim:
-                    claimName: my-pvc
-            kafkaContainer:
-              volumeMounts:
-                - name: my-volume
-                  mountPath: "/mnt/data"'
-kafka.kafka.strimzi.io/my-cluster patched
-```
-
-When the rolling update completes, create a broker heap dump and copy the output file to localhost.
-
-```sh
-$ PID="$(kubectl exec my-cluster-broker-5 -- jcmd | grep "kafka.Kafka" | awk '{print $1}')"
-
-$ kubectl exec my-cluster-broker-5 -- jcmd "$PID" VM.flags
-724:
--XX:CICompilerCount=4 -XX:ConcGCThreads=3 -XX:G1ConcRefinementThreads=10 -XX:G1EagerReclaimRemSetThreshold=32 -XX:G1HeapRegionSize=4194304
--XX:GCDrainStackTargetSize=64 -XX:+HeapDumpOnOutOfMemoryError -XX:HeapDumpPath=/mnt/data/oome.hprof -XX:InitialHeapSize=5368709120
--XX:+ManagementServer -XX:MarkStackSize=4194304 -XX:MaxHeapSize=5368709120 -XX:MaxNewSize=3221225472 -XX:MinHeapDeltaBytes=4194304
--XX:MinHeapSize=5368709120 -XX:NonNMethodCodeHeapSize=5839372 -XX:NonProfiledCodeHeapSize=122909434 -XX:ProfiledCodeHeapSize=122909434
--XX:ReservedCodeCacheSize=251658240 -XX:+SegmentedCodeCache -XX:SoftMaxHeapSize=5368709120 -XX:-THPStackMitigation
--XX:+UseCompressedClassPointers -XX:+UseCompressedOops -XX:+UseFastUnorderedTimeStamps -XX:+UseG1GC
-
-$ kubectl exec my-cluster-broker-5 -- jcmd "$PID" GC.heap_dump /mnt/data/heap.hprof
-724:
-Dumping heap to /mnt/data/heap.hprof ...
-Heap dump file created [179236580 bytes in 0.664 secs]
-
-$ kubectl cp my-cluster-broker-5:/mnt/data/heap.hprof "$HOME"/Downloads/heap.hprof
-tar: Removing leading `/' from member names
-```
-
-If the pod is crash looping, the dump can still be recovered by spinning up a temporary pod and mounting the volume.
-
-```sh
-$ kubectl run my-pod --restart "Never" --image "foo" --overrides "{
-  \"spec\": {
-    \"containers\": [
-      {
-        \"name\": \"busybox\",
-        \"image\": \"busybox\",
-        \"imagePullPolicy\": \"IfNotPresent\",
-        \"command\": [\"/bin/sh\", \"-c\", \"trap : TERM INT; sleep infinity & wait\"],
-        \"volumeMounts\": [
-          {\"name\": \"data\", \"mountPath\": \"/mnt/data\"}
-        ]
-      }
-    ],
-    \"volumes\": [
-      {\"name\": \"data\", \"persistentVolumeClaim\": {\"claimName\": \"my-pvc\"}}
-    ]
-  }
-}"
-
-$ kubectl exec my-pod -- ls -lh /mnt/data
-total 171M   
--rw-------    1 1001     root      170.9M Mar 17 14:38 heap.hprof
-```
-
-For the heap dump analysis you can use a tool like Eclipse Memory Analyzer.
+It is also possible to create alerting rules to provide notifications about specific conditions observed in metrics.
+This is managed by Prometheus Alertmanager, but it is not described here.

@@ -1,0 +1,71 @@
+apiVersion: v1
+kind: Service
+metadata:
+  name: node-exporter
+  labels:
+    app: node-exporter
+  namespace: prometheus
+spec:
+  clusterIP: None
+  ports:
+  - name: scrape
+    port: 9100
+    protocol: TCP
+  selector:
+    app: node-exporter
+  type: ClusterIP
+---
+apiVersion: apps/v1
+kind: DaemonSet
+metadata:
+  name: node-exporter
+  labels:
+    app: prometheus
+  namespace: prometheus
+spec:
+  selector:
+    matchLabels:
+      app: node-exporter
+  template:
+    metadata:
+      labels:
+        app: node-exporter
+      name: node-exporter
+    spec:
+      containers:
+      - image: prom/node-exporter
+        name: node-exporter
+        ports:
+        - containerPort: 9100
+          hostPort: 9100
+          name: scrape
+      hostNetwork: true
+      hostPID: true
+---
+apiVersion: monitoring.coreos.com/v1
+kind: ServiceMonitor
+metadata:
+  labels:
+    app: node-exporter
+    prometheus: prometheus
+  name: node-exporter
+  namespace: prometheus
+spec:
+  endpoints:
+  - honorLabels: true
+    port: scrape
+  selector:
+    matchLabels:
+      app: node-exporter
+---
+apiVersion: integreatly.org/v1alpha1
+kind: GrafanaDashboard
+metadata:
+  name: node-exporter
+  labels:
+    app: grafana
+    grafana: dashabord
+  namespace: grafana
+spec:
+  json: ""
+  url: https://grafana.com/api/dashboards/1860/revisions/18/download
