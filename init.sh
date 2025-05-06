@@ -1,14 +1,13 @@
 #!/usr/bin/env bash
 
 NAMESPACE="test" && export NAMESPACE
-STRIMZI_VERSION="0.45.0" && export STRIMZI_VERSION
+STRIMZI_VERSION="0.46.0" && export STRIMZI_VERSION
 INGRESS_DOMAIN="f12i.io" && export INGRESS_DOMAIN
 
 [[ "${BASH_SOURCE[0]}" -ef "$0" ]] && echo "Usage: source init.sh" && exit 1
 
 kafka-cp() {
   local id="${1-}" part="${2-50}"
-  [[ -z $id ]] && echo "Missing params" && return
   echo 'public void run(String id, int part) { System.out.println(abs(id.hashCode()) % part); }
     private int abs(int n) { return (n == Integer.MIN_VALUE) ? 0 : Math.abs(n); }
     run("'"$id"'", '"$part"');' | jshell -
@@ -42,8 +41,8 @@ kubectl delete pv $(kubectl get pv 2>/dev/null | grep "my-cluster" | awk '{print
 
 # clean monitoring stack
 kubectl delete ns grafana prometheus --force --wait=false &>/dev/null
-kubectl delete crd $(kubectl get crd | grep integreatly.org | awk '{print $1}') &>/dev/null
-kubectl delete crd $(kubectl get crd | grep monitoring.coreos.com | awk '{print $1}') &>/dev/null
+kubectl delete crd $(kubectl get crd 2>/dev/null | grep integreatly.org | awk '{print $1}') &>/dev/null
+kubectl delete crd $(kubectl get crd 2>/dev/null | grep monitoring.coreos.com | awk '{print $1}') &>/dev/null
 
 # deploy Strimzi
 STRIMZI_FILE="/tmp/strimzi-$STRIMZI_VERSION.yaml"
