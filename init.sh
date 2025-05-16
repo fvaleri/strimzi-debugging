@@ -2,7 +2,6 @@
 
 NAMESPACE="test" && export NAMESPACE
 STRIMZI_VERSION="0.46.0" && export STRIMZI_VERSION
-INGRESS_DOMAIN="f12i.io" && export INGRESS_DOMAIN
 
 [[ "${BASH_SOURCE[0]}" -ef "$0" ]] && echo "Usage: source init.sh" && exit 1
 

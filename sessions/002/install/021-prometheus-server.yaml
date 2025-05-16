@@ -70,7 +70,7 @@ metadata:
 spec:
   ingressClassName: nginx
   rules:
-  - host: prometheus.${INGRESS_DOMAIN}
+  - host: prometheus.f12i.io
     http:
       paths:
       - backend:
@@ -245,7 +245,7 @@ metadata:
 spec:
   ingressClassName: nginx
   rules:
-  - host: alertmanager.${INGRESS_DOMAIN}
+  - host: alertmanager.f12i.io
     http:
       paths:
       - backend:

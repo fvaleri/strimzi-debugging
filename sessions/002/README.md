@@ -6,6 +6,7 @@ When the cluster is ready, install Prometheus, Grafana and Strimzi dashboards.
 Only the Cluster Operator and Kafka dashboards are included, but you can easily add the other components.
 
 ```sh
+
 $ for f in sessions/002/install/*.yaml; do
   echo ">>> Installing $f"
   envsubst < "$f" | kubectl apply -f -
