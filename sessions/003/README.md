@@ -120,7 +120,8 @@ Even if you try to match your local setup to the Kubernetes configuration, subtl
 Create an additional volume of the desired size using a PVC.
 
 ```sh
-$ echo -e "apiVersion: v1
+$ kubectl create -f - <<EOF
+apiVersion: v1
 kind: PersistentVolumeClaim
 metadata:
   name: my-pvc
@@ -130,7 +131,8 @@ spec:
   resources:
     requests:
       storage: 10Gi
-  storageClassName: standard" | kubectl create -f -
+  storageClassName: standard
+EOF
 persistentvolumeclaim/my-pvc created
 ```
 

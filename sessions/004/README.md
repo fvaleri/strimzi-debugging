@@ -69,12 +69,14 @@ $ CLUSTER_CA_CRT=$(</tmp/cluster-ca.crt) && CLUSTER_CA_CRT=$(echo "$CLUSTER_CA_C
   USER_CRT=$(</tmp/user.crt) && USER_CRT=$(echo "$USER_CRT" |sed ':a;N;$!ba; s;\n; \\\n;g') \
   USER_KEY=$(</tmp/user.key) && USER_KEY=$(echo "$USER_KEY" |sed ':a;N;$!ba; s;\n; \\\n;g')
 
-$ echo -e "security.protocol = SSL
+$ cat <<EOF >/tmp/client.properties
+security.protocol = SSL
 ssl.truststore.type=PEM
 ssl.truststore.certificates=$CLUSTER_CA_CRT
 ssl.keystore.type=PEM
 ssl.keystore.certificate.chain=$USER_CRT
-ssl.keystore.key=$USER_KEY" >/tmp/client.properties
+ssl.keystore.key=$USER_KEY
+EOF
 
 $ $KAFKA_HOME/bin/kafka-console-producer.sh --bootstrap-server $BOOTSTRAP_SERVERS --topic my-topic --producer.config /tmp/client.properties
 >hello
@@ -203,9 +205,11 @@ In our case, we don't have a CA, so we just need to trust the self-signed certif
 ```sh
 $ PUBLIC_CRT=$(</tmp/bundle.crt) && PUBLIC_CRT=$(echo "$PUBLIC_CRT" |sed ':a;N;$!ba; s;\n; \\\n;g')
 
-$ echo -e "security.protocol=SSL
+$ cat <<EOF >/tmp/client.properties
+security.protocol=SSL
 ssl.truststore.type=PEM
-ssl.truststore.certificates=$PUBLIC_CRT" >/tmp/client.properties
+ssl.truststore.certificates=$PUBLIC_CRT
+EOF
 
 $ $KAFKA_HOME/bin/kafka-console-producer.sh --bootstrap-server $BOOTSTRAP_SERVERS --topic my-topic --producer.config /tmp/client.properties 
 >hello

@@ -40,14 +40,16 @@ Topic: my-topic	TopicId: XbszKNVQSSKTPB3sGvRaGg	PartitionCount: 3	ReplicationFac
 	Topic: my-topic	Partition: 1	Leader: 2	Replicas: 2,1,0	Isr: 2,1,0
 	Topic: my-topic	Partition: 2	Leader: 1	Replicas: 1,0,2	Isr: 1,0,2
 
-[kafka@my-cluster-broker-5 kafka]$ echo -e '{
+[kafka@my-cluster-broker-5 kafka]$ cat <<EOF >/tmp/reassign.json
+{
   "version": 1,
   "partitions": [
     {"topic": "my-topic", "partition": 0, "replicas": [3, 2, 1]},
     {"topic": "my-topic", "partition": 1, "replicas": [2, 1, 3]},
     {"topic": "my-topic", "partition": 2, "replicas": [1, 3, 2]}
   ]
-}' >/tmp/reassign.json
+}
+EOF
 
 [kafka@my-cluster-broker-5 kafka]$/opt/kafka/bin/kafka-reassign-partitions.sh --bootstrap-server my-cluster-kafka-bootstrap:9092 \
   --reassignment-json-file /tmp/reassign.json --throttle 10000000 --execute
