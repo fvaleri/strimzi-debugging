@@ -17,9 +17,9 @@ statefulsets
 replicasets
     replicaset.apps/my-cluster-entity-operator-bb7c65dd4
 configmaps
-    configmap/my-cluster-broker-5
-    configmap/my-cluster-broker-6
-    configmap/my-cluster-broker-5
+    configmap/my-cluster-broker-10
+    configmap/my-cluster-broker-11
+    configmap/my-cluster-broker-12
     configmap/my-cluster-controller-0
     configmap/my-cluster-controller-1
     configmap/my-cluster-controller-2
@@ -48,17 +48,17 @@ networkpolicies
     networkpolicy.networking.k8s.io/my-cluster-entity-operator
     networkpolicy.networking.k8s.io/my-cluster-network-policy-kafka
 pods
-    pod/my-cluster-broker-5
-    pod/my-cluster-broker-6
-    pod/my-cluster-broker-5
+    pod/my-cluster-broker-10
+    pod/my-cluster-broker-11
+    pod/my-cluster-broker-12
     pod/my-cluster-controller-0
     pod/my-cluster-controller-1
     pod/my-cluster-controller-2
     pod/my-cluster-entity-operator-bb7c65dd4-9zdmk
 persistentvolumeclaims
-    persistentvolumeclaim/data-my-cluster-broker-5
-    persistentvolumeclaim/data-my-cluster-broker-6
-    persistentvolumeclaim/data-my-cluster-broker-5
+    persistentvolumeclaim/data-my-cluster-broker-10
+    persistentvolumeclaim/data-my-cluster-broker-11
+    persistentvolumeclaim/data-my-cluster-broker-12
     persistentvolumeclaim/data-my-cluster-controller-0
     persistentvolumeclaim/data-my-cluster-controller-1
     persistentvolumeclaim/data-my-cluster-controller-2
@@ -95,9 +95,9 @@ customresources
         my-cluster-controller
 events
 logs
-    my-cluster-broker-5
-    my-cluster-broker-6
-    my-cluster-broker-5
+    my-cluster-broker-10
+    my-cluster-broker-11
+    my-cluster-broker-12
     my-cluster-controller-0
     my-cluster-controller-1
     my-cluster-controller-2
@@ -163,9 +163,9 @@ kafka.kafka.strimzi.io/my-cluster patched
 When the rolling update completes, create a broker heap dump and copy the output file to localhost.
 
 ```sh
-$ PID="$(kubectl exec my-cluster-broker-5 -- jcmd | grep "kafka.Kafka" | awk '{print $1}')"
+$ PID="$(kubectl exec my-cluster-broker-10 -- jcmd | grep "kafka.Kafka" | awk '{print $1}')"
 
-$ kubectl exec my-cluster-broker-5 -- jcmd "$PID" VM.flags
+$ kubectl exec my-cluster-broker-10 -- jcmd "$PID" VM.flags
 724:
 -XX:CICompilerCount=4 -XX:ConcGCThreads=3 -XX:G1ConcRefinementThreads=10 -XX:G1EagerReclaimRemSetThreshold=32 -XX:G1HeapRegionSize=4194304
 -XX:GCDrainStackTargetSize=64 -XX:+HeapDumpOnOutOfMemoryError -XX:HeapDumpPath=/mnt/data/oome.hprof -XX:InitialHeapSize=5368709120
@@ -174,12 +174,12 @@ $ kubectl exec my-cluster-broker-5 -- jcmd "$PID" VM.flags
 -XX:ReservedCodeCacheSize=251658240 -XX:+SegmentedCodeCache -XX:SoftMaxHeapSize=5368709120 -XX:-THPStackMitigation
 -XX:+UseCompressedClassPointers -XX:+UseCompressedOops -XX:+UseFastUnorderedTimeStamps -XX:+UseG1GC
 
-$ kubectl exec my-cluster-broker-5 -- jcmd "$PID" GC.heap_dump /mnt/data/heap.hprof
+$ kubectl exec my-cluster-broker-10 -- jcmd "$PID" GC.heap_dump /mnt/data/heap.hprof
 724:
 Dumping heap to /mnt/data/heap.hprof ...
 Heap dump file created [179236580 bytes in 0.664 secs]
 
-$ kubectl cp my-cluster-broker-5:/mnt/data/heap.hprof "$HOME"/Downloads/heap.hprof
+$ kubectl cp my-cluster-broker-10:/mnt/data/heap.hprof "$HOME"/Downloads/heap.hprof
 tar: Removing leading `/' from member names
 ```
 

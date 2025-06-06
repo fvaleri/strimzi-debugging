@@ -24,9 +24,9 @@ apicurioregistry.registry.apicur.io/my-schema-registry created
 $ kubectl get po
 NAME                                              READY   STATUS    RESTARTS   AGE
 apicurio-registry-operator-9448ffc74-b6whl        1/1     Running   0          69s
-my-cluster-broker-5                               1/1     Running   0          4m54s
-my-cluster-broker-6                               1/1     Running   0          4m27s
-my-cluster-broker-7                               1/1     Running   0          5m19s
+my-cluster-broker-10                              1/1     Running   0          4m54s
+my-cluster-broker-11                              1/1     Running   0          4m27s
+my-cluster-broker-12                              1/1     Running   0          5m19s
 my-cluster-controller-0                           1/1     Running   0          7m32s
 my-cluster-controller-1                           1/1     Running   0          7m32s
 my-cluster-controller-2                           1/1     Running   0          7m32s
@@ -91,8 +91,8 @@ Record: Hello-1742801335161
 If we now look at one of the messages, we see that the `globalId` is stored in the message headers and used for the schema lookup when consuming messages.
 
 ```sh
-$ kubectl exec my-cluster-broker-5 -- bin/kafka-dump-log.sh --deep-iteration --print-data-log \
-  --files /var/lib/kafka/data/kafka-log5/my-topic-0/00000000000000000000.log | tail -n2
+$ kubectl exec my-cluster-broker-10 -- bin/kafka-dump-log.sh --deep-iteration --print-data-log \
+  --files /var/lib/kafka/data/kafka-log10/my-topic-0/00000000000000000000.log | tail -n2
 | offset: 15 CreateTime: 1742802014915 keySize: -1 valueSize: 12 sequence: 4 headerKeys: [apicurio.value.globalId,apicurio.value.encoding] payload: 
 Hello????e
 ```

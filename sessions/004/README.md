@@ -35,9 +35,9 @@ It also creates a Kafka user resource with a matching configuration.
 ```sh
 $ kubectl get ingress
 NAME                         CLASS   HOSTS                              ADDRESS        PORTS     AGE
-my-cluster-broker-5          nginx   broker-5.my-cluster.f12i.io        192.168.49.2   80, 443   104s
-my-cluster-broker-6          nginx   broker-6.my-cluster.f12i.io        192.168.49.2   80, 443   104s
-my-cluster-broker-7          nginx   broker-7.my-cluster.f12i.io        192.168.49.2   80, 443   104s
+my-cluster-broker-10         nginx   broker-10.my-cluster.f12i.io       192.168.49.2   80, 443   104s
+my-cluster-broker-11         nginx   broker-11.my-cluster.f12i.io       192.168.49.2   80, 443   104s
+my-cluster-broker-12         nginx   broker-12.my-cluster.f12i.io       192.168.49.2   80, 443   104s
 my-cluster-kafka-bootstrap   nginx   bootstrap.my-cluster.f12i.io       192.168.49.2   80, 443   104s
 
 $ kubectl get ku my-user -o yaml | yq .spec

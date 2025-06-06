@@ -42,9 +42,9 @@ NAME                                   CLUSTER      PARTITIONS   REPLICATION FAC
 kafkatopic.kafka.strimzi.io/my-topic   my-cluster   3            3                    True
 
 NAME                                             READY   STATUS    RESTARTS   AGE
-pod/my-cluster-broker-5                          1/1     Running   0          64s
-pod/my-cluster-broker-6                          1/1     Running   0          64s
-pod/my-cluster-broker-5                          1/1     Running   0          64s
+pod/my-cluster-broker-10                         1/1     Running   0          64s
+pod/my-cluster-broker-11                         1/1     Running   0          64s
+pod/my-cluster-broker-12                         1/1     Running   0          64s
 pod/my-cluster-controller-0                      1/1     Running   0          63s
 pod/my-cluster-controller-1                      1/1     Running   0          63s
 pod/my-cluster-controller-2                      1/1     Running   0          63s
@@ -77,10 +77,10 @@ The broker property `log.dirs` configures where our topic partitions are stored.
 We have 3 partitions, which corresponds to exactly 3 folders on disk.
 
 ```sh
-$ kubectl exec my-cluster-broker-5 -- cat /tmp/strimzi.properties | grep log.dirs
-log.dirs=/var/lib/kafka/data/kafka-log5
+$ kubectl exec my-cluster-broker-10 -- cat /tmp/strimzi.properties | grep log.dirs
+log.dirs=/var/lib/kafka/data/kafka-log10
 
-$ kubectl exec my-cluster-broker-5 -- ls -lh /var/lib/kafka/data/kafka-log5 | grep my-topic
+$ kubectl exec my-cluster-broker-10 -- ls -lh /var/lib/kafka/data/kafka-log10 | grep my-topic
 drwxr-xr-x. 2 kafka root  167 Mar 23 13:18 my-topic-0
 drwxr-xr-x. 2 kafka root  167 Mar 23 13:15 my-topic-1
 drwxr-xr-x. 2 kafka root  167 Mar 23 13:18 my-topic-2
@@ -91,7 +91,7 @@ Looking inside partition 0, we have a `.log` file containing our records (each s
 The other two files contain additional metadata.
 
 ```sh
-$ kubectl exec my-cluster-broker-5 -- ls -lh /var/lib/kafka/data/kafka-log5/my-topic-0
+$ kubectl exec my-cluster-broker-10 -- ls -lh /var/lib/kafka/data/kafka-log10/my-topic-0
 total 12K
 -rw-r--r--. 1 kafka root 10M Mar 23 13:15 00000000000000000000.index
 -rw-r--r--. 1 kafka root  78 Mar 23 13:18 00000000000000000000.log
@@ -104,9 +104,9 @@ Partition log files are in binary format, but Kafka includes a dump tool for dec
 On this partition, we have one batch (`baseOffset`), containing only one record (`| offset`) with key "24910" and payload "kafka".
 
 ```sh
-$ kubectl exec my-cluster-broker-5 -- bin/kafka-dump-log.sh --deep-iteration --print-data-log \
-  --files /var/lib/kafka/data/kafka-log5/my-topic-0/00000000000000000000.log
-Dumping /var/lib/kafka/data/kafka-log5/my-topic-0/00000000000000000000.log
+$ kubectl exec my-cluster-broker-10 -- bin/kafka-dump-log.sh --deep-iteration --print-data-log \
+  --files /var/lib/kafka/data/kafka-log10/my-topic-0/00000000000000000000.log
+Dumping /var/lib/kafka/data/kafka-log10/my-topic-0/00000000000000000000.log
 Log starting offset: 0
 baseOffset: 0 lastOffset: 0 count: 1 baseSequence: 0 lastSequence: 0 producerId: 0 producerEpoch: 0 partitionLeaderEpoch: 0 isTransactional: false isControl: false deleteHorizonMs: OptionalLong.empty position: 0 CreateTime: 1742735936663 size: 78 magic: 2 compresscodec: none crc: 825983240 isvalid: true
 | offset: 0 CreateTime: 1742735936663 keySize: 5 valueSize: 5 sequence: 0 headerKeys: [] key: 24910 payload: kafka
@@ -130,9 +130,9 @@ We have a batch from our consumer group, which includes 3 records, one for each 
 As expected, the consumer group committed offset1@partition0, offset2@partition2, and offset0@partition1 (this partition didn't received any message).
 
 ```sh
-$ kubectl exec my-cluster-broker-5 -- bin/kafka-dump-log.sh --deep-iteration --print-data-log --offsets-decoder \
-  --files /var/lib/kafka/data/kafka-log5/__consumer_offsets-12/00000000000000000000.log
-Dumping /var/lib/kafka/data/kafka-log5/__consumer_offsets-12/00000000000000000000.log
+$ kubectl exec my-cluster-broker-10 -- bin/kafka-dump-log.sh --deep-iteration --print-data-log --offsets-decoder \
+  --files /var/lib/kafka/data/kafka-log10/__consumer_offsets-12/00000000000000000000.log
+Dumping /var/lib/kafka/data/kafka-log10/__consumer_offsets-12/00000000000000000000.log
 Log starting offset: 0
 ...
 baseOffset: 1 lastOffset: 3 count: 3 baseSequence: 0 lastSequence: 2 producerId: -1 producerEpoch: -1 partitionLeaderEpoch: 0 isTransactional: false isControl: false deleteHorizonMs: OptionalLong.empty position: 344 CreateTime: 1742735956644 size: 232 magic: 2 compresscodec: none crc: 4034662502 isvalid: true

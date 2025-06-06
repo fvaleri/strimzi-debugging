@@ -47,18 +47,18 @@ This batch is followed by a control batch (`isControl`), which contains a single
 In `__consumer_offsets-12`, the consumer group's offset commit batch is followed by a similar control batch.
 
 ```sh
-$ kubectl exec my-cluster-broker-5 -- bin/kafka-dump-log.sh --deep-iteration --print-data-log \
-  --files /var/lib/kafka/data/kafka-log5/output-topic-0/00000000000000000000.log
-Dumping /var/lib/kafka/data/kafka-log5/output-topic-0/00000000000000000000.log
+$ kubectl exec my-cluster-broker-10 -- bin/kafka-dump-log.sh --deep-iteration --print-data-log \
+  --files /var/lib/kafka/data/kafka-log10/output-topic-0/00000000000000000000.log
+Dumping /var/lib/kafka/data/kafka-log10/output-topic-0/00000000000000000000.log
 Log starting offset: 0
 baseOffset: 0 lastOffset: 0 count: 1 baseSequence: 0 lastSequence: 0 producerId: 1 producerEpoch: 0 partitionLeaderEpoch: 0 isTransactional: true isControl: false deleteHorizonMs: OptionalLong.empty position: 0 CreateTime: 1742739702864 size: 82 magic: 2 compresscodec: none crc: 758896000 isvalid: true
 | offset: 0 CreateTime: 1742739702864 keySize: -1 valueSize: 14 sequence: 0 headerKeys: [] payload: tset a si siht
 baseOffset: 1 lastOffset: 1 count: 1 baseSequence: -1 lastSequence: -1 producerId: 1 producerEpoch: 0 partitionLeaderEpoch: 0 isTransactional: true isControl: true deleteHorizonMs: OptionalLong.empty position: 82 CreateTime: 1742739703234 size: 78 magic: 2 compresscodec: none crc: 2557578104 isvalid: true
 | offset: 1 CreateTime: 1742739703234 keySize: 4 valueSize: 6 sequence: -1 headerKeys: [] endTxnMarker: COMMIT coordinatorEpoch: 0
 
-$ kubectl exec my-cluster-broker-5 -- bin/kafka-dump-log.sh --deep-iteration --print-data-log --offsets-decoder \
-  --files /var/lib/kafka/data/kafka-log5/__consumer_offsets-12/00000000000000000000.log
-Dumping /var/lib/kafka/data/kafka-log5/__consumer_offsets-12/00000000000000000000.log
+$ kubectl exec my-cluster-broker-10 -- bin/kafka-dump-log.sh --deep-iteration --print-data-log --offsets-decoder \
+  --files /var/lib/kafka/data/kafka-log10/__consumer_offsets-12/00000000000000000000.log
+Dumping /var/lib/kafka/data/kafka-log10/__consumer_offsets-12/00000000000000000000.log
 Log starting offset: 0
 ...
 baseOffset: 7 lastOffset: 7 count: 1 baseSequence: 0 lastSequence: 0 producerId: 1 producerEpoch: 0 partitionLeaderEpoch: 0 isTransactional: true isControl: false deleteHorizonMs: OptionalLong.empty position: 1974 CreateTime: 1742739703027 size: 121 magic: 2 compresscodec: none crc: 4292816145 isvalid: true
@@ -75,9 +75,9 @@ Then, when the commit is called, we have `PrepareCommit` state change, which mea
 This happens in the last batch, where the state is changed to `CompleteCommit`, terminating the transaction.
 
 ```sh
-$ kubectl exec my-cluster-broker-5 -- bin/kafka-dump-log.sh --deep-iteration --print-data-log --transaction-log-decoder \
-  --files /var/lib/kafka/data/kafka-log5/__transaction_state-30/00000000000000000000.log
-Dumping /var/lib/kafka/data/kafka-log5/__transaction_state-30/00000000000000000000.log
+$ kubectl exec my-cluster-broker-10 -- bin/kafka-dump-log.sh --deep-iteration --print-data-log --transaction-log-decoder \
+  --files /var/lib/kafka/data/kafka-log10/__transaction_state-30/00000000000000000000.log
+Dumping /var/lib/kafka/data/kafka-log10/__transaction_state-30/00000000000000000000.log
 Log starting offset: 0
 baseOffset: 0 lastOffset: 0 count: 1 baseSequence: -1 lastSequence: -1 producerId: -1 producerEpoch: -1 partitionLeaderEpoch: 0 isTransactional: false isControl: false deleteHorizonMs: OptionalLong.empty position: 0 CreateTime: 1742739549438 size: 120 magic: 2 compresscodec: none crc: 3663501755 isvalid: true
 | offset: 0 CreateTime: 1742739549438 keySize: 15 valueSize: 37 sequence: -1 headerKeys: [] key: transaction_metadata::transactionalId=kafka-txn-0 payload: producerId:1,producerEpoch:0,state=Empty,partitions=[],txnLastUpdateTimestamp=1742739549435,txnTimeoutMs=60000
@@ -110,12 +110,12 @@ If the partition is part of a compacted topic like `__consumer_offsets`, compact
 The last cleaned offset never changes.
 
 ```sh
-$ kubectl exec -it my-cluster-broker-5 -- bash
+$ kubectl exec -it my-cluster-broker-10 -- bash
 
-[kafka@my-cluster-broker-5 kafka]$ grep "__consumer_offsets 27" /var/lib/kafka/data/kafka-log5/cleaner-offset-checkpoint
+[kafka@my-cluster-broker-10 kafka]$ grep "__consumer_offsets 27" /var/lib/kafka/data/kafka-log10/cleaner-offset-checkpoint
 __consumer_offsets 27 913095344
 
-[kafka@my-cluster-broker-5 kafka]$ exit
+[kafka@my-cluster-broker-10 kafka]$ exit
 exit
 ```
 
@@ -125,7 +125,7 @@ In Kafka 3+ there is an official command line tool that you can use to identify 
 > The `CLUSTER_ACTION` operation type is required when authorization is enabled.
 
 ```sh
-$ kubectl-kafka bin/kafka-transactions.sh --bootstrap-server my-cluster-kafka-bootstrap:9092 find-hanging --broker 5
+$ kubectl-kafka bin/kafka-transactions.sh --bootstrap-server my-cluster-kafka-bootstrap:9092 find-hanging --broker 10
 Topic                  Partition   ProducerId  ProducerEpoch   StartOffset LastTimestamp               Duration(s)
 __consumer_offsets     27          171100      1               913095344   2022-06-06T03:16:47Z        209793
 

@@ -29,9 +29,9 @@ The `MirrorCheckpointConnector` emits consumer group offsets checkpoints to enab
 ```sh
 $ kubectl get po
 NAME                                          READY   STATUS    RESTARTS   AGE
-my-cluster-broker-5                           1/1     Running   0          11m
-my-cluster-broker-6                           1/1     Running   0          11m
-my-cluster-broker-7                           1/1     Running   0          11m
+my-cluster-broker-10                          1/1     Running   0          11m
+my-cluster-broker-11                          1/1     Running   0          11m
+my-cluster-broker-12                          1/1     Running   0          11m
 my-cluster-controller-0                       1/1     Running   0          11m
 my-cluster-controller-1                       1/1     Running   0          11m
 my-cluster-controller-2                       1/1     Running   0          11m

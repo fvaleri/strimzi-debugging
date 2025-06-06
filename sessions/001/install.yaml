@@ -6,7 +6,7 @@ metadata:
     # must match the cluster name
     strimzi.io/cluster: my-cluster
   annotations:
-    strimzi.io/next-node-ids: "[0-4]"
+    strimzi.io/next-node-ids: "[0-9]"
 spec:
   replicas: 3
   roles:
@@ -32,7 +32,7 @@ metadata:
     # must match the cluster name
     strimzi.io/cluster: my-cluster
   annotations:
-    strimzi.io/next-node-ids: "[5-29]"
+    strimzi.io/next-node-ids: "[10-100]"
 spec:
   replicas: 3
   roles:

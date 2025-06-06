@@ -14,17 +14,17 @@ When the cluster is ready, we want to scale it up and put some load on the new b
 Thanks to the Cluster Operator, we can scale the cluster up by simply raising the number of broker replicas in the Kafka custom resource (CR).
 
 ```sh
-$ kubectl patch knp kafka --type merge -p '
+$ kubectl patch knp broker --type merge -p '
     spec:
       replicas: 4'
-kafkanodepool.kafka.strimzi.io/kafka patched
+kafkanodepool.kafka.strimzi.io/broker patched
 
-$ kubectl get po -l app.kubernetes.io/name=kafka
-NAME                 READY   STATUS    RESTARTS   AGE
-my-cluster-kafka-0   1/1     Running   0          2m8s
-my-cluster-kafka-1   1/1     Running   0          2m8s
-my-cluster-kafka-2   1/1     Running   0          2m8s
-my-cluster-kafka-3   1/1     Running   0          30s
+$ kubectl get po -l app.kubernetes.io/name=broker
+NAME                   READY   STATUS    RESTARTS   AGE
+my-cluster-broker-10   1/1     Running   0          2m8s
+my-cluster-broker-11   1/1     Running   0          2m8s
+my-cluster-broker-12   1/1     Running   0          2m8s
+my-cluster-broker-13   1/1     Running   0          30s
 ```
 
 One option is to use the `kafka-reassign-partitions.sh` tool to move existing data.
@@ -33,29 +33,29 @@ You would need a custom procedure to figure out which replica changes can be don
 The result of this procedure would be a `reassign.json` file describing the desired partition state for each topic that we can pass to the tool.
 
 ```sh
-$ kubectl exec -it my-cluster-broker-5 -- bash
-[kafka@my-cluster-broker-5 kafka]$ /opt/kafka/bin/kafka-topics.sh --bootstrap-server my-cluster-kafka-bootstrap:9092 --topic my-topic --describe
+$ kubectl exec -it my-cluster-broker-10 -- bash
+[kafka@my-cluster-broker-10 kafka]$ /opt/kafka/bin/kafka-topics.sh --bootstrap-server my-cluster-kafka-bootstrap:9092 --topic my-topic --describe
 Topic: my-topic	TopicId: XbszKNVQSSKTPB3sGvRaGg	PartitionCount: 3	ReplicationFactor: 3	Configs: min.insync.replicas=2,message.format.version=3.0-IV1
-	Topic: my-topic	Partition: 0	Leader: 0	Replicas: 0,2,1	Isr: 0,2,1
-	Topic: my-topic	Partition: 1	Leader: 2	Replicas: 2,1,0	Isr: 2,1,0
-	Topic: my-topic	Partition: 2	Leader: 1	Replicas: 1,0,2	Isr: 1,0,2
+	Topic: my-topic	Partition: 0	Leader: 10	Replicas: 10,12,11	Isr: 10,12,11
+	Topic: my-topic	Partition: 1	Leader: 12	Replicas: 12,11,10	Isr: 12,11,10
+	Topic: my-topic	Partition: 2	Leader: 11	Replicas: 11,10,12	Isr: 11,10,12
 
-[kafka@my-cluster-broker-5 kafka]$ cat <<EOF >/tmp/reassign.json
+[kafka@my-cluster-broker-10 kafka]$ cat <<EOF >/tmp/reassign.json
 {
   "version": 1,
   "partitions": [
-    {"topic": "my-topic", "partition": 0, "replicas": [3, 2, 1]},
-    {"topic": "my-topic", "partition": 1, "replicas": [2, 1, 3]},
-    {"topic": "my-topic", "partition": 2, "replicas": [1, 3, 2]}
+    {"topic": "my-topic", "partition": 0, "replicas": [13, 12, 11]},
+    {"topic": "my-topic", "partition": 1, "replicas": [12, 11, 13]},
+    {"topic": "my-topic", "partition": 2, "replicas": [11, 13, 12]}
   ]
 }
 EOF
 
-[kafka@my-cluster-broker-5 kafka]$/opt/kafka/bin/kafka-reassign-partitions.sh --bootstrap-server my-cluster-kafka-bootstrap:9092 \
+[kafka@my-cluster-broker-10 kafka]$/opt/kafka/bin/kafka-reassign-partitions.sh --bootstrap-server my-cluster-kafka-bootstrap:9092 \
   --reassignment-json-file /tmp/reassign.json --throttle 10000000 --execute
 Current partition replica assignment
 
-{"version":1,"partitions":[{"topic":"my-topic","partition":0,"replicas":[0,2,1],"log_dirs":["any","any","any"]},{"topic":"my-topic","partition":1,"replicas":[2,1,0],"log_dirs":["any","any","any"]},{"topic":"my-topic","partition":2,"replicas":[1,0,2],"log_dirs":["any","any","any"]}]}
+{"version":1,"partitions":[{"topic":"my-topic","partition":0,"replicas":[10,12,11],"log_dirs":["any","any","any"]},{"topic":"my-topic","partition":1,"replicas":[12,11,10],"log_dirs":["any","any","any"]},{"topic":"my-topic","partition":2,"replicas":[11,10,12],"log_dirs":["any","any","any"]}]}
 
 Save this to use as the --reassignment-json-file option during rollback
 Warning: You must run --verify periodically, until the reassignment completes, to ensure the throttle is removed.
@@ -77,23 +77,23 @@ After the reassignment is started, we use the `--verify` option to check the sta
 When the process is done, we can check if the topic configuration changes have been applied.
 
 ```sh
-[kafka@my-cluster-broker-5 kafka]$ /opt/kafka/bin/kafka-reassign-partitions.sh --bootstrap-server my-cluster-kafka-bootstrap:9092 \
+[kafka@my-cluster-broker-10 kafka]$ /opt/kafka/bin/kafka-reassign-partitions.sh --bootstrap-server my-cluster-kafka-bootstrap:9092 \
   --reassignment-json-file /tmp/reassign.json --verify
 Status of partition reassignment:
 Reassignment of partition my-topic-0 is completed.
 Reassignment of partition my-topic-1 is completed.
 Reassignment of partition my-topic-2 is completed.
 
-Clearing broker-level throttles on brokers 0,1,2,3
+Clearing broker-level throttles on brokers 10,11,12,13
 Clearing topic-level throttles on topic my-topic
 
-[kafka@my-cluster-broker-5 kafka]$ /opt/kafka/bin/kafka-topics.sh --bootstrap-server my-cluster-kafka-bootstrap:9092 --topic my-topic --describe
+[kafka@my-cluster-broker-10 kafka]$ /opt/kafka/bin/kafka-topics.sh --bootstrap-server my-cluster-kafka-bootstrap:9092 --topic my-topic --describe
 Topic: my-topic	TopicId: XbszKNVQSSKTPB3sGvRaGg	PartitionCount: 3	ReplicationFactor: 3	Configs: min.insync.replicas=2,message.format.version=3.0-IV1
-	Topic: my-topic	Partition: 0	Leader: 3	Replicas: 3,2,1	Isr: 2,1,3
-	Topic: my-topic	Partition: 1	Leader: 2	Replicas: 2,1,3	Isr: 2,1,3
-	Topic: my-topic	Partition: 2	Leader: 1	Replicas: 1,3,2	Isr: 1,2,3
+	Topic: my-topic	Partition: 0	Leader: 13	Replicas: 13,12,11	Isr: 12,11,13
+	Topic: my-topic	Partition: 1	Leader: 12	Replicas: 12,11,13	Isr: 12,11,13
+	Topic: my-topic	Partition: 2	Leader: 11	Replicas: 11,13,12	Isr: 11,12,13
 
-[kafka@my-cluster-broker-5 kafka]$ exit
+[kafka@my-cluster-broker-10 kafka]$ exit
 exit
 ```
 
@@ -101,19 +101,19 @@ exit
 
 First, use [this session](/sessions/001) to deploy a Kafka cluster on Kubernetes.
 
-When the cluster is ready, we send some data and check how partitions are distributed among the brokers.
+When the cluster is ready, we send some data and check how partitions are distributed between the brokers.
 
 ```sh
 $ kubectl-kafka bin/kafka-producer-perf-test.sh --topic my-topic --record-size 100 --num-records 10000000 \
   --throughput -1 --producer-props acks=1 bootstrap.servers=my-cluster-kafka-bootstrap:9092
 ...
-10000000 records sent, 165387.668695 records/sec (15.77 MB/sec), 1750.32 ms avg latency, 5498.00 ms max latency, 1504 ms 50th, 3831 ms 95th, 4697 ms 99th, 5377 ms 99.9th.
+10000000 records sent, 435085.3 records/sec (41.49 MB/sec), 521.45 ms avg latency, 9808.00 ms max latency, 258 ms 50th, 1399 ms 95th, 9636 ms 99th, 9781 ms 99.9th.
 
 $ kubectl-kafka bin/kafka-topics.sh --bootstrap-server my-cluster-kafka-bootstrap:9092 --describe --topic my-topic
-Topic: my-topic	TopicId: Gkti6y9fQjiYCU02tkwTFg	PartitionCount: 3	ReplicationFactor: 3	Configs: min.insync.replicas=2,retention.bytes=1073741824
-	Topic: my-topic	Partition: 0	Leader: 9	Replicas: 9,7,8	Isr: 7,8,9	Elr: 	LastKnownElr: 
-	Topic: my-topic	Partition: 1	Leader: 7	Replicas: 7,8,9	Isr: 7,8,9	Elr: 	LastKnownElr: 
-	Topic: my-topic	Partition: 2	Leader: 8	Replicas: 8,9,7	Isr: 7,8,9	Elr: 	LastKnownElr: 
+Topic: my-topic	TopicId: w7uEJVDXSm22zscX2-9AYA	PartitionCount: 3	ReplicationFactor: 3	Configs: min.insync.replicas=2,retention.bytes=1073741824
+	Topic: my-topic	Partition: 0	Leader: 11	Replicas: 11,12,10	Isr: 11,12,10	Elr: 	LastKnownElr: 
+	Topic: my-topic	Partition: 1	Leader: 12	Replicas: 12,10,11	Isr: 12,11,10	Elr: 	LastKnownElr: 
+	Topic: my-topic	Partition: 2	Leader: 11	Replicas: 10,11,12	Isr: 11,12,10	Elr: 	LastKnownElr: 
 ```
 
 Then, we deploy Cruise Control with the auto-rebalancing feature enabled.
@@ -122,7 +122,7 @@ Then, we deploy Cruise Control with the auto-rebalancing feature enabled.
 > The auto-rebalancing feature will automatically generate and execute KafkaRebalance resources on cluster scale up and down.
 > Each mode can be customized by adding custom KafkaRebalance templates.
 
-The Cluster Operator will trigger a rolling update to add the metrics reporter plugin to brokers, and then it will deploy Cruise Control.
+The Cluster Operator will trigger a rolling update of the brokers to add the metrics reporter, and then it will deploy Cruise Control.
 
 ```sh
 $ kubectl patch k my-cluster --type merge -p '
@@ -134,12 +134,12 @@ $ kubectl patch k my-cluster --type merge -p '
 kafka.kafka.strimzi.io/my-cluster patched
 ```
 
-Wait some time for Cruise Control to build the workload model and then scale up the Kafka cluster, adding two more brokers.
+Wait some time for Cruise Control to build its internal workload model, and then scale up the Kafka cluster adding a new broker.
 
 ```sh
 $ kubectl patch knp broker --type merge -p '
     spec:
-      replicas: 5'
+      replicas: 4'
 kafkanodepool.kafka.strimzi.io/broker patched
 ```
 
@@ -154,12 +154,12 @@ my-cluster-auto-rebalancing-add-brokers   my-cluster              Rebalancing
 my-cluster-auto-rebalancing-add-brokers   my-cluster              Ready
 ```
 
-When KafkaRebalance is ready, we can see that new brokers contain some of the existing replicas.
+When KafkaRebalance is ready, we can see that the new broker now contains existing replicas.
 
 ```sh
-$ kubectl-kafka bin/kafka-topics.sh --bootstrap-server my-cluster-kafka-bootstrap:9092 --describe --topic my-topicic
-Topic: my-topic	TopicId: Gkti6y9fQjiYCU02tkwTFg	PartitionCount: 3	ReplicationFactor: 3	Configs: min.insync.replicas=2,retention.bytes=1073741824
-    Topic: my-topic Partition: 0    Leader: 9   Replicas: 9,10,11   Isr: 10,9,11    Elr:    LastKnownElr: 
-    Topic: my-topic Partition: 1    Leader: 11  Replicas: 11,10,9   Isr: 10,9,11    Elr:    LastKnownElr: 
-    Topic: my-topic Partition: 2    Leader: 8   Replicas: 8,9,7     Isr: 7,8,9      Elr:    LastKnownElr: 
+$ kubectl-kafka bin/kafka-topics.sh --bootstrap-server my-cluster-kafka-bootstrap:9092 --describe --topic my-topic
+Topic: my-topic	TopicId: w7uEJVDXSm22zscX2-9AYA	PartitionCount: 3	ReplicationFactor: 3	Configs: min.insync.replicas=2,retention.bytes=1073741824
+	Topic: my-topic	Partition: 0	Leader: 11	Replicas: 11,12,10	Isr: 10,11,12	Elr: 	LastKnownElr: 
+	Topic: my-topic	Partition: 1	Leader: 12	Replicas: 12,10,11	Isr: 10,11,12	Elr: 	LastKnownElr: 
+	Topic: my-topic	Partition: 2	Leader: 10	Replicas: 10,11,13	Isr: 10,11,13	Elr: 	LastKnownElr: 
 ```
