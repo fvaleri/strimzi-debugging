@@ -5,8 +5,8 @@ First, use [this session](/sessions/001) to deploy a Kafka cluster on Kubernetes
 We also add an external listener of type ingress with TLS authentication.
 Then, wait for the Cluster Operator to restart all pods one by one (rolling update).
 
-> [!IMPORTANT]  
-> You need to enable the Nginx ingress controller with `--enable-ssl-passthrough` flag, and add ingress mappings to `/etc/hosts`.
+> [!IMPORTANT]
+> Enable the Nginx ingress controller with `--enable-ssl-passthrough` flag and add the `/etc/hosts` mapping.
 
 ```sh
 $ kubectl create -f sessions/004/install.yaml \
@@ -70,7 +70,7 @@ $ CLUSTER_CA_CRT=$(</tmp/cluster-ca.crt) && CLUSTER_CA_CRT=$(echo "$CLUSTER_CA_C
   USER_KEY=$(</tmp/user.key) && USER_KEY=$(echo "$USER_KEY" |sed ':a;N;$!ba; s;\n; \\\n;g')
 
 $ cat <<EOF >/tmp/client.properties
-security.protocol = SSL
+security.protocol=SSL
 ssl.truststore.type=PEM
 ssl.truststore.certificates=$CLUSTER_CA_CRT
 ssl.keystore.type=PEM
@@ -78,12 +78,16 @@ ssl.keystore.certificate.chain=$USER_CRT
 ssl.keystore.key=$USER_KEY
 EOF
 
-$ $KAFKA_HOME/bin/kafka-console-producer.sh --bootstrap-server $BOOTSTRAP_SERVERS --topic my-topic --producer.config /tmp/client.properties
+$ kubectl cp /tmp/client.properties kafka-tools:/tmp/client.properties
+
+$ kubectl-kafka bin/kafka-console-producer.sh --bootstrap-server "$BOOTSTRAP_SERVERS" --topic my-topic \
+  --producer.config /tmp/client.properties
 >hello
 >world
 >^C
 
-$KAFKA_HOME/bin/kafka-console-consumer.sh --bootstrap-server $BOOTSTRAP_SERVERS --topic my-topic --from-beginning --max-messages 2 --consumer.config /tmp/client.properties
+$ kubectl-kafka bin/kafka-console-consumer.sh --bootstrap-server $BOOTSTRAP_SERVERS --topic my-topic \
+  --from-beginning --max-messages 2 --consumer.config /tmp/client.properties
 hello
 world
 Processed a total of 2 messages
@@ -211,7 +215,9 @@ ssl.truststore.type=PEM
 ssl.truststore.certificates=$PUBLIC_CRT
 EOF
 
-$ $KAFKA_HOME/bin/kafka-console-producer.sh --bootstrap-server $BOOTSTRAP_SERVERS --topic my-topic --producer.config /tmp/client.properties 
+$ kubectl cp /tmp/client.properties kafka-tools:/tmp/client.properties
+
+$ kubectl-kafka bin/kafka-console-producer.sh --bootstrap-server "$BOOTSTRAP_SERVERS" --topic my-topic
 >hello
 >world
 >^C

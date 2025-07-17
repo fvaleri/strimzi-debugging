@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
 
-NAMESPACE="test" && export NAMESPACE
-STRIMZI_VERSION="0.46.1" && export STRIMZI_VERSION
+export NAMESPACE="test"
+export STRIMZI_VERSION="0.47.0"
 
 [[ "${BASH_SOURCE[0]}" -ef "$0" ]] && echo "Usage: source init.sh" && exit 1
 
@@ -19,7 +19,10 @@ kubectl-kafka() {
   kubectl exec kafka-tools -itq -- sh -c "/opt/kafka/$*"
 }
 
-echo "Deploying Strimzi"
+echo "Preparing Kubernetes"
+
+if ! kubectl cluster-info &>/dev/null; then \
+  echo "Unable to connect to Kubernetes" && return; fi
 
 # create test namespace
 kubectl config set-context --current --namespace="$NAMESPACE" &>/dev/null
@@ -29,21 +32,23 @@ kubectl get kt -o yaml 2>/dev/null | yq 'del(.items[].metadata.finalizers[])' \
   | kubectl apply -f - &>/dev/null; kubectl delete kt --all --force &>/dev/null
 
 kubectl delete ns "$NAMESPACE" --ignore-not-found --force --wait=false &>/dev/null
-kubectl wait --for=delete ns/"$NAMESPACE" --timeout=120s &>/dev/null && kubectl create ns "$NAMESPACE"
+kubectl wait --for=delete ns/"$NAMESPACE" --timeout=120s &>/dev/null
+kubectl create ns "$NAMESPACE" &>/dev/null
 
 # set privileged SecurityStandard label for this namespace
 kubectl label ns "$NAMESPACE" pod-security.kubernetes.io/enforce=privileged --overwrite &>/dev/null
 
 # clean PersistentVolumes
 # shellcheck disable=SC2046
-kubectl delete pv $(kubectl get pv 2>/dev/null | grep "my-cluster" | awk '{print $1}') --force &>/dev/null
+kubectl delete pv "$(kubectl get pv 2>/dev/null | grep "my-cluster" | awk '{print $1}')" --force &>/dev/null
 
 # clean monitoring stack
 kubectl delete ns grafana prometheus --force --wait=false &>/dev/null
-kubectl delete crd $(kubectl get crd 2>/dev/null | grep integreatly.org | awk '{print $1}') &>/dev/null
-kubectl delete crd $(kubectl get crd 2>/dev/null | grep monitoring.coreos.com | awk '{print $1}') &>/dev/null
+kubectl delete crd "$(kubectl get crd 2>/dev/null | grep integreatly.org | awk '{print $1}')" &>/dev/null
+kubectl delete crd "$(kubectl get crd 2>/dev/null | grep monitoring.coreos.com | awk '{print $1}')" &>/dev/null
 
-# deploy Strimzi
+echo "Deploying Strimzi"
+
 STRIMZI_FILE="/tmp/strimzi-$STRIMZI_VERSION.yaml"
 if [[ ! -f "$STRIMZI_FILE" ]]; then
   echo "Downloading Strimzi to $STRIMZI_FILE"
@@ -54,4 +59,5 @@ sed -E "s/namespace: .*/namespace: $NAMESPACE/g ; s/memory: .*/memory: 500Mi/g" 
 kubectl set env deploy/strimzi-cluster-operator STRIMZI_FULL_RECONCILIATION_INTERVAL_MS="30000" &>/dev/null
 
 kubectl wait --for=condition=Available deploy strimzi-cluster-operator --timeout=300s
-echo "Done"
+
+echo "Ready"

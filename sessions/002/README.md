@@ -6,7 +6,6 @@ When the cluster is ready, install Prometheus, Grafana and Strimzi dashboards.
 Only the Cluster Operator and Kafka dashboards are included, but you can easily add the other components.
 
 ```sh
-
 $ for f in sessions/002/install/*.yaml; do
   echo ">>> Installing $f"
   envsubst < "$f" | kubectl apply -f -
@@ -96,9 +95,8 @@ grafanadashboard.integreatly.org/node-exporter created
 
 When all Grafana is ready, you can access the dashboards from [http://grafana.f12i.io](http://grafana.f12i.io).
 
-> [!IMPORTANT]  
-> Make sure to add ingress mappings to `/etc/hosts`.
-> Example: `192.168.49.2 prometheus.f12i.io grafana.f12i.io`
+> [!IMPORTANT]
+> Enable the Nginx ingress controller with `--enable-ssl-passthrough` flag and add the `/etc/hosts` mapping.
 
 It is also possible to create alerting rules to provide notifications about specific conditions observed in metrics.
-This is managed by Prometheus Alertmanager, but it is not described here.
+This is managed by Prometheus Alert Manager, but it is not described here.

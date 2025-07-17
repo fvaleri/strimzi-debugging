@@ -23,7 +23,7 @@ metadata:
   namespace: grafana
 spec:
   json: ""
-  url: https://raw.githubusercontent.com/strimzi/strimzi-kafka-operator/${STRIMZI_VERSION}/packaging/examples/metrics/grafana-dashboards/strimzi-kafka.json
+  url: https://raw.githubusercontent.com/strimzi/strimzi-kafka-operator/${STRIMZI_VERSION}/packaging/examples/metrics/strimzi-metrics-reporter/grafana-dashboards/strimzi-kafka.json
   datasources:
     - inputName: "DS_PROMETHEUS"
       datasourceName: "Prometheus"

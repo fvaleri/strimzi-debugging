@@ -8,9 +8,9 @@ Use the `init.sh` script to easily initialize or reset the test environment.
 
 ```sh
 $ source init.sh
+Preparing Kubernetes
 Deploying Strimzi
-namespace/test created
-Done
+Ready
 ```
 
 Then, we create a new Kafka cluster and test topic.
@@ -28,28 +28,28 @@ kafkatopic.kafka.strimzi.io/my-topic created
 
 $ kubectl get sps,knp,k,kt,po
 NAME                                                  PODS   READY PODS   CURRENT PODS   AGE
-strimzipodset.core.strimzi.io/my-cluster-broker       3      3            3              65s
-strimzipodset.core.strimzi.io/my-cluster-controller   3      3            3              65s
+strimzipodset.core.strimzi.io/my-cluster-broker       3      3            3              2m44s
+strimzipodset.core.strimzi.io/my-cluster-controller   3      3            3              2m44s
 
 NAME                                        DESIRED REPLICAS   ROLES            NODEIDS
-kafkanodepool.kafka.strimzi.io/broker       3                  ["broker"]       [5,6,7]
+kafkanodepool.kafka.strimzi.io/broker       3                  ["broker"]       [10,11,12]
 kafkanodepool.kafka.strimzi.io/controller   3                  ["controller"]   [0,1,2]
 
-NAME                                DESIRED KAFKA REPLICAS   DESIRED ZK REPLICAS   READY   METADATA STATE   WARNINGS
-kafka.kafka.strimzi.io/my-cluster                                                                           
+NAME                                READY   METADATA STATE   WARNINGS
+kafka.kafka.strimzi.io/my-cluster   True    KRaft            
 
 NAME                                   CLUSTER      PARTITIONS   REPLICATION FACTOR   READY
 kafkatopic.kafka.strimzi.io/my-topic   my-cluster   3            3                    True
 
 NAME                                             READY   STATUS    RESTARTS   AGE
-pod/my-cluster-broker-10                         1/1     Running   0          64s
-pod/my-cluster-broker-11                         1/1     Running   0          64s
-pod/my-cluster-broker-12                         1/1     Running   0          64s
-pod/my-cluster-controller-0                      1/1     Running   0          63s
-pod/my-cluster-controller-1                      1/1     Running   0          63s
-pod/my-cluster-controller-2                      1/1     Running   0          63s
-pod/my-cluster-entity-operator-bb7c65dd4-9zdmk   2/2     Running   0          31s
-pod/strimzi-cluster-operator-6596f469c9-smsw2    1/1     Running   0          2m5s
+pod/my-cluster-broker-10                         1/1     Running   0          2m44s
+pod/my-cluster-broker-11                         1/1     Running   0          2m44s
+pod/my-cluster-broker-12                         1/1     Running   0          2m44s
+pod/my-cluster-controller-0                      1/1     Running   0          2m44s
+pod/my-cluster-controller-1                      1/1     Running   0          2m44s
+pod/my-cluster-controller-2                      1/1     Running   0          2m43s
+pod/my-cluster-entity-operator-64dd78b88-vxkct   2/2     Running   0          113s
+pod/strimzi-cluster-operator-59c68d8fbf-q62ns    1/1     Running   0          3m
 ```
 
 When the Kafka cluster is ready, we send and receive some messages.

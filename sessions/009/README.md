@@ -51,7 +51,7 @@ Topic: my-topic	TopicId: XbszKNVQSSKTPB3sGvRaGg	PartitionCount: 3	ReplicationFac
 }
 EOF
 
-[kafka@my-cluster-broker-10 kafka]$/opt/kafka/bin/kafka-reassign-partitions.sh --bootstrap-server my-cluster-kafka-bootstrap:9092 \
+[kafka@my-cluster-broker-10 kafka]$ /opt/kafka/bin/kafka-reassign-partitions.sh --bootstrap-server my-cluster-kafka-bootstrap:9092 \
   --reassignment-json-file /tmp/reassign.json --throttle 10000000 --execute
 Current partition replica assignment
 

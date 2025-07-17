@@ -91,6 +91,8 @@ metadata:
 spec:
   replicas: 1
   serviceAccountName: prometheus
+  scrapeInterval: 10s
+  evaluationInterval: 10s
   enableAdminAPI: true
   storage:
     volumeClaimTemplate:
