@@ -2,6 +2,7 @@
 
 export NAMESPACE="test"
 export STRIMZI_VERSION="0.47.0"
+STRIMZI_FILE="/tmp/strimzi-$STRIMZI_VERSION.yaml"
 
 [[ "${BASH_SOURCE[0]}" -ef "$0" ]] && echo "Usage: source init.sh" && exit 1
 
@@ -19,45 +20,40 @@ kubectl-kafka() {
   kubectl exec kafka-tools -itq -- sh -c "/opt/kafka/$*"
 }
 
-echo "Preparing Kubernetes"
+kubectl-dns() {
+  local ns="${1-}"
+  kubectl delete ns "$ns" --wait=false &>/dev/null
+  # delete namespace and topic finalizers that may block deletion
+  kubectl get ns "$ns" --ignore-not-found -o yaml | yq 'del(.metadata.finalizers[])' | kubectl replace -f - &>/dev/null
+  kubectl get kt --ignore-not-found -o yaml | yq 'del(.items[].metadata.finalizers[])' | kubectl replace -f - &>/dev/null
+  kubectl wait --for=delete ns/"$ns" --timeout=120s &>/dev/null
+}
 
-if ! kubectl cluster-info &>/dev/null; then \
-  echo "Unable to connect to Kubernetes" && return; fi
-
-# create test namespace
+echo "Connecting to Kubernetes"
+if ! kubectl cluster-info &>/dev/null; then echo "Unable to connect to Kubernetes" && return; fi
 kubectl config set-context --current --namespace="$NAMESPACE" &>/dev/null
 
-# delete any topic first to clean finalizers
-kubectl get kt -o yaml 2>/dev/null | yq 'del(.items[].metadata.finalizers[])' \
-  | kubectl apply -f - &>/dev/null; kubectl delete kt --all --force &>/dev/null
-
-kubectl delete ns "$NAMESPACE" --ignore-not-found --force --wait=false &>/dev/null
-kubectl wait --for=delete ns/"$NAMESPACE" --timeout=120s &>/dev/null
+echo "Creating $NAMESPACE namespace"
+kubectl-dns "$NAMESPACE"
 kubectl create ns "$NAMESPACE" &>/dev/null
-
 # set privileged SecurityStandard label for this namespace
 kubectl label ns "$NAMESPACE" pod-security.kubernetes.io/enforce=privileged --overwrite &>/dev/null
 
-# clean PersistentVolumes
-# shellcheck disable=SC2046
-kubectl delete pv "$(kubectl get pv 2>/dev/null | grep "my-cluster" | awk '{print $1}')" --force &>/dev/null
+echo "Deleting old PersistentVolumes"
+kubectl delete pv $(kubectl get pv 2>/dev/null | grep "my-cluster" | awk "{print $1}") --ignore-not-found &>/dev/null
 
-# clean monitoring stack
-kubectl delete ns grafana prometheus --force --wait=false &>/dev/null
-kubectl delete crd "$(kubectl get crd 2>/dev/null | grep integreatly.org | awk '{print $1}')" &>/dev/null
-kubectl delete crd "$(kubectl get crd 2>/dev/null | grep monitoring.coreos.com | awk '{print $1}')" &>/dev/null
+echo "Deleting old Prometheus and Grafana resources"
+kubectl-dns grafana && kubectl-dns prometheus
+kubectl delete crd $(kubectl get crd 2>/dev/null | grep "monitoring.coreos.com" | awk "{print $1}") --ignore-not-found &>/dev/null
+kubectl delete clusterrolebinding -l app=prometheus-operator --ignore-not-found &>/dev/null
+kubectl delete clusterrole -l app=prometheus-operator --ignore-not-found &>/dev/null
+kubectl delete crd $(kubectl get crd 2>/dev/null | grep "integreatly.org" | awk "{print $1}") --ignore-not-found &>/dev/null
+kubectl delete clusterrolebinding -l app=grafana-operator --ignore-not-found &>/dev/null
+kubectl delete clusterrole -l app=grafana-operator --ignore-not-found &>/dev/null
 
-echo "Deploying Strimzi"
-
-STRIMZI_FILE="/tmp/strimzi-$STRIMZI_VERSION.yaml"
+echo "Installing Strimzi operator $STRIMZI_VERSION"
 if [[ ! -f "$STRIMZI_FILE" ]]; then
-  echo "Downloading Strimzi to $STRIMZI_FILE"
   curl -sLk "https://github.com/strimzi/strimzi-kafka-operator/releases/download/$STRIMZI_VERSION/strimzi-cluster-operator-$STRIMZI_VERSION.yaml" -o "$STRIMZI_FILE"
 fi
-sed -E "s/namespace: .*/namespace: $NAMESPACE/g ; s/memory: .*/memory: 500Mi/g" "$STRIMZI_FILE" \
-  | kubectl create -f - --dry-run=client -o yaml | kubectl replace --force -f - &>/dev/null
-kubectl set env deploy/strimzi-cluster-operator STRIMZI_FULL_RECONCILIATION_INTERVAL_MS="30000" &>/dev/null
-
-kubectl wait --for=condition=Available deploy strimzi-cluster-operator --timeout=300s
-
-echo "Ready"
+sed -E "s/namespace: .*/namespace: $NAMESPACE/g ; s/memory: .*/memory: 500Mi/g" "$STRIMZI_FILE" | kubectl create -f - &>/dev/null
+kubectl wait --for=condition=Available deploy strimzi-cluster-operator --timeout=300s &>/dev/null

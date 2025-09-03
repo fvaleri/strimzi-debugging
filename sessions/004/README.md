@@ -6,7 +6,19 @@ We also add an external listener of type ingress with TLS authentication.
 Then, wait for the Cluster Operator to restart all pods one by one (rolling update).
 
 > [!IMPORTANT]
-> Enable the Nginx ingress controller with `--enable-ssl-passthrough` flag and add the `/etc/hosts` mapping.
+> If you are using Minikube you need to enable the Nginx ingress controller:
+> ```sh
+> minikube addons enable ingress
+> ```
+> Then, run the following command to enable SSL passthrough every time you restart Minikube:
+> ```sh
+> kubectl patch deploy -n ingress-nginx ingress-nginx-controller --type json \
+>   -p '[{"op":"add", "path":"/spec/template/spec/containers/0/args/-", "value":"--enable-ssl-passthrough"}]'
+> ```
+> Finally, make sure to add Minikube's IP to your hosts file:
+> ```sh
+> sudo echo "192.168.49.2 prometheus.f12i.io grafana.f12i.io" >> /etc/hosts
+> ```
 
 ```sh
 $ kubectl create -f sessions/004/install.yaml \

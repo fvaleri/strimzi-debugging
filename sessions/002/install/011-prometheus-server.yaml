@@ -1,11 +1,4 @@
 apiVersion: v1
-kind: Namespace
-metadata:
-  name: prometheus
-  labels:
-    app: prometheus
----
-apiVersion: v1
 kind: ServiceAccount
 metadata:
   name: prometheus

@@ -4,7 +4,7 @@ metadata:
   name: strimzi-operators
   labels:
     app: grafana
-    grafana: dashabord
+    grafana: dashboard
   namespace: grafana
 spec:
   json: ""
@@ -19,7 +19,7 @@ metadata:
   name: strimzi-kafka
   labels:
     app: grafana
-    grafana: dashabord
+    grafana: dashboard
   namespace: grafana
 spec:
   json: ""
