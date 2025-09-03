@@ -9,10 +9,9 @@ Use the `init.sh` script to easily initialize or reset the test environment.
 ```sh
 $ source init.sh
 Connecting to Kubernetes
-Creating test namespace
-Deleting old PersistentVolumes
-Deleting old Prometheus and Grafana resources
-Installing Strimzi operator 0.47.0
+Creating namespace test
+Deleting strays volumes
+Installing operator x.x.x
 ```
 
 Then, we create a new Kafka cluster and test topic.

@@ -22,7 +22,7 @@ kubectl-kafka() {
 
 kubectl-dns() {
   local ns="${1-}"
-  kubectl delete ns "$ns" --wait=false &>/dev/null
+  kubectl delete ns "$ns" --wait=false &>/dev/null && sleep 10
   # delete namespace and topic finalizers that may block deletion
   kubectl get ns "$ns" --ignore-not-found -o yaml | yq 'del(.metadata.finalizers[])' | kubectl replace -f - &>/dev/null
   kubectl get kt --ignore-not-found -o yaml | yq 'del(.items[].metadata.finalizers[])' | kubectl replace -f - &>/dev/null
@@ -33,27 +33,18 @@ echo "Connecting to Kubernetes"
 if ! kubectl cluster-info &>/dev/null; then echo "Unable to connect to Kubernetes" && return; fi
 kubectl config set-context --current --namespace="$NAMESPACE" &>/dev/null
 
-echo "Creating $NAMESPACE namespace"
+echo "Creating namespace $NAMESPACE"
 kubectl-dns "$NAMESPACE"
 kubectl create ns "$NAMESPACE" &>/dev/null
 # set privileged SecurityStandard label for this namespace
 kubectl label ns "$NAMESPACE" pod-security.kubernetes.io/enforce=privileged --overwrite &>/dev/null
 
-echo "Deleting old PersistentVolumes"
+echo "Deleting strays volumes"
 kubectl delete pv $(kubectl get pv 2>/dev/null | grep "my-cluster" | awk "{print $1}") --ignore-not-found &>/dev/null
 
-echo "Deleting old Prometheus and Grafana resources"
-kubectl-dns grafana && kubectl-dns prometheus
-kubectl delete crd $(kubectl get crd 2>/dev/null | grep "monitoring.coreos.com" | awk "{print $1}") --ignore-not-found &>/dev/null
-kubectl delete clusterrolebinding -l app=prometheus-operator --ignore-not-found &>/dev/null
-kubectl delete clusterrole -l app=prometheus-operator --ignore-not-found &>/dev/null
-kubectl delete crd $(kubectl get crd 2>/dev/null | grep "integreatly.org" | awk "{print $1}") --ignore-not-found &>/dev/null
-kubectl delete clusterrolebinding -l app=grafana-operator --ignore-not-found &>/dev/null
-kubectl delete clusterrole -l app=grafana-operator --ignore-not-found &>/dev/null
-
-echo "Installing Strimzi operator $STRIMZI_VERSION"
+echo "Installing operator $STRIMZI_VERSION"
 if [[ ! -f "$STRIMZI_FILE" ]]; then
   curl -sLk "https://github.com/strimzi/strimzi-kafka-operator/releases/download/$STRIMZI_VERSION/strimzi-cluster-operator-$STRIMZI_VERSION.yaml" -o "$STRIMZI_FILE"
 fi
-sed -E "s/namespace: .*/namespace: $NAMESPACE/g ; s/memory: .*/memory: 500Mi/g" "$STRIMZI_FILE" | kubectl create -f - &>/dev/null
+sed -E "s/namespace: .*/namespace: $NAMESPACE/g ; s/memory: .*/memory: 500Mi/g" "$STRIMZI_FILE" | kubectl replace --force -f - &>/dev/null
 kubectl wait --for=condition=Available deploy strimzi-cluster-operator --timeout=300s &>/dev/null

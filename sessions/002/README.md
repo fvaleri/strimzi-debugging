@@ -22,7 +22,7 @@ When the cluster is ready, install Prometheus, Grafana and Strimzi dashboards.
 ```sh
 $ for f in sessions/002/install/*.yaml; do
   echo ">>> Installing $f"
-  envsubst < "$f" | kubectl create -f -
+  envsubst < "$f" | kubectl replace --force -f -
   sleep 5
 done
 >>> Installing sessions/002/install/010-prometheus-operator.yaml
