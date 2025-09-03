@@ -1,4 +1,4 @@
-## Use Mirror Maker 2 for disaster recovery
+## Using Mirror Maker 2 for disaster recovery
 
 First, use [this session](/sessions/001) to deploy a Kafka cluster on Kubernetes.
 

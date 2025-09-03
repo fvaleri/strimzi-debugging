@@ -1,4 +1,4 @@
-## Monitor Kafka metrics
+## Monitoring Kafka metrics
 
 First, use [this session](/sessions/001) to deploy a Kafka cluster on Kubernetes.
 

@@ -1,4 +1,4 @@
-## Deploy a Kafka cluster
+## Deploying a Kafka cluster
 
 In this example, we deploy a Kafka cluster to a Kubernetes cluster using the operator.
 Use the `init.sh` script to easily initialize or reset the test environment.

@@ -1,4 +1,4 @@
-## Use Kafka Connect with Debezium
+## Using Kafka Connect with Debezium
 
 First, use [this session](/sessions/001) to deploy a Kafka cluster on Kubernetes.
 When the cluster is ready, we deploy a MySQL instance (the external system), and Kafka Connect cluster.

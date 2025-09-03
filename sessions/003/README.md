@@ -1,4 +1,4 @@
-## Get diagnostic data
+## Getting diagnostic data
 
 First, use [this session](/sessions/001) to deploy a Kafka cluster on Kubernetes.
 

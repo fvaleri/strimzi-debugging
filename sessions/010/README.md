@@ -1,4 +1,4 @@
-## Run transactional applications
+## Running transactional applications
 
 First, use [this session](/sessions/001) to deploy a Kafka cluster on Kubernetes.
 

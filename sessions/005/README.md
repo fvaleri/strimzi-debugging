@@ -1,4 +1,4 @@
-## Use Kafka with Apicurio Registry
+## Using Kafka with Apicurio Registry
 
 First, use [this session](/sessions/001) to deploy a Kafka cluster on Kubernetes.
 
