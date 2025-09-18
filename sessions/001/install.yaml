@@ -68,6 +68,8 @@ spec:
       offsets.topic.replication.factor: 3
       transaction.state.log.replication.factor: 3
       transaction.state.log.min.isr: 2
+      share.coordinator.state.topic.replication.factor: 3
+      share.coordinator.state.topic.min.isr: 2
     listeners:
       - name: plain
         port: 9092
