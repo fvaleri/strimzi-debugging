@@ -1,10 +1,11 @@
 #!/usr/bin/env bash
 
+# stop if not interactive mode
+[[ $- != *i* ]] && echo "Usage: source init.sh" && exit 1
+
 export NAMESPACE="test"
 export STRIMZI_VERSION="0.47.0"
 STRIMZI_FILE="/tmp/strimzi-$STRIMZI_VERSION.yaml"
-
-[[ "${BASH_SOURCE[0]}" -ef "$0" ]] && echo "Usage: source init.sh" && exit 1
 
 kafka-cp() {
   local id="${1-}" part="${2-50}"
