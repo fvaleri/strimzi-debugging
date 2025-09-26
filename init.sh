@@ -4,7 +4,7 @@
 [[ $- != *i* ]] && echo "Usage: source init.sh" && exit 1
 
 export NAMESPACE="test"
-export STRIMZI_VERSION="0.47.0"
+export STRIMZI_VERSION="0.48.0-rc1"
 STRIMZI_FILE="/tmp/strimzi-$STRIMZI_VERSION.yaml"
 
 kafka-cp() {
@@ -21,21 +21,17 @@ kubectl-kafka() {
   kubectl exec kafka-tools -itq -- sh -c "/opt/kafka/$*"
 }
 
-kubectl-dns() {
-  local ns="${1-}"
-  kubectl delete ns "$ns" --wait=false &>/dev/null && sleep 10
-  # delete namespace and topic finalizers that may block deletion
-  kubectl get ns "$ns" --ignore-not-found -o yaml | yq 'del(.metadata.finalizers[])' | kubectl replace -f - &>/dev/null
-  kubectl get kt --ignore-not-found -o yaml | yq 'del(.items[].metadata.finalizers[])' | kubectl replace -f - &>/dev/null
-  kubectl wait --for=delete ns/"$ns" --timeout=120s &>/dev/null
-}
-
 echo "Connecting to Kubernetes"
 if ! kubectl cluster-info &>/dev/null; then echo "Unable to connect to Kubernetes" && return; fi
 kubectl config set-context --current --namespace="$NAMESPACE" &>/dev/null
 
 echo "Creating namespace $NAMESPACE"
-kubectl-dns "$NAMESPACE"
+# delete namespace and topic finalizers that may block deletion
+kubectl delete ns "$NAMESPACE" --wait=false &>/dev/null && sleep 10
+kubectl get ns "$NAMESPACE" --ignore-not-found -o yaml | yq 'del(.metadata.finalizers[])' | kubectl replace -f - &>/dev/null
+kubectl get kt --ignore-not-found -o yaml 2>/dev/null | yq 'del(.items[].metadata.finalizers[])' | kubectl replace -f - &>/dev/null
+kubectl wait --for=delete ns/"$NAMESPACE" --timeout=120s &>/dev/null
+# create a new namespace
 kubectl create ns "$NAMESPACE" &>/dev/null
 # set privileged SecurityStandard label for this namespace
 kubectl label ns "$NAMESPACE" pod-security.kubernetes.io/enforce=privileged --overwrite &>/dev/null
@@ -47,5 +43,5 @@ echo "Installing operator $STRIMZI_VERSION"
 if [[ ! -f "$STRIMZI_FILE" ]]; then
   curl -sLk "https://github.com/strimzi/strimzi-kafka-operator/releases/download/$STRIMZI_VERSION/strimzi-cluster-operator-$STRIMZI_VERSION.yaml" -o "$STRIMZI_FILE"
 fi
-sed -E "s/namespace: .*/namespace: $NAMESPACE/g ; s/memory: .*/memory: 500Mi/g" "$STRIMZI_FILE" | kubectl replace --force -f - &>/dev/null
+sed -E "s/namespace: .*/namespace: $NAMESPACE/g" "$STRIMZI_FILE" | kubectl replace --force -f - &>/dev/null
 kubectl wait --for=condition=Available deploy strimzi-cluster-operator --timeout=300s &>/dev/null

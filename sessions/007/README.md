@@ -2,10 +2,10 @@
 
 First, use [this session](/sessions/001) to deploy a Kafka cluster on Kubernetes.
 
-At this point, we can deploy the target cluster.
+Then deploy the target cluster.
 
 ```sh
-$ kubectl create -f sessions/007/instal/target.yaml
+$ kubectl create -f sessions/007/install/target.yaml
 kafkanodepool.kafka.strimzi.io/combined created
 kafka.kafka.strimzi.io/my-cluster-tgt created
 ```
@@ -17,7 +17,7 @@ The recommended way of deploying the MM2 is near the target Kafka cluster (same 
 > When source and target clusters run on different namespaces or Kubernetes clusters, you have to copy the source `cluster-ca-cert` in the target namespace where MM2 is running.
 
 ```sh
-$ export SOURCE_NS="$NAMESPACE" TARGET_NS="$NAMESPACE"; envsubst < sessions/007/mm2.yaml | kubectl create -f -
+$ export SOURCE_NS="$NAMESPACE" TARGET_NS="$NAMESPACE"; envsubst < sessions/007/install/mm2.yaml | kubectl create -f -
 kafkamirrormaker2.kafka.strimzi.io/my-mm2-cluster created
 configmap/mirror-maker-2-metrics created
 ```

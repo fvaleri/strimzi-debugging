@@ -43,8 +43,8 @@ NAME                                                     CLUSTER              CO
 kafkaconnector.kafka.strimzi.io/mysql-source-connector   my-connect-cluster   io.debezium.connector.mysql.MySqlConnector   1           True
 ```
 
-As you may have guessed at this point, we are going to emit MySQL row changes and import them into Kafka, so that other applications can pick them up and process them.
-Let's check if the connector and its tasks are running fine by using the `KafkaConnector` resource, which is easier than interacting via REST requests.
+We are now going to emit MySQL row changes and import them into Kafka, so that other applications can pick them up and process them.
+Let's first check if the connector and its tasks are running fine by using the `KafkaConnector` resource.
 
 ```sh
 $ kubectl get kctr mysql-source-connector -o yaml | yq .status
@@ -108,11 +108,11 @@ Enough with describing the configuration, now let's create some changes using go
 $ kubectl exec my-mysql-0 -- sh -c 'MYSQL_PWD="changeit" mysql -u admin testdb -e "
   INSERT INTO customers (first_name, last_name, email) VALUES (\"John\", \"Doe\", \"jdoe@example.com\");
   UPDATE customers SET first_name = \"Jane\" WHERE id = 1;
-  INSERT INTO customers (first_name, last_name, email) VALUES (\"Dylan\", \"Dog\", \"ddog@example.com\");
+  INSERT INTO customers (first_name, last_name, email) VALUES (\"Max\", \"Power\", \"mpower@example.com\");
   SELECT * FROM customers;"'
 id	first_name	last_name	email
-1	Jane	Doe	jdoe@example.com
-2	Dylan	Dog	ddog@example.com
+1	Jane	Doe	    jdoe@example.com
+2	Max 	Power	ddog@example.com
 ```
 
 The MySQL connector writes change events that occur in a table to a Kafka topic named like `serverName.databaseName.tableName`.
@@ -122,7 +122,7 @@ It's interesting to look at some record properties: `op` is the change type (c=c
 ```sh
 $ kubectl-kafka bin/kafka-console-consumer.sh --bootstrap-server my-cluster-kafka-bootstrap:9092 \
   --topic my-mysql.testdb.customers --from-beginning --max-messages 3
-Struct{after=Struct{id=2,first_name=Dylan,last_name=Dog,email=ddog@example.com},source=Struct{version=2.3.7.Final,connector=mysql,name=my-mysql,ts_ms=1730112871000,db=testdb,table=customers,server_id=111111,gtid=500bc4b7-951a-11ef-aae4-9e82de0bd73c:16,file=mysql-bin.000002,pos=2602,row=0,thread=61},op=c,ts_ms=1730112871209}
+Struct{after=Struct{id=2,first_name=Max,last_name=Power,email=mpower@example.com},source=Struct{version=2.3.7.Final,connector=mysql,name=my-mysql,ts_ms=1730112871000,db=testdb,table=customers,server_id=111111,gtid=500bc4b7-951a-11ef-aae4-9e82de0bd73c:16,file=mysql-bin.000002,pos=2602,row=0,thread=61},op=c,ts_ms=1730112871209}
 Struct{after=Struct{id=1,first_name=John,last_name=Doe,email=jdoe@example.com},source=Struct{version=2.3.7.Final,connector=mysql,name=my-mysql,ts_ms=1730112871000,db=testdb,table=customers,server_id=111111,gtid=500bc4b7-951a-11ef-aae4-9e82de0bd73c:14,file=mysql-bin.000002,pos=1707,row=0,thread=61},op=c,ts_ms=1730112871199}
 Struct{before=Struct{id=1,first_name=John,last_name=Doe,email=jdoe@example.com},after=Struct{id=1,first_name=Jane,last_name=Doe,email=jdoe@example.com},source=Struct{version=2.3.7.Final,connector=mysql,name=my-mysql,ts_ms=1730112871000,db=testdb,table=customers,server_id=111111,gtid=500bc4b7-951a-11ef-aae4-9e82de0bd73c:15,file=mysql-bin.000002,pos=2120,row=0,thread=61},op=u,ts_ms=1730112871207}
 Processed a total of 3 messages

@@ -5,16 +5,10 @@ First, use [this session](/sessions/001) to deploy a Kafka cluster on Kubernetes
 Then, run a transactional application example (read-process-write).
 
 ```sh
-$ kubectl create -f install.yaml 
+$ kubectl create -f sessions/010/install.yaml
 kafkatopic.kafka.strimzi.io/input-topic created
 kafkatopic.kafka.strimzi.io/output-topic created
 statefulset.apps/kafka-txn created
-
-$ kubectl get po -l app=kafka-txn
-NAME          READY   STATUS    RESTARTS   AGE
-kafka-txn-0   1/1     Running   0          9m56s
-kafka-txn-1   1/1     Running   0          9m53s
-kafka-txn-2   1/1     Running   0          9m50s
 ```
 
 When the application is running, we send one sentence to the input topic and check the result from the output topic.

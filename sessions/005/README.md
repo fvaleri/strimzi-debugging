@@ -2,7 +2,7 @@
 
 First, use [this session](/sessions/001) to deploy a Kafka cluster on Kubernetes.
 
-When the Kafka cluster is ready, we deploy the Apicurio Registry operator.
+Then, we deploy the Apicurio Registry operator.
 
 ```sh
 $ envsubst < sessions/005/install/apicurio.yaml | kubectl create -f -
@@ -15,10 +15,10 @@ clusterrolebinding.rbac.authorization.k8s.io/apicurio-registry-operator-rolebind
 deployment.apps/apicurio-registry-operator created
 ```
 
-After that we deploy our registry instance with in-memory storage system and check the result.
+When the operator is ready, we deploy our registry instance with in-memory storage system.
 
 ```sh
-$ kubectl create -f registry.yaml
+$ kubectl create -f sessions/005/install/registry.yaml
 apicurioregistry.registry.apicur.io/my-schema-registry created
 
 $ kubectl get po
@@ -54,7 +54,7 @@ $ export BOOTSTRAP_SERVERS=$(kubectl get k my-cluster -o yaml | yq '.status.list
 $ curl -s -X POST -H "Content-Type: application/json" \
   -H "X-Registry-ArtifactId: my-topic-value" -H "X-Registry-ArtifactType: AVRO" \
   -d @sessions/005/install/greeting.avsc \
-  "$REGISTRY_URL/groups/default/artifacts?ifExists=RETURN_OR_UPDATE" | yq -o json
+  "$REGISTRY_URL"/groups/default/artifacts?ifExists=RETURN_OR_UPDATE | yq -o json
 {
   "name": "Greeting",
   "createdBy": "",
@@ -74,18 +74,18 @@ $ curl -s -X POST -H "Content-Type: application/json" \
 At this point, we can start the application and observe its output.
 
 ```sh
-$ envsubst < sessions/005/install/application.yaml | kubectl create -f -
+$ envsubst < sessions/005/install/kafka-avro.yaml | kubectl create -f -
 deployment.apps/kafka-avro created
 
 $ kubectl logs -f $(kubectl get po -l app=kafka-avro -o name)
-Producing records
-Records produced
-Consuming all records
-Record: Hello-1742801335037
-Record: Hello-1742801335160
-Record: Hello-1742801335160
-Record: Hello-1742801335161
-Record: Hello-1742801335161
+08:25:25.624 [main] INFO  it.fvaleri.kafka.Main - Producing records
+08:25:25.832 [main] INFO  it.fvaleri.kafka.Main - Records produced
+08:25:25.832 [main] INFO  it.fvaleri.kafka.Main - Consuming all records
+08:25:29.539 [main] INFO  it.fvaleri.kafka.Main - Record: Hello-1758875125640
+08:25:29.540 [main] INFO  it.fvaleri.kafka.Main - Record: Hello-1758875125831
+08:25:29.540 [main] INFO  it.fvaleri.kafka.Main - Record: Hello-1758875125832
+08:25:29.540 [main] INFO  it.fvaleri.kafka.Main - Record: Hello-1758875125832
+08:25:29.540 [main] INFO  it.fvaleri.kafka.Main - Record: Hello-1758875125832
 ```
 
 If we now look at one of the messages, we see that the `globalId` is stored in the message headers and used for the schema lookup when consuming messages.
@@ -100,7 +100,7 @@ Hello????e
 Finally, we can use the REST API to look at the schema content and metadata, which may be useful for debugging.
 
 ```sh
-$ curl -s "$REGISTRY_URL/search/artifacts" | yq -o json
+$ curl -s "$REGISTRY_URL"/search/artifacts | yq -o json
 {
   "artifacts": [
     {
@@ -117,7 +117,7 @@ $ curl -s "$REGISTRY_URL/search/artifacts" | yq -o json
   "count": 1
 }
 
-$ curl -s "$REGISTRY_URL/groups/default/artifacts/my-topic-value" | yq -o json
+$ curl -s "$REGISTRY_URL"/groups/default/artifacts/my-topic-value | yq -o json
 {
   "type": "record",
   "name": "Greeting",
@@ -133,7 +133,7 @@ $ curl -s "$REGISTRY_URL/groups/default/artifacts/my-topic-value" | yq -o json
   ]
 }
 
-$ curl -s "$REGISTRY_URL/groups/default/artifacts/my-topic-value/meta" | yq -o json
+$ curl -s "$REGISTRY_URL"/groups/default/artifacts/my-topic-value/meta | yq -o json
 {
   "name": "Greeting",
   "createdBy": "",

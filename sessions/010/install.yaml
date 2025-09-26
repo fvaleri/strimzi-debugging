@@ -30,7 +30,7 @@ kind: StatefulSet
 metadata:
   name: kafka-txn
 spec:
-  replicas: 3
+  replicas: 1
   serviceName: kafka-txn
   selector:
     matchLabels:

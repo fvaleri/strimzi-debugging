@@ -105,7 +105,7 @@ logs
 Report file report-17-03-2025_12-26-05.zip created
 ```
 
-## Get heap dumps
+## Getting heap dumps
 
 It is also possible to collect broker JVM heap dumps and other advanced diagnostic data (thread dumps, flame graphs, etc).
 

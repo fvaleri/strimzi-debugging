@@ -32,12 +32,9 @@ spec:
       logger.sinktask.name: org.apache.kafka.connect.runtime.WorkerSinkTask
       logger.sinktask.level: INFO
   resources:
-    limits:
-      cpu: 3000m
-      memory: 3Gi
     requests:
-      cpu: 1000m
-      memory: 3Gi
+      cpu: 2000m
+      memory: 2Gi
   build:
     output:
       type: docker

@@ -2,8 +2,7 @@
 
 First, use [this session](/sessions/001) to deploy a Kafka cluster on Kubernetes.
 
-We also add an external listener of type ingress with TLS authentication.
-Then, wait for the Cluster Operator to restart all pods one by one (rolling update).
+Then we configure an external listener of type ingress with TLS authentication.
 
 > [!IMPORTANT]
 > If you are using Minikube you need to enable the Nginx ingress controller:
@@ -41,7 +40,7 @@ kafkauser.kafka.strimzi.io/my-user created
 kafka.kafka.strimzi.io/my-cluster patched
 ```
 
-The previous command adds a new authentication element to the external listener, which is the endpoint used by clients connecting from outside using TLS.
+The previous command adds a new authentication field to the external listener, which is the endpoint used by clients connecting from outside using TLS.
 It also creates a Kafka user resource with a matching configuration.
 
 ```sh
@@ -60,46 +59,43 @@ authentication:
 When the rolling update is completed, you should be able to see the broker certificate running the following command.
 
 ```sh
-$ openssl s_client -connect broker-5.my-cluster.f12i.io:443 -servername bootstrap.my-cluster.f12i.io -showcerts
-...
-Server certificate
+$ openssl s_client -connect broker-10.my-cluster.f12i.io:443 -servername bootstrap.my-cluster.f12i.io -showcerts 2>/dev/null | grep "subject\|issuer"
 subject=O=io.strimzi, CN=my-cluster-kafka
 issuer=O=io.strimzi, CN=cluster-ca v0
-...
 ```
 
 Then, we can try to send some messages using an external Kafka client.
-Here we are using the console producer tool included in every Kafka distribution.
+
+> [!NOTE]
+> Here we are using a local console producer tool included in every Kafka distribution.
 
 ```sh
-$ export BOOTSTRAP_SERVERS=$(kubectl get k my-cluster -o yaml | yq '.status.listeners.[] | select(.name == "external").bootstrapServers'); 
-  kubectl get k my-cluster -o yaml | yq '.status.listeners.[] | select(.name == "external").certificates[0]' > /tmp/cluster-ca.crt ; \
-  kubectl get secret my-user -o jsonpath="{.data['user\.crt']}" | base64 -d > /tmp/user.crt ; \
-  kubectl get secret my-user -o jsonpath="{.data['user\.key']}" | base64 -d > /tmp/user.key
+$ mkdir -p /tmp/mtls ; \
+  export BOOTSTRAP_SERVERS=$(kubectl get k my-cluster -o yaml | yq '.status.listeners.[] | select(.name == "external").bootstrapServers') ; \
+  kubectl get k my-cluster -o yaml | yq '.status.listeners.[] | select(.name == "external").certificates[0]' > /tmp/mtls/cluster-ca.crt ; \
+  kubectl get secret my-user -o yaml | yq '.data["user.crt"]' | base64 -d > /tmp/mtls/user.crt ; \
+  kubectl get secret my-user -o yaml | yq '.data["user.key"]' | base64 -d > /tmp/mtls/user.key
 
-$ CLUSTER_CA_CRT=$(</tmp/cluster-ca.crt) && CLUSTER_CA_CRT=$(echo "$CLUSTER_CA_CRT" |sed ':a;N;$!ba; s;\n; \\\n;g') \
-  USER_CRT=$(</tmp/user.crt) && USER_CRT=$(echo "$USER_CRT" |sed ':a;N;$!ba; s;\n; \\\n;g') \
-  USER_KEY=$(</tmp/user.key) && USER_KEY=$(echo "$USER_KEY" |sed ':a;N;$!ba; s;\n; \\\n;g')
-
-$ cat <<EOF >/tmp/client.properties
+$ cat <<EOF >/tmp/mtls/client.properties
+config.providers=dir
+config.providers.dir.class=org.apache.kafka.common.config.provider.DirectoryConfigProvider
+config.providers.dir.param.allowlist.pattern=/tmp/mtls/.*
 security.protocol=SSL
 ssl.truststore.type=PEM
-ssl.truststore.certificates=$CLUSTER_CA_CRT
+ssl.truststore.certificates=\${dir:/tmp/mtls:cluster-ca.crt}
 ssl.keystore.type=PEM
-ssl.keystore.certificate.chain=$USER_CRT
-ssl.keystore.key=$USER_KEY
+ssl.keystore.certificate.chain=\${dir:/tmp/mtls:user.crt}
+ssl.keystore.key=\${dir:/tmp/mtls:user.key}
 EOF
 
-$ kubectl cp /tmp/client.properties kafka-tools:/tmp/client.properties
-
-$ kubectl-kafka bin/kafka-console-producer.sh --bootstrap-server "$BOOTSTRAP_SERVERS" --topic my-topic \
-  --producer.config /tmp/client.properties
+$ bin/kafka-console-producer.sh --bootstrap-server "$BOOTSTRAP_SERVERS" --topic my-topic \
+  --producer.config /tmp/mtls/client.properties
 >hello
 >world
 >^C
 
-$ kubectl-kafka bin/kafka-console-consumer.sh --bootstrap-server $BOOTSTRAP_SERVERS --topic my-topic \
-  --from-beginning --max-messages 2 --consumer.config /tmp/client.properties
+$ bin/kafka-console-consumer.sh --bootstrap-server "$BOOTSTRAP_SERVERS" --topic my-topic \
+  --from-beginning --max-messages 2 --consumer.config /tmp/mtls/client.properties
 hello
 world
 Processed a total of 2 messages
@@ -145,7 +141,7 @@ Certificate:
 If this is not enough to spot the issue, we can add the `-Djavax.net.debug=ssl:handshake` Java option to the client in order to get more details.
 As an additional exercise, try to get the clients CA and user certificates to verify if the first signs the second.
 
-## Use custom TLS certificates
+## Using custom TLS certificates
 
 Often, security policies don't allow you to run a Kafka cluster with self-signed certificates in production.
 Configure the listeners to use a custom certificate signed by an external or well-known CA.
@@ -154,12 +150,12 @@ Custom certificates are not managed by the operator, so you will be in charge of
 A rolling update will start automatically in order to make the new certificate available.
 This example only shows TLS encryption, but you can add a custom client certificate for TLS authentication by setting `type: tls-external` in the `KafkaUser` custom resource and creating the user secret (subject can only contain `CN=$USER_NAME`).
 
-Typically, the security team will provide a certificate bundle which includes the whole trust chain (i.e. root CA + intermediate CA + listener certificate) and a private key.
-If that's not the case, you can easily create the bundle from individual certificates in PEM format, because you need to trust the whole chain, if any.
-
-```sh
-$ cat /tmp/listener.crt /tmp/intermca.crt /tmp/rootca.crt >/tmp/bundle.crt
-```
+> [!NOTE]
+> Typically, the security team will provide a certificate bundle which includes the whole trust chain (i.e. root CA + intermediate CA + listener certificate) and a private key.
+> If that's not the case, you can easily create the bundle from individual certificates in PEM format, because you need to trust the whole chain, if any.
+> ```sh
+> $ cat /tmp/listener.crt /tmp/intermca.crt /tmp/rootca.crt >/tmp/bundle.crt
+> ```
 
 Here we generate our own certificate bundle with only one self-signed certificate, pretending it was handed over by the security team.
 We also use a wildcard certificate so that we don't need to specify all broker SANs.
@@ -183,16 +179,16 @@ commonName=my-cluster
 subjectAltName=@san
 [san]
 DNS.1=*.my-cluster.f12i.io
-" && openssl genrsa -out /tmp/listener.key 2048 \
-  && openssl req -new -x509 -days 3650 -key /tmp/listener.key -out /tmp/bundle.crt -config <(echo "$CONFIG")
+" ; mkdir -p /tmp/ctls ; openssl genrsa -out /tmp/ctls/listener.key 2048 ; \
+  openssl req -new -x509 -days 3650 -key /tmp/ctls/listener.key -out /tmp/ctls/bundle.crt -config <(echo "$CONFIG")
 ```
 
-Now we [deploy the Strimzi Cluster Operator and Kafka cluster](/sessions/001), and set the external listener.
+Now we [deploy the Strimzi Cluster Operator and Kafka cluster](/sessions/001), and configure an external listener.
 Then, we deploy the secret containing the custom certificate and update the Kafka cluster configuration by adding a reference to that secret.
 
 ```sh
 $ kubectl create secret generic ext-listener-crt \
-  --from-file=/tmp/bundle.crt --from-file=/tmp/listener.key
+  --from-file=/tmp/ctls/bundle.crt --from-file=/tmp/ctls/listener.key
 secret/ext-listener-crt created
   
 $ kubectl patch k my-cluster --type merge -p '
@@ -219,17 +215,19 @@ When the rolling update is completed, clients just need to trust the external CA
 In our case, we don't have a CA, so we just need to trust the self-signed certificate.
 
 ```sh
-$ PUBLIC_CRT=$(</tmp/bundle.crt) && PUBLIC_CRT=$(echo "$PUBLIC_CRT" |sed ':a;N;$!ba; s;\n; \\\n;g')
+$ export BOOTSTRAP_SERVERS=$(kubectl get k my-cluster -o yaml | yq '.status.listeners.[] | select(.name == "external").bootstrapServers')
 
-$ cat <<EOF >/tmp/client.properties
+$ cat <<EOF >/tmp/ctls/client.properties
+config.providers=dir
+config.providers.dir.class=org.apache.kafka.common.config.provider.DirectoryConfigProvider
+config.providers.dir.param.allowlist.pattern=/tmp/ctls/.*
 security.protocol=SSL
 ssl.truststore.type=PEM
-ssl.truststore.certificates=$PUBLIC_CRT
+ssl.truststore.certificates=\${dir:/tmp/ctls:bundle.crt}
 EOF
 
-$ kubectl cp /tmp/client.properties kafka-tools:/tmp/client.properties
-
-$ kubectl-kafka bin/kafka-console-producer.sh --bootstrap-server "$BOOTSTRAP_SERVERS" --topic my-topic
+$ bin/kafka-console-producer.sh --bootstrap-server "$BOOTSTRAP_SERVERS" --topic my-topic \
+  --producer.config /tmp/ctls/client.properties
 >hello
 >world
 >^C
