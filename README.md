@@ -1,7 +1,6 @@
 # Strimzi debugging
 
 This project contains a series of debugging sessions for Strimzi.
-You can use Minikube to run most of the examples.
 
 1. [Deploying a Kafka cluster](/sessions/001)
 2. [Monitoring Kafka metrics](/sessions/002)
