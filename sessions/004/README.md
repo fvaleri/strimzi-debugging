@@ -16,7 +16,7 @@ Then we configure an external listener of type ingress with TLS authentication.
 > ```
 > Finally, make sure to add Minikube's IP to your hosts file:
 > ```sh
-> sudo echo "192.168.49.2 prometheus.f12i.io grafana.f12i.io" >> /etc/hosts
+> sudo echo "192.168.49.2 bootstrap.my-cluster.f12i.io broker-10.my-cluster.f12i.io broker-11.my-cluster.f12i.io broker-12.my-cluster.f12i.io" >> /etc/hosts
 > ```
 
 ```sh
