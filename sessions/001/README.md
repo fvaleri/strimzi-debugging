@@ -11,7 +11,7 @@ $ source init.sh
 Connecting to Kubernetes
 Creating namespace test
 Deleting strays volumes
-Installing operator x.x.x
+Installing Strimzi x.x.x
 ```
 
 Then, we create a new Kafka cluster and test topic.

@@ -39,7 +39,7 @@ kubectl label ns "$NAMESPACE" pod-security.kubernetes.io/enforce=privileged --ov
 echo "Deleting strays volumes"
 kubectl delete pv $(kubectl get pv 2>/dev/null | grep "my-cluster" | awk "{print $1}") --ignore-not-found &>/dev/null
 
-echo "Installing operator $STRIMZI_VERSION"
+echo "Installing Strimzi $STRIMZI_VERSION"
 if [[ ! -f "$STRIMZI_FILE" ]]; then
   curl -sLk "https://github.com/strimzi/strimzi-kafka-operator/releases/download/$STRIMZI_VERSION/strimzi-cluster-operator-$STRIMZI_VERSION.yaml" -o "$STRIMZI_FILE"
 fi

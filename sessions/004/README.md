@@ -5,19 +5,7 @@ First, use [this session](/sessions/001) to deploy a Kafka cluster on Kubernetes
 Then we configure an external listener of type ingress with TLS authentication.
 
 > [!IMPORTANT]
-> If you are using Minikube you need to enable the Nginx ingress controller:
-> ```sh
-> minikube addons enable ingress
-> ```
-> Then, run the following command to enable SSL passthrough every time you restart Minikube:
-> ```sh
-> kubectl patch deploy -n ingress-nginx ingress-nginx-controller --type json \
->   -p '[{"op":"add", "path":"/spec/template/spec/containers/0/args/-", "value":"--enable-ssl-passthrough"}]'
-> ```
-> Finally, make sure to add Minikube's IP to your hosts file:
-> ```sh
-> sudo echo "192.168.49.2 bootstrap.my-cluster.f12i.io broker-10.my-cluster.f12i.io broker-11.my-cluster.f12i.io broker-12.my-cluster.f12i.io" >> /etc/hosts
-> ```
+> The NGINX ingress controller needs to be deployed with SSL passthrough enabled.
 
 ```sh
 $ kubectl create -f sessions/004/install.yaml \

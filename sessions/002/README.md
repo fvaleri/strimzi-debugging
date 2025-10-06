@@ -3,19 +3,7 @@
 First, use [this session](/sessions/001) to deploy a Kafka cluster on Kubernetes.
 
 > [!IMPORTANT]
-> If you are using Minikube you need to enable the Nginx ingress controller: 
-> ```sh
-> minikube addons enable ingress
-> ```
-> Then, run the following command to enable SSL passthrough every time you restart Minikube: 
-> ```sh
-> kubectl patch deploy -n ingress-nginx ingress-nginx-controller --type json \
->   -p '[{"op":"add", "path":"/spec/template/spec/containers/0/args/-", "value":"--enable-ssl-passthrough"}]'
-> ```
-> Finally, make sure to add Minikube's IP to your hosts file:
-> ```sh
-> sudo echo "192.168.49.2 prometheus.f12i.io grafana.f12i.io" >> /etc/hosts
-> ```
+> The NGINX ingress controller needs to be configured with SSL passthrough enabled.
 
 When the cluster is ready, install Prometheus, Grafana and Strimzi dashboards.
 
@@ -85,11 +73,10 @@ grafanadashboard.integreatly.org/strimzi-kafka created
 When Grafana pod is ready, you can access the dashboards from [http://grafana.f12i.io](http://grafana.f12i.io).
 
 > [!NOTE]  
-> If you can't access Grafana trough the ingress URL, then use Minikube port forwarding:
+> If the Ingress resource is not supported, use port forwarding to access Grafana on http://localhost:8000:
 > ```shell
 > kubectl -n grafana port-forward service/grafana 8000:80
 > ```
-> Then point your browser to http://localhost:8000.
 
 Only the Cluster Operator and Kafka dashboards are included, but you can easily [add the other dashboards](/sessions/002/install/032-grafana-strimzi.yaml).
 
