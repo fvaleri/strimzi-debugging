@@ -1,8 +1,8 @@
 ## Using Kafka Connect with Debezium
 
-First, use [this session](/sessions/001) to deploy a Kafka cluster on Kubernetes.
+Begin by using [session 001](/sessions/001) to deploy a Kafka cluster on Kubernetes.
 
-When the cluster is ready, we deploy a MySQL instance which is our external system.
+Once the cluster is ready, deploy a MySQL instance to serve as the external data source.
 
 ```sh
 $ kubectl create -f sessions/006/install/mysql.yaml \
@@ -17,9 +17,9 @@ service/my-mysql-svc created
 pod/my-mysql-0 condition met
 ```
 
-Debezium configuration is specific to each connector and it is documented in detail.
-The value of `server_id` must be unique for each server and replication client in the MySQL cluster.
-In this case, the MySQL user must have appropriate permissions on all databases for which the connector captures changes.
+Debezium configuration is connector-specific and thoroughly documented.
+The `server_id` value must be unique for each server and replication client within the MySQL cluster.
+The MySQL user must have appropriate permissions on all databases from which the connector will capture changes.
 
 ```sh
 $ kubectl get cm my-mysql-cfg -o yaml | yq .data
@@ -50,7 +50,7 @@ initdb.sql: |
   FLUSH PRIVILEGES;
 ```
 
-Then, we build a custom Kafka connect image that includes our connectors.
+Next, build a custom Kafka Connect image that includes the required connectors.
 
 ```sh
 # update versions as needed
@@ -77,7 +77,7 @@ docker build -t ttl.sh/fvaleri/kafka-connect:24h /tmp/my-connect
 docker push ttl.sh/fvaleri/kafka-connect:24h
 ```
 
-After that, we can finally deploy Kafka Connect using our custom image.
+Now deploy Kafka Connect using the custom image.
 
 ```sh
 $ kubectl create -f sessions/006/install/connect.yaml
@@ -122,7 +122,7 @@ topics:
   - my-mysql
 ```
 
-In order to try our data pipeline, we create some changes using SQL queries.
+To test the data pipeline, create some database changes using SQL queries.
 
 ```sh
 $ kubectl exec my-mysql-0 -- sh -c 'MYSQL_PWD="changeit" mysql -u admin testdb -e "
@@ -135,10 +135,10 @@ id	first_name	last_name	email
 2	Max 	Power	ddog@example.com
 ```
 
-MySQL connector writes change events that occur in a table to a Kafka topic named like `serverName.databaseName.tableName`.
-We created 3 changes (insert-update-insert), so we have 3 records in that topic.
-It's interesting to look at some record properties: `op` is the change type (c=create, r=read for snapshot only, u=update, d=delete), `gtid` is the global transaction identifier that is unique in a MySQL cluster, `payload.source.ts_ms` is the timestamp when the change was applied, `payload.ts_ms` is the timestamp when Debezium processed that event.
-The notification lag is the difference with the source timestamp.
+The MySQL connector writes change events to a Kafka topic following the naming pattern `serverName.databaseName.tableName`.
+The three database changes (insert, update, insert) result in three topic records.
+Key record properties include: `op` for the operation type (c=create, r=read for snapshots, u=update, d=delete), `gtid` for the globally unique transaction identifier, `payload.source.ts_ms` for when the database change occurred, and `payload.ts_ms` for when Debezium processed the event.
+The notification lag represents the time difference between these two timestamps.
 
 ```sh
 $ kubectl-kafka bin/kafka-console-consumer.sh --bootstrap-server my-cluster-kafka-bootstrap:9092 \
@@ -149,4 +149,4 @@ Struct{before=Struct{id=1,first_name=John,last_name=Doe,email=jdoe@example.com},
 Processed a total of 3 messages
 ```
 
-As an additional exercise, you can extend this data pipeline by configuring a sink connector and exporting these changes to an external system like Artemis Broker.
+As an exercise, extend this data pipeline by configuring a sink connector to export these changes to an external system such as Artemis Broker.

@@ -1,11 +1,11 @@
-## Configuring TLS authentication
+## Configuring TLS Authentication
 
-First, use [this session](/sessions/001) to deploy a Kafka cluster on Kubernetes.
+Begin by using [session 001](/sessions/001) to deploy a Kafka cluster on Kubernetes.
 
-Then we configure an external listener of type ingress with TLS authentication.
+Next, configure an external listener of type ingress with TLS authentication enabled.
 
 > [!IMPORTANT]
-> The NGINX ingress controller needs to be deployed with SSL passthrough enabled.
+> The NGINX ingress controller must be deployed with SSL passthrough enabled.
 
 ```sh
 $ kubectl create -f sessions/004/install.yaml \
@@ -28,8 +28,8 @@ kafkauser.kafka.strimzi.io/my-user created
 kafka.kafka.strimzi.io/my-cluster patched
 ```
 
-The previous command adds a new authentication field to the external listener, which is the endpoint used by clients connecting from outside using TLS.
-It also creates a Kafka user resource with a matching configuration.
+This command adds an authentication field to the external listener, which serves as the endpoint for external clients connecting via TLS.
+It also creates a KafkaUser resource with matching authentication settings.
 
 ```sh
 $ kubectl get ingress
@@ -44,7 +44,7 @@ authentication:
   type: tls
 ```
 
-When the rolling update is completed, you should be able to see the broker certificate running the following command.
+Once the rolling update completes, you can inspect the broker certificate using the following command.
 
 ```sh
 $ openssl s_client -connect broker-10.my-cluster.f12i.io:443 -servername bootstrap.my-cluster.f12i.io -showcerts 2>/dev/null | grep "subject\|issuer"
@@ -52,10 +52,10 @@ subject=O=io.strimzi, CN=my-cluster-kafka
 issuer=O=io.strimzi, CN=cluster-ca v0
 ```
 
-Then, we can try to send some messages using an external Kafka client.
+Now you can send messages using an external Kafka client.
 
 > [!NOTE]
-> Here we are using a local console producer tool included in every Kafka distribution.
+> This example uses the console producer tool included in standard Kafka distributions.
 
 ```sh
 $ mkdir -p /tmp/mtls ; \
@@ -89,10 +89,10 @@ world
 Processed a total of 2 messages
 ```
 
-When dealing with TLS issues, it is useful to look inside the certificate to verify its configuration and expiration.
-For example, let's get the cluster CA certificate which is used to sign all server certificates.
-We can use use `kubectl` to do so, but let's suppose we have a must-gather script output.
-Use the command from the first session to generate a new report from the current cluster.
+When troubleshooting TLS issues, examining certificate details helps verify configuration and expiration dates.
+For example, let's inspect the cluster CA certificate, which signs all server certificates.
+While you can retrieve this using `kubectl`, this example demonstrates working with must-gather script output.
+Use the command from session 002 to generate a fresh report from the current cluster.
 
 ```sh
 $ unzip -p ~/Downloads/report-12-10-2024_11-31-59.zip reports/secrets/my-cluster-cluster-ca-cert.yaml \
@@ -126,31 +126,31 @@ Certificate:
         ...
 ```
 
-If this is not enough to spot the issue, we can add the `-Djavax.net.debug=ssl:handshake` Java option to the client in order to get more details.
-As an additional exercise, try to get the clients CA and user certificates to verify if the first signs the second.
+If certificate inspection doesn't reveal the issue, add the `-Djavax.net.debug=ssl:handshake` Java option to the client for detailed handshake information.
+As an exercise, retrieve both the clients CA and user certificates to verify the signing chain.
 
-## Using custom TLS certificates
+## Using Custom TLS Certificates
 
-Often, security policies don't allow you to run a Kafka cluster with self-signed certificates in production.
-Configure the listeners to use a custom certificate signed by an external or well-known CA.
+Security policies often prohibit self-signed certificates in production environments.
+You can configure listeners to use custom certificates signed by an external or well-known Certificate Authority (CA).
 
-Custom certificates are not managed by the operator, so you will be in charge of the renewal process, which requires an update to the listener secret.
-A rolling update will start automatically in order to make the new certificate available.
-This example only shows TLS encryption, but you can add a custom client certificate for TLS authentication by setting `type: tls-external` in the `KafkaUser` custom resource and creating the user secret (subject can only contain `CN=$USER_NAME`).
+Custom certificates are not managed by the Strimzi operator, so you're responsible for the renewal process, which requires updating the listener secret.
+The operator triggers a rolling update automatically to apply the new certificate.
+This example demonstrates TLS encryption. For TLS authentication with custom client certificates, set `type: tls-external` in the KafkaUser custom resource and create the user secret (the subject must contain only `CN=$USER_NAME`).
 
 > [!NOTE]
-> Typically, the security team will provide a certificate bundle which includes the whole trust chain (i.e. root CA + intermediate CA + listener certificate) and a private key.
-> If that's not the case, you can easily create the bundle from individual certificates in PEM format, because you need to trust the whole chain, if any.
+> Typically, your security team provides a certificate bundle containing the complete trust chain (root CA + intermediate CA + listener certificate) along with a private key.
+> If you receive individual certificates in PEM format, create the bundle by concatenating them:
 > ```sh
 > $ cat /tmp/listener.crt /tmp/intermca.crt /tmp/rootca.crt >/tmp/bundle.crt
 > ```
 
-Here we generate our own certificate bundle with only one self-signed certificate, pretending it was handed over by the security team.
-We also use a wildcard certificate so that we don't need to specify all broker SANs.
+For this example, we'll generate a self-signed certificate bundle to simulate a security team handoff.
+A wildcard certificate is used to avoid specifying Subject Alternative Names (SANs) for each broker individually.
 
-> [!IMPORTANT]  
-> The custom server certificate for a listener must not be a CA and it must include a SAN for each broker address, plus one for the bootstrap address.
-> Alternatively, you can use a wildcard certificate to include all addresses with one SAN entry.
+> [!IMPORTANT]
+> The custom server certificate for a listener must not have the CA flag set, and it must include a Subject Alternative Name (SAN) for each broker address plus the bootstrap address.
+> Alternatively, use a wildcard certificate to cover all addresses with a single SAN entry.
 
 ```sh
 $ CONFIG="
@@ -171,8 +171,8 @@ DNS.1=*.my-cluster.f12i.io
   openssl req -new -x509 -days 3650 -key /tmp/ctls/listener.key -out /tmp/ctls/bundle.crt -config <(echo "$CONFIG")
 ```
 
-Now we [deploy the Strimzi Cluster Operator and Kafka cluster](/sessions/001), and configure an external listener.
-Then, we deploy the secret containing the custom certificate and update the Kafka cluster configuration by adding a reference to that secret.
+Now [deploy the Strimzi Cluster Operator and Kafka cluster](/sessions/001), then configure an external listener.
+Next, create a secret containing the custom certificate and update the Kafka cluster configuration to reference it.
 
 ```sh
 $ kubectl create secret generic ext-listener-crt \
@@ -199,8 +199,8 @@ $ kubectl patch k my-cluster --type merge -p '
 kafka.kafka.strimzi.io/my-cluster patched
 ```
 
-When the rolling update is completed, clients just need to trust the external CA and they will be able to connect.
-In our case, we don't have a CA, so we just need to trust the self-signed certificate.
+After the rolling update completes, clients only need to trust the external CA to establish connections.
+Since this example uses a self-signed certificate, clients must trust that certificate directly.
 
 ```sh
 $ export BOOTSTRAP_SERVERS=$(kubectl get k my-cluster -o yaml | yq '.status.listeners.[] | select(.name == "external").bootstrapServers')

@@ -1,8 +1,8 @@
 ## Using Kafka with Apicurio Registry
 
-First, use [this session](/sessions/001) to deploy a Kafka cluster on Kubernetes.
+Begin by using [session 001](/sessions/001) to deploy a Kafka cluster on Kubernetes.
 
-Then, we deploy the Apicurio Registry operator.
+Next, deploy the Apicurio Registry operator.
 
 ```sh
 $ envsubst < sessions/005/install/apicurio.yaml | kubectl create -f -
@@ -15,7 +15,7 @@ clusterrolebinding.rbac.authorization.k8s.io/apicurio-registry-operator-rolebind
 deployment.apps/apicurio-registry-operator created
 ```
 
-When the operator is ready, we deploy our registry instance with in-memory storage system.
+Once the operator is ready, deploy a registry instance configured with an in-memory storage system.
 
 ```sh
 $ kubectl create -f sessions/005/install/registry.yaml
@@ -35,15 +35,15 @@ my-schema-registry-deployment-858c7dc76b-gjkcs    1/1     Running   0          6
 strimzi-cluster-operator-d78fd875b-dcjxw          1/1     Running   0          8m36s
 ```
 
-Now, we export some connection parameters and register the test Avro message schema.
+Now export the connection parameters and register the test Avro message schema.
 
-> [!NOTE]  
-> In addition to the REST API, the registry also provides a web interface for handling schemas and set rules.
-> This is accessible using the auto-generated ingress address.
+> [!NOTE]
+> Besides the REST API, the registry provides a web interface for managing schemas and validation rules.
+> Access it using the auto-generated ingress address.
 
-The artifact `id` convention for the mapping is to combine the topic name with the key or value, depending on whether the serializer is used for the message key or value.
-The generated `globalId` is then stored in the message headers and used to lookup the schema when consuming messages.
-Different schema `version`s use the same artifact `id`, but have different `globalId`s.
+The artifact `id` naming convention combines the topic name with either "key" or "value", depending on whether the serializer handles message keys or values.
+The generated `globalId` is stored in message headers and used for schema lookup during consumption.
+While different schema `version`s share the same artifact `id`, each has a unique `globalId`.
 
 ```sh
 $ export BOOTSTRAP_SERVERS=$(kubectl get k my-cluster -o yaml | yq '.status.listeners.[] | select(.name == "plain").bootstrapServers') \
@@ -71,7 +71,7 @@ $ curl -s -X POST -H "Content-Type: application/json" \
 }
 ```
 
-At this point, we can start the application and observe its output.
+With the schema registered, start the application and observe its output.
 
 ```sh
 $ envsubst < sessions/005/install/kafka-avro.yaml | kubectl create -f -
@@ -88,7 +88,7 @@ $ kubectl logs -f $(kubectl get po -l app=kafka-avro -o name)
 08:25:29.540 [main] INFO  it.fvaleri.kafka.Main - Record: Hello-1758875125832
 ```
 
-If we now look at one of the messages, we see that the `globalId` is stored in the message headers and used for the schema lookup when consuming messages.
+Inspecting a message reveals that the `globalId` is stored in the message headers, enabling schema lookup during consumption.
 
 ```sh
 $ kubectl exec my-cluster-broker-10 -- bin/kafka-dump-log.sh --deep-iteration --print-data-log \
@@ -97,7 +97,7 @@ $ kubectl exec my-cluster-broker-10 -- bin/kafka-dump-log.sh --deep-iteration --
 Hello????e
 ```
 
-Finally, we can use the REST API to look at the schema content and metadata, which may be useful for debugging.
+Finally, use the REST API to examine schema content and metadata, which can be helpful for debugging purposes.
 
 ```sh
 $ curl -s "$REGISTRY_URL"/search/artifacts | yq -o json

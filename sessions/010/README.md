@@ -1,8 +1,8 @@
-## Running transactional applications
+## Running Transactional Applications
 
-First, use [this session](/sessions/001) to deploy a Kafka cluster on Kubernetes.
+Begin by using [session 001](/sessions/001) to deploy a Kafka cluster on Kubernetes.
 
-Then, run a transactional application example (read-process-write).
+Next, run a transactional application example implementing a read-process-write pattern.
 
 ```sh
 $ kubectl create -f sessions/010/install.yaml
@@ -11,7 +11,7 @@ kafkatopic.kafka.strimzi.io/output-topic created
 statefulset.apps/kafka-txn created
 ```
 
-When the application is running, we send one sentence to the input topic and check the result from the output topic.
+Once the application is running, send a sentence to the input topic and verify the result from the output topic.
 
 ```sh
 $ kubectl-kafka bin/kafka-console-producer.sh --bootstrap-server my-cluster-kafka-bootstrap:9092 --topic input-topic
@@ -23,9 +23,9 @@ tset a si siht
 ^CProcessed a total of 1 messages
 ```
 
-After that, we can take a look at partition content.
-Our output topic has one partition, but what are the `__consumer_offsets` and `__transaction_state` coordinating partitions?
-We can pass the `group.id` and `transactional.id` to the following function define in `init.sh` to find out.
+Next, examine the partition content.
+The output topic has one partition, but which `__consumer_offsets` and `__transaction_state` partitions coordinate this transaction?
+Pass the `group.id` and `transactional.id` to the function defined in `init.sh` to determine the coordinating partitions.
 
 ```sh
 $ kafka-cp my-group
@@ -35,10 +35,10 @@ $ kafka-cp kafka-txn-0
 30
 ```
 
-We now check what's happening inside all the partitions involved in this transaction.
-In `output-topic-0`, we see that the data batch is transactional (`isTransactional`) and contains the PID and epoch.
-This batch is followed by a control batch (`isControl`), which contains a single end transaction marker record (`endTxnMarker`).
-In `__consumer_offsets-12`, the consumer group's offset commit batch is followed by a similar control batch.
+Examine what's happening inside all partitions involved in this transaction.
+In `output-topic-0`, the data batch has `isTransactional` set to true and includes the Producer ID (PID) and epoch.
+A control batch (`isControl`) follows, containing a single transaction end marker record (`endTxnMarker`).
+Similarly, in `__consumer_offsets-12`, the consumer group's offset commit batch is followed by a control batch.
 
 ```sh
 $ kubectl exec my-cluster-broker-10 -- bin/kafka-dump-log.sh --deep-iteration --print-data-log \
@@ -62,11 +62,11 @@ baseOffset: 8 lastOffset: 8 count: 1 baseSequence: -1 lastSequence: -1 producerI
 ...
 ```
 
-That was straightforward, but how is the transaction state managed by the coordinator? 
-In `__transaction_state-20` record payloads, we can see all transaction state changes keyed by TID `kafka-txn-0` (we also have PID+epoch).
-The transaction starts in the `Empty` state, then we have two `Ongoing` state changes (one for each partition registration).
-Then, when the commit is called, we have `PrepareCommit` state change, which means the broker is now committed to the transaction.
-This happens in the last batch, where the state is changed to `CompleteCommit`, terminating the transaction.
+That's the data flow, but how does the coordinator manage transaction state?
+In `__transaction_state-30` record payloads, observe all state changes keyed by transaction ID (TID) `kafka-txn-0`, along with PID and epoch.
+The transaction begins in the `Empty` state, followed by two `Ongoing` state changes as each partition registers.
+When commit is called, the state changes to `PrepareCommit`, indicating the broker's commitment to the transaction.
+Finally, the state changes to `CompleteCommit` in the last batch, terminating the transaction.
 
 ```sh
 $ kubectl exec my-cluster-broker-10 -- bin/kafka-dump-log.sh --deep-iteration --print-data-log --transaction-log-decoder \
@@ -85,9 +85,9 @@ baseOffset: 4 lastOffset: 4 count: 1 baseSequence: -1 lastSequence: -1 producerI
 | offset: 4 CreateTime: 1742739703240 keySize: 15 valueSize: 37 sequence: -1 headerKeys: [] key: transaction_metadata::transactionalId=kafka-txn-0 payload: producerId:1,producerEpoch:0,state=CompleteCommit,partitions=[],txnLastUpdateTimestamp=1742739703142,txnTimeoutMs=60000
 ```
 
-## Transaction rollback
+## Transaction Rollback
 
-When there is a hanging transaction the LSO is stuck, which means that transactional consumers of this partition can't make any progress (CURRENT-OFFSET==LSO).
+When a transaction hangs, the Log Stable Offset (LSO) becomes stuck, preventing transactional consumers from making progress on this partition (CURRENT-OFFSET==LSO).
 
 ```sh
 # application log
@@ -100,8 +100,8 @@ GROUP     TOPIC                  PARTITION  CURRENT-OFFSET  LOG-END-OFFSET  LAG 
 my-group  __consumer_offsets-27  9          913095344       913097449       2105  my-client-0  /10.60.172.97  my-client
 ```
 
-If the partition is part of a compacted topic like `__consumer_offsets`, compaction is also blocked, causing unbounded partition growth.
-The last cleaned offset never changes.
+If the partition belongs to a compacted topic like `__consumer_offsets`, compaction is also blocked, leading to unbounded partition growth.
+The last cleaned offset remains frozen.
 
 ```sh
 $ kubectl exec -it my-cluster-broker-10 -- bash
@@ -113,10 +113,10 @@ __consumer_offsets 27 913095344
 exit
 ```
 
-In Kafka 3+ there is an official command line tool that you can use to identify and rollback hanging transactions.
+Kafka 3.0+ includes an official command-line tool for identifying and rolling back hanging transactions.
 
-> [!IMPORTANT]  
-> The `CLUSTER_ACTION` operation type is required when authorization is enabled.
+> [!IMPORTANT]
+> When authorization is enabled, the `CLUSTER_ACTION` operation type is required to use this tool.
 
 ```sh
 $ kubectl-kafka bin/kafka-transactions.sh --bootstrap-server my-cluster-kafka-bootstrap:9092 find-hanging --broker 10

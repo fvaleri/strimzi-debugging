@@ -1,11 +1,11 @@
-## Monitoring Kafka metrics
+## Monitoring Kafka Metrics
 
-First, use [this session](/sessions/001) to deploy a Kafka cluster on Kubernetes.
+Begin by using [session 001](/sessions/001) to deploy a Kafka cluster on Kubernetes.
 
 > [!IMPORTANT]
-> The NGINX ingress controller needs to be configured with SSL passthrough enabled.
+> The NGINX ingress controller must be configured with SSL passthrough enabled.
 
-When the cluster is ready, install Prometheus, Grafana and Strimzi dashboards.
+Once the cluster is ready, install Prometheus, Grafana, and the Strimzi dashboards.
 
 ```sh
 $ for f in sessions/002/install/*.yaml; do
@@ -70,15 +70,16 @@ grafanadashboard.integreatly.org/strimzi-operators created
 grafanadashboard.integreatly.org/strimzi-kafka created
 ```
 
-When Grafana pod is ready, you can access the dashboards from [http://grafana.f12i.io](http://grafana.f12i.io).
+Once the Grafana pod is ready, access the dashboards at [http://grafana.f12i.io](http://grafana.f12i.io).
 
-> [!NOTE]  
-> If the Ingress resource is not supported, use port forwarding to access Grafana on http://localhost:8000:
+> [!NOTE]
+> If Ingress resources are not supported in your environment, use port forwarding to access Grafana at http://localhost:8000:
 > ```shell
 > kubectl -n grafana port-forward service/grafana 8000:80
 > ```
 
-Only the Cluster Operator and Kafka dashboards are included, but you can easily [add the other dashboards](/sessions/002/install/032-grafana-strimzi.yaml).
+This configuration includes the Cluster Operator and Kafka dashboards by default.
+You can easily [add additional dashboards](/sessions/002/install/032-grafana-strimzi.yaml) as needed.
 
-It is also possible to create alerting rules to provide notifications about specific conditions observed in metrics.
-This is managed by Prometheus Alert Manager, but it is out of scope for this session.
+You can also create alerting rules to receive notifications about specific metric conditions.
+Alert management is handled by Prometheus Alert Manager, though this is beyond the scope of this session.

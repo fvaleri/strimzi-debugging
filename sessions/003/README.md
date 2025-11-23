@@ -1,9 +1,9 @@
-## Getting diagnostic data
+## Getting Diagnostic Data
 
-First, use [this session](/sessions/001) to deploy a Kafka cluster on Kubernetes.
+Begin by using [session 001](/sessions/001) to deploy a Kafka cluster on Kubernetes.
 
-When debugging issues, you usually need to retrieve various artifacts from the environment, which can be a lot of effort.
-Fortunately, Strimzi provides a must-gather script that can be used to download all relevant artifacts and logs from a specific Kafka cluster.
+When debugging issues, you typically need to collect various artifacts from the environment, which can be time-consuming and error-prone.
+Strimzi provides a must-gather script that simplifies this process by downloading all relevant artifacts and logs from a specific Kafka cluster.
 
 > [!NOTE]  
 > You can add the `--secrets=all` option to also get secret values.
@@ -105,19 +105,18 @@ logs
 Report file report-17-03-2025_12-26-05.zip created
 ```
 
-## Getting heap dumps
+## Getting Heap Dumps
 
-It is also possible to collect broker JVM heap dumps and other advanced diagnostic data (thread dumps, flame graphs, etc).
+You can also collect broker JVM heap dumps and other advanced diagnostic data such as thread dumps and flame graphs.
 
 > [!WARNING]
-> Taking a heap dump is a heavy operation that can cause the Java application to hang.
-> It is not recommended in production, unless it is not possible to reproduce the memory issue in a test environment.
+> Taking a heap dump is a resource-intensive operation that can cause the Java application to pause temporarily.
+> This is not recommended for production environments unless the memory issue cannot be reproduced in a test environment.
 
-Debugging locally can often be easier and faster.
-However, some issues only manifest in Kubernetes due to factors like networking, resource limits, or interactions with other components.
-Even if you try to match your local setup to the Kubernetes configuration, subtle differences (e.g. service discovery, security settings, or operator-managed logic) might lead to different behavior.
+While debugging locally is often easier and faster, some issues only manifest in Kubernetes due to environment-specific factors like networking, resource limits, or interactions with other components.
+Even when attempting to replicate the Kubernetes configuration locally, subtle differences in service discovery, security settings, or operator-managed configurations may result in different behavior.
 
-Create an additional volume of the desired size using a PVC.
+Create an additional volume with the desired size using a PersistentVolumeClaim (PVC).
 
 ```sh
 $ kubectl create -f - <<EOF
@@ -136,12 +135,12 @@ EOF
 persistentvolumeclaim/my-pvc created
 ```
 
-Mount the new volume using the additional volume feature within Kafka template (rolling update).
-It is required to use `/mnt` mount point.
+Mount the new volume using the additional volume feature in the Kafka template. This triggers a rolling update.
+The mount point must be under `/mnt`.
 
 > [!WARNING]
-> Adding a custom volume triggers pod restarts, which can make it difficult to capture an issue that has already occurred.
-> If the issue cannot be easily reproduced in a test environment, configuring the volume in advance could help avoid the pod restarts when you need them most.
+> Adding a custom volume triggers pod restarts, which can make it difficult to capture issues that have already occurred.
+> If the issue cannot be easily reproduced in a test environment, consider configuring the volume in advance to avoid disruptive pod restarts when you need to capture diagnostic data.
 
 ```sh
 $ kubectl patch k my-cluster --type merge -p '
@@ -160,7 +159,7 @@ $ kubectl patch k my-cluster --type merge -p '
 kafka.kafka.strimzi.io/my-cluster patched
 ```
 
-When the rolling update completes, create a broker heap dump and copy the output file to localhost.
+Once the rolling update completes, generate a broker heap dump and copy the output file to your local machine.
 
 ```sh
 $ PID="$(kubectl exec my-cluster-broker-10 -- jcmd | grep "kafka.Kafka" | awk '{print $1}')"
@@ -183,7 +182,7 @@ $ kubectl cp my-cluster-broker-10:/mnt/data/heap.hprof "$HOME"/Downloads/heap.hp
 tar: Removing leading `/' from member names
 ```
 
-If the pod is crash looping, the dump can still be recovered by spinning up a temporary pod and mounting the volume.
+If the pod is crash looping, you can still recover the dump by creating a temporary pod and mounting the same volume.
 
 ```sh
 $ kubectl run my-pod --restart "Never" --image "foo" --overrides "{
@@ -210,4 +209,4 @@ total 171M
 -rw-------    1 1001     root      170.9M Mar 17 14:38 heap.hprof
 ```
 
-For the heap dump analysis you can use a tool like Eclipse Memory Analyzer.
+You can analyze the heap dump using tools like Eclipse Memory Analyzer (MAT).

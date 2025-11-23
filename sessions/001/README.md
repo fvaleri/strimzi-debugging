@@ -1,7 +1,7 @@
-## Deploying a Kafka cluster
+## Deploying a Kafka Cluster
 
-In this example, we deploy a Kafka cluster to a Kubernetes cluster using the operator.
-Use the `init.sh` script to easily initialize or reset the test environment.
+This session demonstrates how to deploy a Kafka cluster to Kubernetes using the Strimzi operator.
+You can use the `init.sh` script to initialize or reset your test environment easily.
 
 > [!IMPORTANT]  
 > Login first if your Kubernetes cluster requires authentication.
@@ -14,11 +14,11 @@ Deleting strays volumes
 Installing Strimzi x.x.x
 ```
 
-Then, we create a new Kafka cluster and test topic.
-In the YAML files, we can see how the desired cluster state is declared.
+Next, create a new Kafka cluster and test topic.
+The YAML files demonstrate how to declare the desired cluster state.
 
-In addition to Kafka pods, the Entity Operator (EO) pod is also deployed, which includes two namespaced operators: the Topic Operator (TO), and the User Operator (UO).
-These operators only support a single namespace and a single Kafka cluster.
+In addition to the Kafka pods, the deployment includes an Entity Operator (EO) pod, which contains two namespaced operators: the Topic Operator (TO) and the User Operator (UO).
+These operators are designed to manage a single namespace and a single Kafka cluster.
 
 ```sh
 $ kubectl create -f sessions/001/install.yaml
@@ -53,9 +53,9 @@ pod/my-cluster-entity-operator-64dd78b88-vxkct   2/2     Running   0          11
 pod/strimzi-cluster-operator-59c68d8fbf-q62ns    1/1     Running   0          3m
 ```
 
-When the Kafka cluster is ready, we send and receive some messages.
-When consuming messages, you can print additional data such as the partition number.
-Every consumer with the same `group.id` is part of the same consumer group.
+Once the Kafka cluster is ready, you can send and receive messages.
+When consuming messages, you can display additional metadata such as the partition number.
+All consumers sharing the same `group.id` belong to the same consumer group.
 
 ```sh
 $ kubectl-kafka bin/kafka-console-producer.sh --bootstrap-server my-cluster-kafka-bootstrap:9092 --topic my-topic \
@@ -73,9 +73,9 @@ Partition:2	45237	world
 Processed a total of 3 messages
 ```
 
-It works, but where our messages are being stored?
-The broker property `log.dirs` configures where our topic partitions are stored.
-We have 3 partitions, which corresponds to exactly 3 folders on disk.
+Now that message production and consumption are working, let's explore where the messages are actually stored.
+The broker property `log.dirs` specifies the location where topic partitions are stored on disk.
+With 3 partitions, you'll find exactly 3 corresponding directories.
 
 ```sh
 $ kubectl exec my-cluster-broker-10 -- cat /tmp/strimzi.properties | grep log.dirs
@@ -87,9 +87,9 @@ drwxr-xr-x. 2 kafka root  167 Mar 23 13:15 my-topic-1
 drwxr-xr-x. 2 kafka root  167 Mar 23 13:18 my-topic-2
 ```
 
-The consumer output shows that messages were sent to partition 0 and 2.
-Looking inside partition 0, we have a `.log` file containing our records (each segment is named after the initial offset), an `.index` file mapping the record offset to its position in the log and a `.timeindex` file mapping the record timestamp to its position in the log.
-The other two files contain additional metadata.
+The consumer output indicates that messages were sent to partitions 0 and 2.
+Inside partition 0, you'll find several files: a `.log` file containing the records (segments are named by their initial offset), an `.index` file that maps record offsets to their log positions, and a `.timeindex` file that maps record timestamps to their log positions.
+The remaining two files store additional partition metadata.
 
 ```sh
 $ kubectl exec my-cluster-broker-10 -- ls -lh /var/lib/kafka/data/kafka-log10/my-topic-0
@@ -101,8 +101,8 @@ total 12K
 -rw-r--r--. 1 kafka root  43 Mar 23 13:15 partition.metadata
 ```
 
-Partition log files are in binary format, but Kafka includes a dump tool for decoding them.
-On this partition, we have one batch (`baseOffset`), containing only one record (`| offset`) with key "24910" and payload "kafka".
+Partition log files use a binary format, but Kafka provides a dump tool to decode and inspect them.
+In this partition, there's one batch (`baseOffset`) containing a single record (`| offset`) with key "24910" and payload "kafka".
 
 ```sh
 $ kubectl exec my-cluster-broker-10 -- bin/kafka-dump-log.sh --deep-iteration --print-data-log \
@@ -113,22 +113,22 @@ baseOffset: 0 lastOffset: 0 count: 1 baseSequence: 0 lastSequence: 0 producerId:
 | offset: 0 CreateTime: 1742735936663 keySize: 5 valueSize: 5 sequence: 0 headerKeys: [] key: 24910 payload: kafka
 ```
 
-Our consumer group should have committed the offsets to the `__consumer_offsets` internal topic.
-The problem is that this topic has 50 partitions by default, so how do we know which partition was used?
-We can use the same algorithm that Kafka uses to map a `group.id` to a specific offset coordinating partition.
-The `kafka-cp` function is defined inside the `init.sh` script.
+The consumer group should have committed its offsets to the `__consumer_offsets` internal topic.
+Since this topic has 50 partitions by default, you need to determine which partition was used for your consumer group.
+You can use the same hashing algorithm that Kafka employs to map a `group.id` to its coordinating partition.
+The `kafka-cp` function, defined in the `init.sh` script, implements this algorithm.
 
 ```sh
 $ kafka-cp my-group
 12
 ```
 
-We know that the consumer group commit record was sent to `__consumer_offsets-12`, so let's dump this partition too.
-Here values are encoded for performance reasons, so we have to pass the `--offsets-decoder` option.
+Knowing that the consumer group commit was sent to `__consumer_offsets-12`, let's examine this partition.
+The values are encoded for performance, so you must use the `--offsets-decoder` option to read them.
 
-This partition contains other metadata, but we are specifically interested in the `offset_commit` key.
-We have a batch from our consumer group, which includes 3 records, one for each input topic partition.
-As expected, the consumer group committed offset1@partition0, offset2@partition2, and offset0@partition1 (this partition didn't received any message).
+This partition contains various metadata, but we're particularly interested in records with the `offset_commit` key.
+There's a batch from our consumer group containing 3 records, one for each input topic partition.
+As expected, the consumer group committed offset 1 for partition 0, offset 2 for partition 2, and offset 0 for partition 1 (which didn't receive any messages).
 
 ```sh
 $ kubectl exec my-cluster-broker-10 -- bin/kafka-dump-log.sh --deep-iteration --print-data-log --offsets-decoder \
