@@ -1,35 +1,34 @@
-apiVersion: kafka.strimzi.io/v1beta2
+apiVersion: kafka.strimzi.io/v1
 kind: KafkaMirrorMaker2
 metadata:
   name: my-mm2-cluster
 spec:
   replicas: 1
   #version: x.y.z
-  connectCluster: my-cluster-tgt
-  clusters:
-    - alias: my-cluster
-      bootstrapServers: my-cluster-kafka-bootstrap.${SOURCE_NS}.svc:9093
-      tls:
-        trustedCertificates:
-          - certificate: ca.crt
-            secretName: my-cluster-cluster-ca-cert
-    - alias: my-cluster-tgt
-      bootstrapServers: my-cluster-tgt-kafka-bootstrap.${TARGET_NS}.svc:9093
-      tls:
-        trustedCertificates:
-          - certificate: ca.crt
-            secretName: my-cluster-tgt-cluster-ca-cert
-      config:
-        # -1 means use default broker RF
-        config.storage.replication.factor: -1
-        offset.storage.replication.factor: -1
-        status.storage.replication.factor: -1
-        ssl.cipher.suites: TLS_ECDHE_RSA_WITH_AES_256_GCM_SHA384
-        ssl.enabled.protocols: TLSv1.2
-        ssl.protocol: TLSv1.2
+  target:
+    alias: my-cluster-tgt
+    bootstrapServers: my-cluster-tgt-kafka-bootstrap.${TARGET_NS}.svc:9093
+    groupId: my-mm2-cluster
+    configStorageTopic: my-mm2-config
+    statusStorageTopic: my-mm2-status
+    offsetStorageTopic: my-mm2-offset
+    tls:
+      trustedCertificates:
+        - certificate: ca.crt
+          secretName: my-cluster-tgt-cluster-ca-cert
+    config:
+      # -1 means use default broker RF
+      config.storage.replication.factor: -1
+      offset.storage.replication.factor: -1
+      status.storage.replication.factor: -1
   mirrors:
-    - sourceCluster: my-cluster
-      targetCluster: my-cluster-tgt
+    - source:
+        alias: my-cluster
+        bootstrapServers: my-cluster-kafka-bootstrap.${SOURCE_NS}.svc:9093
+        tls:
+          trustedCertificates:
+            - certificate: ca.crt
+              secretName: my-cluster-cluster-ca-cert
       topicsPattern: ".*"
       groupsPattern: ".*"
       sourceConnector:
@@ -37,7 +36,7 @@ spec:
         config:
           replication.factor: -1
           offset-syncs.topic.replication.factor: -1
-          offset-syncs.topic.location: "target"
+          offset-syncs.topic.location: target
           key.converter: "org.apache.kafka.connect.converters.ByteArrayConverter"
           value.converter: "org.apache.kafka.connect.converters.ByteArrayConverter"
           # disable source cluster name prefix on target topic
@@ -62,10 +61,10 @@ spec:
     type: inline
     loggers:
       rootLogger.level: INFO
-      logger.sourcetask.name: org.apache.kafka.connect.runtime.WorkerSourceTask
-      logger.sourcetask.level: INFO
-      logger.sinktask.name: org.apache.kafka.connect.runtime.WorkerSinkTask
-      logger.sinktask.level: INFO
+      logger.source.name: org.apache.kafka.connect.runtime.WorkerSourceTask
+      logger.source.level: INFO
+      logger.sink.name: org.apache.kafka.connect.runtime.WorkerSinkTask
+      logger.sink.level: INFO
   resources:
     requests:
       cpu: 2000m

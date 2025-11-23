@@ -9,7 +9,7 @@ Fortunately, Strimzi provides a must-gather script that can be used to download 
 > You can add the `--secrets=all` option to also get secret values.
 
 ```sh
-$ curl -s https://raw.githubusercontent.com/strimzi/strimzi-kafka-operator/main/tools/report.sh \
+$ curl -s https://raw.githubusercontent.com/strimzi/strimzi-kafka-operator/"$STRIMZI_VERSION"/tools/report.sh \
   | bash -s -- --namespace=test --cluster=my-cluster --out-dir=~/Downloads
 deployments
     deployment.apps/my-cluster-entity-operator

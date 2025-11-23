@@ -4,7 +4,7 @@
 [[ $- != *i* ]] && echo "Usage: source init.sh" && exit 1
 
 export NAMESPACE="test"
-export STRIMZI_VERSION="0.48.0"
+export STRIMZI_VERSION="0.49.0"
 STRIMZI_FILE="/tmp/strimzi-$STRIMZI_VERSION.yaml"
 
 kafka-cp() {

@@ -1,4 +1,4 @@
-apiVersion: kafka.strimzi.io/v1beta2
+apiVersion: kafka.strimzi.io/v1
 kind: KafkaConnect
 metadata:
   name: my-connect-cluster
@@ -7,16 +7,17 @@ metadata:
 spec:
   replicas: 1
   #version: x.y.z
+  image: ttl.sh/fvaleri/kafka-connect:24h
   bootstrapServers: my-cluster-kafka-bootstrap:9093
+  groupId: my-connect-cluster
+  configStorageTopic: my-connect-config
+  statusStorageTopic: my-connect-status
+  offsetStorageTopic: my-connect-offset
   tls:
     trustedCertificates:
       - secretName: my-cluster-cluster-ca-cert
         certificate: ca.crt
   config:
-    group.id: my-connect-cluster
-    offset.storage.topic: connect-cluster-offsets
-    config.storage.topic: connect-cluster-configs
-    status.storage.topic: connect-cluster-status
     key.converter: org.apache.kafka.connect.storage.StringConverter
     value.converter: org.apache.kafka.connect.storage.StringConverter
     # -1 means use default broker RF
@@ -27,25 +28,16 @@ spec:
     type: inline
     loggers:
       rootLogger.level: INFO
-      logger.sourcetask.name: org.apache.kafka.connect.runtime.WorkerSourceTask
-      logger.sourcetask.level: INFO
-      logger.sinktask.name: org.apache.kafka.connect.runtime.WorkerSinkTask
-      logger.sinktask.level: INFO
+      logger.source.name: org.apache.kafka.connect.runtime.WorkerSourceTask
+      logger.source.level: INFO
+      logger.sink.name: org.apache.kafka.connect.runtime.WorkerSinkTask
+      logger.sink.level: INFO
   resources:
     requests:
       cpu: 2000m
       memory: 2Gi
-  build:
-    output:
-      type: docker
-      image: ttl.sh/fvaleri/kafka-connect:24h
-    plugins:
-      - name: debezium-mysql
-        artifacts:
-          - type: tgz
-            url: https://repo1.maven.org/maven2/io/debezium/debezium-connector-mysql/2.3.7.Final/debezium-connector-mysql-2.3.7.Final-plugin.tar.gz
 ---
-apiVersion: kafka.strimzi.io/v1beta2
+apiVersion: kafka.strimzi.io/v1
 kind: KafkaConnector
 metadata:
   name: mysql-source-connector
