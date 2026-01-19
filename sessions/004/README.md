@@ -131,6 +131,8 @@ As an exercise, retrieve both the clients CA and user certificates to verify the
 
 ## Using Custom TLS Certificates
 
+Begin by using [session 001](/sessions/001) to deploy a Kafka cluster on Kubernetes.
+
 Security policies often prohibit self-signed certificates in production environments.
 You can configure listeners to use custom certificates signed by an external or well-known Certificate Authority (CA).
 

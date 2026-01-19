@@ -74,7 +74,7 @@ spec:
     spec:
       containers:
         - name: mysql
-          image: quay.io/centos7/mysql-80-centos7:20230712
+          image: quay.io/fedora/mysql-80:20260114
           resources:
             limits:
               cpu: 1000m

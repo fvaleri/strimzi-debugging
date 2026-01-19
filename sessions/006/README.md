@@ -56,7 +56,7 @@ Next, build a custom Kafka Connect image that includes the required connectors.
 # update versions as needed
 IMAGE="quay.io/strimzi/kafka:latest-kafka-4.1.1"
 CONNECTORS=(
-  "https://repo1.maven.org/maven2/io/debezium/debezium-connector-mysql/2.3.7.Final/debezium-connector-mysql-2.3.7.Final-plugin.tar.gz"
+  "https://repo1.maven.org/maven2/io/debezium/debezium-connector-mysql/3.4.0.Final/debezium-connector-mysql-3.4.0.Final-plugin.tar.gz"
 )
 
 mkdir -p /tmp/my-connect/plugins

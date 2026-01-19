@@ -18,9 +18,9 @@ $ kubectl-kafka bin/kafka-console-producer.sh --bootstrap-server my-cluster-kafk
 >this is a test
 >^C
 
-$ kubectl-kafka bin/kafka-console-consumer.sh --bootstrap-server my-cluster-kafka-bootstrap:9092 --topic output-topic --from-beginning
+$ kubectl-kafka bin/kafka-console-consumer.sh --bootstrap-server my-cluster-kafka-bootstrap:9092 --topic output-topic --from-beginning --max-messages 1
 tset a si siht
-^CProcessed a total of 1 messages
+Processed a total of 1 messages
 ```
 
 Next, examine the partition content.

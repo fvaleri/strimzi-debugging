@@ -111,9 +111,9 @@ $ kubectl-kafka bin/kafka-producer-perf-test.sh --topic my-topic --record-size 1
 
 $ kubectl-kafka bin/kafka-topics.sh --bootstrap-server my-cluster-kafka-bootstrap:9092 --describe --topic my-topic
 Topic: my-topic	TopicId: w7uEJVDXSm22zscX2-9AYA	PartitionCount: 3	ReplicationFactor: 3	Configs: min.insync.replicas=2,retention.bytes=1073741824
-	Topic: my-topic	Partition: 0	Leader: 11	Replicas: 11,12,10	Isr: 11,12,10	Elr: 	LastKnownElr: 
-	Topic: my-topic	Partition: 1	Leader: 12	Replicas: 12,10,11	Isr: 12,11,10	Elr: 	LastKnownElr: 
-	Topic: my-topic	Partition: 2	Leader: 11	Replicas: 10,11,12	Isr: 11,12,10	Elr: 	LastKnownElr: 
+	Topic: my-topic	Partition: 0	Leader: 12	Replicas: 12,10,11	Isr: 12,10,11	Elr: 	LastKnownElr:
+	Topic: my-topic	Partition: 1	Leader: 10	Replicas: 10,11,12	Isr: 10,11,12	Elr: 	LastKnownElr:
+	Topic: my-topic	Partition: 2	Leader: 11	Replicas: 11,12,10	Isr: 11,12,10	Elr: 	LastKnownElr:
 ```
 
 Next, deploy Cruise Control with auto-rebalancing enabled.
@@ -158,8 +158,8 @@ After KafkaRebalance completes, verify that the new broker now hosts existing re
 
 ```sh
 $ kubectl-kafka bin/kafka-topics.sh --bootstrap-server my-cluster-kafka-bootstrap:9092 --describe --topic my-topic
-Topic: my-topic	TopicId: w7uEJVDXSm22zscX2-9AYA	PartitionCount: 3	ReplicationFactor: 3	Configs: min.insync.replicas=2,retention.bytes=1073741824
-	Topic: my-topic	Partition: 0	Leader: 11	Replicas: 11,12,10	Isr: 10,11,12	Elr: 	LastKnownElr: 
-	Topic: my-topic	Partition: 1	Leader: 12	Replicas: 12,10,11	Isr: 10,11,12	Elr: 	LastKnownElr: 
-	Topic: my-topic	Partition: 2	Leader: 10	Replicas: 10,11,13	Isr: 10,11,13	Elr: 	LastKnownElr: 
+Topic: my-topic	TopicId: 122aJXC2Q9-d6BjF7wlglA	PartitionCount: 3	ReplicationFactor: 3	Configs: min.insync.replicas=2,retention.bytes=1073741824
+	Topic: my-topic	Partition: 0	Leader: 12	Replicas: 12,10,11	Isr: 10,11,12	Elr: 	LastKnownElr:
+	Topic: my-topic	Partition: 1	Leader: 10	Replicas: 10,13,12	Isr: 10,12,13	Elr: 	LastKnownElr:
+	Topic: my-topic	Partition: 2	Leader: 11	Replicas: 11,13,10	Isr: 10,11,13	Elr: 	LastKnownElr:
 ```

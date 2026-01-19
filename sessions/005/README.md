@@ -22,17 +22,18 @@ $ kubectl create -f sessions/005/install/registry.yaml
 apicurioregistry.registry.apicur.io/my-schema-registry created
 
 $ kubectl get po
-NAME                                              READY   STATUS    RESTARTS   AGE
-apicurio-registry-operator-9448ffc74-b6whl        1/1     Running   0          69s
-my-cluster-broker-10                              1/1     Running   0          4m54s
-my-cluster-broker-11                              1/1     Running   0          4m27s
-my-cluster-broker-12                              1/1     Running   0          5m19s
-my-cluster-controller-0                           1/1     Running   0          7m32s
-my-cluster-controller-1                           1/1     Running   0          7m32s
-my-cluster-controller-2                           1/1     Running   0          7m32s
-my-cluster-entity-operator-67b8cc5c87-74qlb       2/2     Running   0          6m59s
-my-schema-registry-deployment-858c7dc76b-gjkcs    1/1     Running   0          66s
-strimzi-cluster-operator-d78fd875b-dcjxw          1/1     Running   0          8m36s
+NAME                                                 READY   STATUS    RESTARTS   AGE
+apicurio-registry-operator-v3.1.6-7c9744db7-btbnl    1/1     Running   0          10m
+my-cluster-broker-10                                 1/1     Running   0          13m
+my-cluster-broker-11                                 1/1     Running   0          13m
+my-cluster-broker-12                                 1/1     Running   0          13m
+my-cluster-controller-0                              1/1     Running   0          13m
+my-cluster-controller-1                              1/1     Running   0          13m
+my-cluster-controller-2                              1/1     Running   0          13m
+my-cluster-entity-operator-7bc7859cbb-fd66x          2/2     Running   0          13m
+my-schema-registry-app-deployment-5667d76f6d-stktm   1/1     Running   0          6m29s
+my-schema-registry-ui-deployment-5fff75785f-8tvql    1/1     Running   0          6m21s
+strimzi-cluster-operator-59d87b7b87-b5lx9            1/1     Running   0          14m
 ```
 
 Now export the connection parameters and register the test Avro message schema.
@@ -47,27 +48,34 @@ While different schema `version`s share the same artifact `id`, each has a uniqu
 
 ```sh
 $ export BOOTSTRAP_SERVERS=$(kubectl get k my-cluster -o yaml | yq '.status.listeners.[] | select(.name == "plain").bootstrapServers') \
-  REGISTRY_URL=http://$(kubectl get apicurioregistries my-schema-registry -o jsonpath="{.status.info.host}")/apis/registry/v2 \
+  REGISTRY_URL=http://$(kubectl get apicurioregistries3 my-schema-registry -o jsonpath="{.spec.app.ingress.host}")/apis/registry/v3 \
   ARTIFACT_GROUP="default" \
   TOPIC_NAME="my-topic"
 
 $ curl -s -X POST -H "Content-Type: application/json" \
-  -H "X-Registry-ArtifactId: my-topic-value" -H "X-Registry-ArtifactType: AVRO" \
   -d @sessions/005/install/greeting.avsc \
-  "$REGISTRY_URL"/groups/default/artifacts?ifExists=RETURN_OR_UPDATE | yq -o json
+  "$REGISTRY_URL"/groups/default/artifacts | yq -o json
 {
-  "name": "Greeting",
-  "createdBy": "",
-  "createdOn": "2025-03-24T07:26:33+0000",
-  "modifiedBy": "",
-  "modifiedOn": "2025-03-24T07:26:33+0000",
-  "id": "my-topic-value",
-  "version": "1",
-  "type": "AVRO",
-  "globalId": 1,
-  "state": "ENABLED",
-  "contentId": 1,
-  "references": []
+  "artifact": {
+    "owner": "",
+    "createdOn": "2026-01-19T15:43:33Z",
+    "modifiedBy": "",
+    "modifiedOn": "2026-01-19T15:43:33Z",
+    "artifactType": "AVRO",
+    "artifactId": "greeting"
+  },
+  "version": {
+    "version": "1",
+    "owner": "",
+    "createdOn": "2026-01-19T15:43:33Z",
+    "artifactType": "AVRO",
+    "globalId": 1,
+    "state": "ENABLED",
+    "contentId": 1,
+    "artifactId": "greeting",
+    "modifiedBy": "",
+    "modifiedOn": "2026-01-19T15:43:33Z"
+  }
 }
 ```
 
@@ -79,8 +87,7 @@ deployment.apps/kafka-avro created
 
 $ kubectl logs -f $(kubectl get po -l app=kafka-avro -o name)
 08:25:25.624 [main] INFO  it.fvaleri.kafka.Main - Producing records
-08:25:25.832 [main] INFO  it.fvaleri.kafka.Main - Records produced
-08:25:25.832 [main] INFO  it.fvaleri.kafka.Main - Consuming all records
+08:25:25.832 [main] INFO  it.fvaleri.kafka.Main - Consuming records
 08:25:29.539 [main] INFO  it.fvaleri.kafka.Main - Record: Hello-1758875125640
 08:25:29.540 [main] INFO  it.fvaleri.kafka.Main - Record: Hello-1758875125831
 08:25:29.540 [main] INFO  it.fvaleri.kafka.Main - Record: Hello-1758875125832
