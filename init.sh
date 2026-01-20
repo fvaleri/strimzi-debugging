@@ -30,6 +30,7 @@ echo "Creating namespace $NAMESPACE"
 kubectl delete ns "$NAMESPACE" --wait=false &>/dev/null && sleep 10
 kubectl get ns "$NAMESPACE" --ignore-not-found -o yaml | yq 'del(.metadata.finalizers[])' | kubectl replace -f - &>/dev/null
 kubectl get kt --ignore-not-found -o yaml 2>/dev/null | yq 'del(.items[].metadata.finalizers[])' | kubectl replace -f - &>/dev/null
+kubectl get apicurioregistries3 --ignore-not-found -o yaml 2>/dev/null | yq 'del(.items[].metadata.finalizers[])' | kubectl replace -f - &>/dev/null
 kubectl wait --for=delete ns/"$NAMESPACE" --timeout=120s &>/dev/null
 # create a new namespace
 kubectl create ns "$NAMESPACE" &>/dev/null
