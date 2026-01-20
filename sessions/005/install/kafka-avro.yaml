@@ -29,7 +29,5 @@ spec:
               value: "${BOOTSTRAP_SERVERS}"
             - name: REGISTRY_URL
               value: "${REGISTRY_URL}"
-            - name: ARTIFACT_GROUP
-              value: "${ARTIFACT_GROUP}"
             - name: TOPIC_NAME
               value: "${TOPIC_NAME}"
