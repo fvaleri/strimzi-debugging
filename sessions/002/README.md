@@ -81,5 +81,9 @@ Once the Grafana pod is ready, access the dashboards at [http://grafana.f12i.io]
 This configuration includes the Cluster Operator and Kafka dashboards by default.
 You can easily [add additional dashboards](/sessions/002/install/032-grafana-strimzi.yaml) as needed.
 
+> [!NOTE]
+> To make the dashboards editable from the Grafana UI, run the following command and then login with admin/admin:
+> kubectl patch grafana grafana-server -n grafana --type merge -p '{"spec":{"config":{"auth.anonymous":{"enabled":false}}}}'
+
 You can also create alerting rules to receive notifications about specific metric conditions.
 Alert management is handled by Prometheus Alert Manager, though this is beyond the scope of this session.
