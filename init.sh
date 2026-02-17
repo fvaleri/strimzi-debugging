@@ -7,7 +7,8 @@ export NAMESPACE="test"
 export STRIMZI_VERSION="0.50.0"
 STRIMZI_FILE="/tmp/strimzi-$STRIMZI_VERSION.yaml"
 
-kafka-cp() {
+# get group or transaction coordinating partition
+get-cp() {
   local id="${1-}" part="${2-50}"
   echo 'public void run(String id, int part) { System.out.println(abs(id.hashCode()) % part); }
     private int abs(int n) { return (n == Integer.MIN_VALUE) ? 0 : Math.abs(n); }

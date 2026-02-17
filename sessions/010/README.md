@@ -28,10 +28,10 @@ The output topic has one partition, but which `__consumer_offsets` and `__transa
 Pass the `group.id` and `transactional.id` to the function defined in `init.sh` to determine the coordinating partitions.
 
 ```sh
-$ kafka-cp my-group
+$ get-cp my-group
 12
 
-$ kafka-cp kafka-txn-0
+$ get-cp kafka-txn-0
 30
 ```
 
