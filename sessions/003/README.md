@@ -2,11 +2,11 @@
 
 Begin by using [session 001](/sessions/001) to deploy a Kafka cluster on Kubernetes.
 
-When debugging issues, you typically need to collect various artifacts from the environment, which can be time-consuming and error-prone.
+When debugging issues, we need to collect various artifacts from the environment, which can be time-consuming and error-prone.
 Strimzi provides a must-gather script that simplifies this process by downloading all relevant artifacts and logs from a specific Kafka cluster.
 
 > [!NOTE]  
-> You can add the `--secrets=all` option to also get secret values.
+> Add the `--secrets=all` option to also get secret values.
 
 ```sh
 $ curl -s https://raw.githubusercontent.com/strimzi/strimzi-kafka-operator/"$STRIMZI_VERSION"/tools/report.sh \
@@ -105,9 +105,48 @@ logs
 Report file report-17-03-2025_12-26-05.zip created
 ```
 
+When troubleshooting TLS issues, examining certificate details helps verify configuration and expiration dates.
+For example, let's inspect the cluster CA certificate, which signs all server certificates.
+While we can retrieve this using `kubectl`, this example demonstrates working with must-gather script output.
+Use the command from session 002 to generate a fresh report from the current cluster.
+
+```sh
+$ unzip -p ~/Downloads/report-12-10-2024_11-31-59.zip reports/secrets/my-cluster-cluster-ca-cert.yaml \
+  | yq '.data."ca.crt"' | base64 -d | openssl x509 -inform pem -noout -text
+Certificate:
+    Data:
+        Version: 3 (0x2)
+        Serial Number:
+            26:9e:a1:7d:4d:34:cb:6b:ec:98:03:46:fb:7a:82:ad:68:80:bd:8e
+        Signature Algorithm: sha512WithRSAEncryption
+        Issuer: O=io.strimzi, CN=cluster-ca v0
+        Validity
+            Not Before: Sep  8 16:28:42 2022 GMT
+            Not After : Sep  8 16:28:42 2023 GMT
+        Subject: O=io.strimzi, CN=cluster-ca v0
+        Subject Public Key Info:
+            Public Key Algorithm: rsaEncryption
+                Public-Key: (4096 bit)
+                Modulus:
+                    ...
+                Exponent: 65537 (0x10001)
+        X509v3 extensions:
+            X509v3 Subject Key Identifier:
+                2D:1D:63:F6:20:57:33:7D:59:73:DF:15:74:A2:A8:3D:E1:5B:3E:38
+            X509v3 Basic Constraints: critical
+                CA:TRUE, pathlen:0
+            X509v3 Key Usage: critical
+                Certificate Sign, CRL Sign
+    Signature Algorithm: sha512WithRSAEncryption
+    Signature Value:
+        ...
+```
+
+If certificate inspection doesn't reveal the issue, add the `-Djavax.net.debug=ssl:handshake` Java option to the client for detailed handshake information.
+
 ## Getting Heap Dumps
 
-You can also collect broker JVM heap dumps and other advanced diagnostic data such as thread dumps and flame graphs.
+It is possible to collect broker JVM heap dumps and other advanced diagnostic data such as thread dumps and flame graphs.
 
 > [!WARNING]
 > Taking a heap dump is a resource-intensive operation that can cause the Java application to pause temporarily.
@@ -140,7 +179,7 @@ The mount point must be under `/mnt`.
 
 > [!WARNING]
 > Adding a custom volume triggers pod restarts, which can make it difficult to capture issues that have already occurred.
-> If the issue cannot be easily reproduced in a test environment, consider configuring the volume in advance to avoid disruptive pod restarts when you need to capture diagnostic data.
+> If the issue cannot be easily reproduced in a test environment, consider configuring the volume in advance to avoid disruptive pod restarts.
 
 ```sh
 $ kubectl patch k my-cluster --type merge -p '
@@ -182,7 +221,7 @@ $ kubectl cp my-cluster-broker-10:/mnt/data/heap.hprof "$HOME"/Downloads/heap.hp
 tar: Removing leading `/' from member names
 ```
 
-If the pod is crash looping, you can still recover the dump by creating a temporary pod and mounting the same volume.
+If the pod is crash looping, we can still recover the dump by creating a temporary pod and mounting the same volume.
 
 ```sh
 $ kubectl run my-pod --restart "Never" --image "foo" --overrides "{
@@ -209,4 +248,4 @@ total 171M
 -rw-------    1 1001     root      170.9M Mar 17 14:38 heap.hprof
 ```
 
-You can analyze the heap dump using tools like Eclipse Memory Analyzer (MAT).
+We can analyze the heap dump using tools like Eclipse Memory Analyzer (MAT).

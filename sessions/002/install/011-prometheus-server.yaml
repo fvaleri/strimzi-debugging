@@ -55,25 +55,6 @@ spec:
   selector:
     prometheus: prometheus
 ---
-apiVersion: networking.k8s.io/v1
-kind: Ingress
-metadata:
-  name: prometheus
-  namespace: prometheus
-spec:
-  ingressClassName: nginx
-  rules:
-  - host: prometheus.f12i.io
-    http:
-      paths:
-      - backend:
-          service:
-            name: prometheus
-            port: 
-              number: 80
-        path: /
-        pathType: Prefix
----
 apiVersion: monitoring.coreos.com/v1
 kind: Prometheus
 metadata:
@@ -231,25 +212,6 @@ spec:
       targetPort: web
   selector:
     alertmanager: alertmanager
----
-apiVersion: networking.k8s.io/v1
-kind: Ingress
-metadata:
-  name: alertmanager
-  namespace: prometheus
-spec:
-  ingressClassName: nginx
-  rules:
-  - host: alertmanager.f12i.io
-    http:
-      paths:
-      - backend:
-          service:
-            name: alertmanager
-            port: 
-              number: 80
-        path: /
-        pathType: Prefix
 ---
 kind: Secret
 apiVersion: v1

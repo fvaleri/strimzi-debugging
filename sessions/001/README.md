@@ -1,7 +1,7 @@
 ## Deploying a Kafka Cluster
 
 This session demonstrates how to deploy a Kafka cluster to Kubernetes using the Strimzi operator.
-You can use the `init.sh` script to initialize or reset your test environment easily.
+We can use the `init.sh` script to initialize or reset your test environment easily.
 
 > [!IMPORTANT]  
 > Login first if your Kubernetes cluster requires authentication.
@@ -29,33 +29,32 @@ kafkatopic.kafka.strimzi.io/my-topic created
 
 $ kubectl get sps,knp,k,kt,po
 NAME                                                  PODS   READY PODS   CURRENT PODS   AGE
-strimzipodset.core.strimzi.io/my-cluster-broker       3      3            3              2m44s
-strimzipodset.core.strimzi.io/my-cluster-controller   3      3            3              2m44s
+strimzipodset.core.strimzi.io/my-cluster-broker       3      3            3              35m
+strimzipodset.core.strimzi.io/my-cluster-controller   3      3            3              35m
 
 NAME                                        DESIRED REPLICAS   ROLES            NODEIDS
 kafkanodepool.kafka.strimzi.io/broker       3                  ["broker"]       [10,11,12]
 kafkanodepool.kafka.strimzi.io/controller   3                  ["controller"]   [0,1,2]
 
-NAME                                READY   METADATA STATE   WARNINGS
-kafka.kafka.strimzi.io/my-cluster   True    KRaft            
+NAME                                READY   WARNINGS   KAFKA VERSION   METADATA VERSION
+kafka.kafka.strimzi.io/my-cluster   True               4.2.0           4.2-IV1
 
 NAME                                   CLUSTER      PARTITIONS   REPLICATION FACTOR   READY
 kafkatopic.kafka.strimzi.io/my-topic   my-cluster   3            3                    True
 
 NAME                                             READY   STATUS    RESTARTS   AGE
-pod/my-cluster-broker-10                         1/1     Running   0          2m44s
-pod/my-cluster-broker-11                         1/1     Running   0          2m44s
-pod/my-cluster-broker-12                         1/1     Running   0          2m44s
-pod/my-cluster-controller-0                      1/1     Running   0          2m44s
-pod/my-cluster-controller-1                      1/1     Running   0          2m44s
-pod/my-cluster-controller-2                      1/1     Running   0          2m43s
-pod/my-cluster-entity-operator-64dd78b88-vxkct   2/2     Running   0          113s
-pod/strimzi-cluster-operator-59c68d8fbf-q62ns    1/1     Running   0          3m
+pod/my-cluster-broker-10                         1/1     Running   0          35m
+pod/my-cluster-broker-11                         1/1     Running   0          35m
+pod/my-cluster-broker-12                         1/1     Running   0          35m
+pod/my-cluster-controller-0                      1/1     Running   0          35m
+pod/my-cluster-controller-1                      1/1     Running   0          35m
+pod/my-cluster-controller-2                      1/1     Running   0          35m
+pod/my-cluster-entity-operator-bdd594cf7-54jcs   2/2     Running   0          34m
+pod/strimzi-cluster-operator-644f44d6d8-585v5    1/1     Running   0          24m
 ```
 
-Once the Kafka cluster is ready, you can send and receive messages.
-When consuming messages, you can display additional metadata such as the partition number.
-All consumers sharing the same `group.id` belong to the same consumer group.
+Once the Kafka cluster is ready, we can try to send and receive messages.
+The operator creates a normal service for the initial connection (bootstrap) and a headless service to give each broker pod a stable DNS name.
 
 ```sh
 $ kubectl-kafka bin/kafka-console-producer.sh --bootstrap-server my-cluster-kafka-bootstrap:9092 --topic my-topic \
@@ -114,17 +113,17 @@ baseOffset: 0 lastOffset: 0 count: 1 baseSequence: 0 lastSequence: 0 producerId:
 ```
 
 The consumer group should have committed its offsets to the `__consumer_offsets` internal topic.
-Since this topic has 50 partitions by default, you need to determine which partition was used for your consumer group.
-You can use the same hashing algorithm that Kafka employs to map a `group.id` to its coordinating partition.
+Since this topic has 50 partitions by default, we need to determine which partition was used for your consumer group.
+We can use the same hashing algorithm that Kafka employs to map a `group.id` to its coordinating partition.
 The `kafka-cp` function, defined in the `init.sh` script, implements this algorithm.
 
 ```sh
-$ kafka-cp my-group
+$ get-cp my-group
 12
 ```
 
 Knowing that the consumer group commit was sent to `__consumer_offsets-12`, let's examine this partition.
-The values are encoded for performance, so you must use the `--offsets-decoder` option to read them.
+The values are encoded for performance, so we must use the `--offsets-decoder` option to read them.
 
 This partition contains various metadata, but we're particularly interested in records with the `offset_commit` key.
 There's a batch from our consumer group containing 3 records, one for each input topic partition.

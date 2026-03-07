@@ -57,8 +57,8 @@ Current partition replica assignment
 
 {"version":1,"partitions":[{"topic":"my-topic","partition":0,"replicas":[10,12,11],"log_dirs":["any","any","any"]},{"topic":"my-topic","partition":1,"replicas":[12,11,10],"log_dirs":["any","any","any"]},{"topic":"my-topic","partition":2,"replicas":[11,10,12],"log_dirs":["any","any","any"]}]}
 
-Save this to use as the --reassignment-json-file option during rollback
-Warning: You must run --verify periodically, until the reassignment completes, to ensure the throttle is removed.
+Save this to use as the `--reassignment-json-file` option during rollback
+Warning: We must run `--verify` periodically, until the reassignment completes, to ensure the throttle is removed.
 The inter-broker throttle limit was set to 10000000 B/s
 Successfully started partition reassignments for my-topic-0,my-topic-1,my-topic-2
 ```

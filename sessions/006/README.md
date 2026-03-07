@@ -149,4 +149,4 @@ Struct{before=Struct{id=1,first_name=John,last_name=Doe,email=jdoe@example.com},
 Processed a total of 3 messages
 ```
 
-As an exercise, extend this data pipeline by configuring a sink connector to export these changes to an external system such as Artemis Broker.
+In a similar way, this data pipeline can be extended by configuring a sink connector to export changes to an external system such as Artemis Broker.

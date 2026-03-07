@@ -40,25 +40,6 @@ spec:
   selector:
     app: grafana
 ---
-apiVersion: networking.k8s.io/v1
-kind: Ingress
-metadata:
-  name: grafana
-  namespace: grafana
-spec:
-  ingressClassName: nginx
-  rules:
-  - host: grafana.f12i.io
-    http:
-      paths:
-      - backend:
-          service:
-            name: grafana
-            port: 
-              number: 80
-        path: /
-        pathType: Prefix
----
 apiVersion: integreatly.org/v1alpha1
 kind: GrafanaDataSource
 metadata:

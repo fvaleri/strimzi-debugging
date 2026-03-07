@@ -70,20 +70,18 @@ grafanadashboard.integreatly.org/strimzi-operators created
 grafanadashboard.integreatly.org/strimzi-kafka created
 ```
 
-Once the Grafana pod is ready, access the dashboards at [http://grafana.f12i.io](http://grafana.f12i.io).
+Once the Grafana pod is ready, use port forwarding to view the dashboards at http://localhost:8000.
 
-> [!NOTE]
-> If Ingress resources are not supported in your environment, use port forwarding to access Grafana at http://localhost:8000:
-> ```shell
-> kubectl -n grafana port-forward service/grafana 8000:80
-> ```
+```sh
+kubectl -n grafana port-forward service/grafana 8000:80
+```
 
 This configuration includes the Cluster Operator and Kafka dashboards by default.
-You can easily [add additional dashboards](/sessions/002/install/032-grafana-strimzi.yaml) as needed.
+We can easily [add new dashboards](/sessions/002/install/032-grafana-strimzi.yaml) as needed.
 
 > [!NOTE]
 > To make the dashboards editable from the Grafana UI, run the following command and then login with admin/admin:
 > kubectl patch grafana grafana-server -n grafana --type merge -p '{"spec":{"config":{"auth.anonymous":{"enabled":false}}}}'
 
-You can also create alerting rules to receive notifications about specific metric conditions.
+We can also create alerting rules to receive notifications about specific metric conditions.
 Alert management is handled by Prometheus Alert Manager, though this is beyond the scope of this session.
