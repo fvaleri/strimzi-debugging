@@ -6,6 +6,7 @@
 export NAMESPACE="test"
 export STRIMZI_VERSION="0.51.0"
 STRIMZI_FILE="/tmp/strimzi-$STRIMZI_VERSION.yaml"
+CLUSTER_NAME="my-cluster"
 
 # get group or transaction coordinating partition
 get-cp() {
@@ -15,6 +16,7 @@ get-cp() {
     run("'"$id"'", '"$part"');' | jshell -
 }
 
+# run kafka tools in a dedicated pod
 kubectl-kafka() {
   kubectl get po kafka-tools &>/dev/null || kubectl run kafka-tools -q --restart="Never" \
     --image="apache/kafka:latest" -- sh -c "trap : TERM INT; sleep infinity & wait"
@@ -37,9 +39,8 @@ kubectl wait --for=delete ns/"$NAMESPACE" --timeout=120s &>/dev/null
 kubectl create ns "$NAMESPACE" &>/dev/null
 # set privileged SecurityStandard label for this namespace
 kubectl label ns "$NAMESPACE" pod-security.kubernetes.io/enforce=privileged --overwrite &>/dev/null
-
-echo "Deleting strays volumes"
-kubectl delete pv $(kubectl get pv 2>/dev/null | grep "my-cluster" | awk "{print $1}") --ignore-not-found &>/dev/null
+# delete strays volumes
+kubectl delete pv $(kubectl get pv 2>/dev/null | grep "$CLUSTER_NAME" | awk '{print $1}') &>/dev/null ||true
 
 echo "Installing Strimzi $STRIMZI_VERSION"
 if [[ ! -f "$STRIMZI_FILE" ]]; then
