@@ -8,9 +8,7 @@ We can use the `init.sh` script to initialize or reset your test environment eas
 
 ```sh
 $ source init.sh
-Connecting to Kubernetes
 Creating namespace test
-Deleting strays volumes
 Installing Strimzi x.x.x
 ```
 

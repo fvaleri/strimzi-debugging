@@ -24,9 +24,9 @@ kubectl-kafka() {
   kubectl exec kafka-tools -itq -- sh -c "/opt/kafka/$*"
 }
 
-echo "Connecting to Kubernetes"
-if ! kubectl cluster-info &>/dev/null; then echo "Unable to connect to Kubernetes" && return; fi
-kubectl config set-context --current --namespace="$NAMESPACE" &>/dev/null
+if ! kubectl cluster-info &>/dev/null; then
+  echo "Unable to connect to Kubernetes" && return
+fi
 
 echo "Creating namespace $NAMESPACE"
 # delete namespace and topic finalizers that may block deletion
@@ -37,6 +37,7 @@ kubectl get apicurioregistries3 --ignore-not-found -o yaml 2>/dev/null | yq 'del
 kubectl wait --for=delete ns/"$NAMESPACE" --timeout=120s &>/dev/null
 # create a new namespace
 kubectl create ns "$NAMESPACE" &>/dev/null
+kubectl config set-context --current --namespace="$NAMESPACE" &>/dev/null
 # set privileged SecurityStandard label for this namespace
 kubectl label ns "$NAMESPACE" pod-security.kubernetes.io/enforce=privileged --overwrite &>/dev/null
 # delete strays volumes
