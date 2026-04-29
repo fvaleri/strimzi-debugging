@@ -56,14 +56,14 @@ The operator creates a normal service for the initial connection (bootstrap) and
 
 ```sh
 $ kubectl-kafka bin/kafka-console-producer.sh --bootstrap-server my-cluster-kafka-bootstrap:9092 --topic my-topic \
-  --property parse.key=true --property key.separator="#"
+  --reader-property parse.key=true --reader-property key.separator="#"
 >32947#hello
 >24910#kafka
 >45237#world
 >^C
 
 $ kubectl-kafka bin/kafka-console-consumer.sh --bootstrap-server my-cluster-kafka-bootstrap:9092 --topic my-topic \
-  --group my-group --from-beginning --max-messages 3 --property print.partition=true --property print.key=true
+  --group my-group --from-beginning --max-messages 3 --formatter-property print.partition=true --formatter-property print.key=true
 Partition:0	24910	kafka
 Partition:2	32947	hello
 Partition:2	45237	world
