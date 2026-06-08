@@ -8,12 +8,12 @@ export STRIMZI_VERSION="1.0.0"
 STRIMZI_FILE="/tmp/strimzi-$STRIMZI_VERSION.yaml"
 CLUSTER_NAME="my-cluster"
 
-# get group or transaction coordinating partition
+# get coordinating partition
 get-cp() {
-  local id="${1-}" part="${2-50}"
-  echo 'public void run(String id, int part) { System.out.println(abs(id.hashCode()) % part); }
+  local key="${1-}" num_parts="${2-50}"
+  echo 'public void run(String key, int numParts) { System.out.println(abs(key.hashCode()) % numParts); }
     private int abs(int n) { return (n == Integer.MIN_VALUE) ? 0 : Math.abs(n); }
-    run("'"$id"'", '"$part"');' | jshell -
+    run("'"$key"'", '"$num_parts"');' | jshell -
 }
 
 # run kafka tools in a dedicated pod
