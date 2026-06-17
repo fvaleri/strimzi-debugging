@@ -4,7 +4,7 @@
 [[ $- != *i* ]] && echo "Usage: source init.sh" && exit 1
 
 export NAMESPACE="test"
-export STRIMZI_VERSION="1.0.0"
+export STRIMZI_VERSION="1.0.1"
 STRIMZI_FILE="/tmp/strimzi-$STRIMZI_VERSION.yaml"
 CLUSTER_NAME="my-cluster"
 
