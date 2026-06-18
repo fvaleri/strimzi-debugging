@@ -23,22 +23,15 @@ tset a si siht
 Processed a total of 1 messages
 ```
 
-Next, examine the partition content.
-The output topic has one partition, but which `__consumer_offsets` and `__transaction_state` partitions coordinate this transaction?
-Pass the `group.id` and `transactional.id` to the function defined in `init.sh` to determine the coordinating partitions.
+Next, examine the content of each partition involved in this transaction.
 
-```sh
-$ get-cp my-group
-12
+> [!NOTE]
+> The output topic has a single partition, but `__consumer_offsets` and `__transaction_state` have 50 partitions each by default.
+> To know which partition holds out data, we pass the `group.id` or `transactional.id` to `get-cp` the function defined in `init.sh`.
 
-$ get-cp kafka-txn-0
-30
-```
-
-Examine what's happening inside all partitions involved in this transaction.
 In `output-topic-0`, the data batch has `isTransactional` set to true and includes the Producer ID (PID) and epoch.
 A control batch (`isControl`) follows, containing a single transaction end marker record (`endTxnMarker`).
-Similarly, in `__consumer_offsets-12`, the consumer group's offset commit batch is followed by a control batch.
+It is possible to uniquely identify a transaction with a `producerId` and `producerEpoch`.
 
 ```sh
 $ kubectl exec my-cluster-broker-10 -- bin/kafka-dump-log.sh --deep-iteration --print-data-log \
@@ -49,9 +42,13 @@ baseOffset: 0 lastOffset: 0 count: 1 baseSequence: 0 lastSequence: 0 producerId:
 | offset: 0 CreateTime: 1742739702864 keySize: -1 valueSize: 14 sequence: 0 headerKeys: [] payload: tset a si siht
 baseOffset: 1 lastOffset: 1 count: 1 baseSequence: -1 lastSequence: -1 producerId: 1 producerEpoch: 0 partitionLeaderEpoch: 0 isTransactional: true isControl: true deleteHorizonMs: OptionalLong.empty position: 82 CreateTime: 1742739703234 size: 78 magic: 2 compresscodec: none crc: 2557578104 isvalid: true
 | offset: 1 CreateTime: 1742739703234 keySize: 4 valueSize: 6 sequence: -1 headerKeys: [] endTxnMarker: COMMIT coordinatorEpoch: 0
+```
 
+Similarly, in `__consumer_offsets-12`, the consumer group's offset commit batch is followed by a control batch.
+
+```sh
 $ kubectl exec my-cluster-broker-10 -- bin/kafka-dump-log.sh --deep-iteration --print-data-log --offsets-decoder \
-  --files /var/lib/kafka/data/kafka-log10/__consumer_offsets-12/00000000000000000000.log
+  --files /var/lib/kafka/data/kafka-log10/__consumer_offsets-$(get-cp my-group)/00000000000000000000.log
 Dumping /var/lib/kafka/data/kafka-log10/__consumer_offsets-12/00000000000000000000.log
 Log starting offset: 0
 ...
@@ -62,7 +59,6 @@ baseOffset: 8 lastOffset: 8 count: 1 baseSequence: -1 lastSequence: -1 producerI
 ...
 ```
 
-That's the data flow, but how does the coordinator manage transaction state?
 In `__transaction_state-30` record payloads, observe all state changes keyed by transaction ID (TID) `kafka-txn-0`, along with PID and epoch.
 The transaction begins in the `Empty` state, followed by two `Ongoing` state changes as each partition registers.
 When commit is called, the state changes to `PrepareCommit`, indicating the broker's commitment to the transaction.
@@ -70,7 +66,7 @@ Finally, the state changes to `CompleteCommit` in the last batch, terminating th
 
 ```sh
 $ kubectl exec my-cluster-broker-10 -- bin/kafka-dump-log.sh --deep-iteration --print-data-log --transaction-log-decoder \
-  --files /var/lib/kafka/data/kafka-log10/__transaction_state-30/00000000000000000000.log
+  --files /var/lib/kafka/data/kafka-log10/__transaction_state-$(get-cp kafka-txn-0)/00000000000000000000.log
 Dumping /var/lib/kafka/data/kafka-log10/__transaction_state-30/00000000000000000000.log
 Log starting offset: 0
 baseOffset: 0 lastOffset: 0 count: 1 baseSequence: -1 lastSequence: -1 producerId: -1 producerEpoch: -1 partitionLeaderEpoch: 0 isTransactional: false isControl: false deleteHorizonMs: OptionalLong.empty position: 0 CreateTime: 1742739549438 size: 120 magic: 2 compresscodec: none crc: 3663501755 isvalid: true
