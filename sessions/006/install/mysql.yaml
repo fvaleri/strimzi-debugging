@@ -53,7 +53,7 @@ data:
       email VARCHAR(255) NOT NULL UNIQUE
     );
 
-    CREATE USER IF NOT EXISTS 'debezium'@'%' IDENTIFIED WITH caching_sha2_password BY 'changeit';
+    CREATE USER IF NOT EXISTS 'debezium'@'%' IDENTIFIED WITH mysql_native_password BY 'changeit';
     GRANT SELECT, RELOAD, SHOW DATABASES, REPLICATION SLAVE, REPLICATION CLIENT ON *.* TO 'debezium'@'%';
     FLUSH PRIVILEGES;
 ---

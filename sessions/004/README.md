@@ -14,45 +14,18 @@ $ echo "$(minikube ip) bootstrap.my-cluster.f12i.io broker-10.my-cluster.f12i.io
   broker-11.my-cluster.f12i.io broker-12.my-cluster.f12i.io" | sudo tee -a /etc/hosts
 92.168.49.2 bootstrap.my-cluster.f12i.io broker-10.my-cluster.f12i.io broker-11.my-cluster.f12i.io broker-12.my-cluster.f12i.io
 
-$ kubectl patch k my-cluster --type merge -p '
-    spec:
-      kafka:
-        listeners:
-          - name: external
-            port: 9094
-            type: nodeport
-            tls: true
-            authentication:
-              type: tls
-            configuration:
-              bootstrap:
-                nodePort: 32100
-                alternativeNames:
-                  - bootstrap.my-cluster.f12i.io
-              brokers:
-                - broker: 10
-                  nodePort: 32110
-                  advertisedHost: broker-10.my-cluster.f12i.io
-                  advertisedPort: 32110
-                - broker: 11
-                  nodePort: 32111
-                  advertisedHost: broker-11.my-cluster.f12i.io
-                  advertisedPort: 32111
-                - broker: 12
-                  nodePort: 32112
-                  advertisedHost: broker-12.my-cluster.f12i.io
-                  advertisedPort: 32112'
+$ kubectl patch k my-cluster --type merge --patch-file sessions/004/install/tls-auth.yaml
 kafka.kafka.strimzi.io/my-cluster patched
 ```
 
-After the rolling update completes, we can check services and inspect the broker certificate.
+After the rolling update completes, we can check the services and inspect the broker certificate.
 
 ```sh
 $ kubectl get svc | grep NodePort
-my-cluster-broker-10                  NodePort    10.99.115.55     <none>        9094:32110/TCP               10m
-my-cluster-broker-11                  NodePort    10.107.241.11    <none>        9094:32111/TCP               10m
-my-cluster-broker-12                  NodePort    10.111.219.129   <none>        9094:32112/TCP               10m
-my-cluster-kafka-external-bootstrap   NodePort    10.99.109.8      <none>        9094:32100/TCP               10m
+my-cluster-broker-10                  NodePort    10.110.157.36    <none>        9094:32110/TCP               84s
+my-cluster-broker-11                  NodePort    10.108.78.230    <none>        9094:32111/TCP               84s
+my-cluster-broker-12                  NodePort    10.109.177.251   <none>        9094:32112/TCP               84s
+my-cluster-kafka-external-bootstrap   NodePort    10.97.31.189     <none>        9094:32100/TCP               84s
 
 $ openssl s_client -connect bootstrap.my-cluster.f12i.io:32100 -showcerts 2>/dev/null | grep "subject\|issuer"
 subject=O=io.strimzi, CN=my-cluster-kafka
@@ -62,7 +35,7 @@ issuer=O=io.strimzi, CN=cluster-ca v0
 Before running some tests, we also need to create a user for TLS authentication.
 
 ```sh
-$ kubectl create -f sessions/004/install.yaml
+$ kubectl create -f sessions/004/install/user.yaml
 kafkauser.kafka.strimzi.io/my-user created
 ```
 
@@ -86,14 +59,18 @@ ssl.keystore.certificate.chain=\${dir:/tmp/mtls:user.crt}
 ssl.keystore.key=\${dir:/tmp/mtls:user.key}
 EOF
 
-$ bin/kafka-console-producer.sh --bootstrap-server "$BOOTSTRAP_SERVERS" --topic my-topic \
-  --producer.config /tmp/mtls/client.properties
->hello
->world
->^C
+$ kubectl-kafka bin/kafka-topics.sh --version
+pod/kafka-tools created
+4.3.1
 
-$ bin/kafka-console-consumer.sh --bootstrap-server "$BOOTSTRAP_SERVERS" --topic my-topic \
-  --from-beginning --max-messages 2 --consumer.config /tmp/mtls/client.properties
+$ kubectl cp /tmp/mtls kafka-tools:/tmp/mtls
+
+$ echo -e "hello\nworld" | \
+  kubectl-kafka bin/kafka-console-producer.sh --bootstrap-server "$BOOTSTRAP_SERVERS" --topic my-topic \
+    --command-config /tmp/mtls/client.properties
+
+$ kubectl-kafka bin/kafka-console-consumer.sh --bootstrap-server "$BOOTSTRAP_SERVERS" --topic my-topic \
+  --from-beginning --max-messages 2 --command-config /tmp/mtls/client.properties
 hello
 world
 Processed a total of 2 messages
@@ -149,36 +126,7 @@ $ kubectl create secret generic ext-listener-crt \
   --from-file=/tmp/ctls/bundle.crt --from-file=/tmp/ctls/listener.key
 secret/ext-listener-crt created
   
-$ kubectl patch k my-cluster --type merge -p '
-  spec:
-    kafka:
-      listeners:
-        - name: external
-          port: 9094
-          type: nodeport
-          tls: true
-          configuration:
-            bootstrap:
-              nodePort: 32100
-              alternativeNames:
-                - bootstrap.my-cluster.f12i.io
-            brokers:
-              - broker: 10
-                nodePort: 32110
-                advertisedHost: broker-10.my-cluster.f12i.io
-                advertisedPort: 32110
-              - broker: 11
-                nodePort: 32111
-                advertisedHost: broker-11.my-cluster.f12i.io
-                advertisedPort: 32111
-              - broker: 12
-                nodePort: 32112
-                advertisedHost: broker-12.my-cluster.f12i.io
-                advertisedPort: 32112
-            brokerCertChainAndKey:
-              secretName: ext-listener-crt
-              certificate: bundle.crt
-              key: listener.key'
+$ kubectl patch k my-cluster --type merge --patch-file sessions/004/insatll/custom-tls.yaml
 kafka.kafka.strimzi.io/my-cluster patched
 ```
 
@@ -195,9 +143,13 @@ ssl.truststore.type=PEM
 ssl.truststore.certificates=\${dir:/tmp/ctls:bundle.crt}
 EOF
 
-$ bin/kafka-console-producer.sh --bootstrap-server bootstrap.my-cluster.f12i.io:32100 --topic my-topic \
-  --producer.config /tmp/ctls/client.properties
->hello
->world
->^C
+$ kubectl-kafka bin/kafka-topics.sh --version
+pod/kafka-tools created
+4.3.1
+
+$ kubectl cp /tmp/ctls kafka-tools:/tmp/ctls
+
+$ echo -e "hello\nworld" | \
+  kubectl-kafka bin/kafka-console-producer.sh --bootstrap-server bootstrap.my-cluster.f12i.io:32100 --topic my-topic \
+    --producer.config /tmp/ctls/client.properties
 ```
