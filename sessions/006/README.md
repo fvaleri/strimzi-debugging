@@ -45,7 +45,7 @@ initdb.sql: |
     email VARCHAR(255) NOT NULL UNIQUE
   );
 
-  CREATE USER IF NOT EXISTS 'debezium'@'%' IDENTIFIED WITH caching_sha2_password BY 'changeit';
+  CREATE USER IF NOT EXISTS 'debezium'@'%' IDENTIFIED WITH mysql_native_password BY 'changeit';
   GRANT SELECT, RELOAD, SHOW DATABASES, REPLICATION SLAVE, REPLICATION CLIENT ON *.* TO 'debezium'@'%';
   FLUSH PRIVILEGES;
 ```
@@ -54,7 +54,7 @@ Next, build a custom Kafka Connect image that includes the required connectors.
 
 ```sh
 # update versions as needed
-IMAGE="quay.io/strimzi/kafka:latest-kafka-4.1.1"
+IMAGE="quay.io/strimzi/kafka:latest-kafka-4.3.0"
 CONNECTORS=(
   "https://repo1.maven.org/maven2/io/debezium/debezium-connector-mysql/3.4.0.Final/debezium-connector-mysql-3.4.0.Final-plugin.tar.gz"
 )
@@ -143,9 +143,9 @@ The notification lag represents the time difference between these two timestamps
 ```sh
 $ kubectl-kafka bin/kafka-console-consumer.sh --bootstrap-server my-cluster-kafka-bootstrap:9092 \
   --topic my-mysql.testdb.customers --from-beginning --max-messages 3
-Struct{after=Struct{id=2,first_name=Max,last_name=Power,email=mpower@example.com},source=Struct{version=2.3.7.Final,connector=mysql,name=my-mysql,ts_ms=1730112871000,db=testdb,table=customers,server_id=111111,gtid=500bc4b7-951a-11ef-aae4-9e82de0bd73c:16,file=mysql-bin.000002,pos=2602,row=0,thread=61},op=c,ts_ms=1730112871209}
-Struct{after=Struct{id=1,first_name=John,last_name=Doe,email=jdoe@example.com},source=Struct{version=2.3.7.Final,connector=mysql,name=my-mysql,ts_ms=1730112871000,db=testdb,table=customers,server_id=111111,gtid=500bc4b7-951a-11ef-aae4-9e82de0bd73c:14,file=mysql-bin.000002,pos=1707,row=0,thread=61},op=c,ts_ms=1730112871199}
-Struct{before=Struct{id=1,first_name=John,last_name=Doe,email=jdoe@example.com},after=Struct{id=1,first_name=Jane,last_name=Doe,email=jdoe@example.com},source=Struct{version=2.3.7.Final,connector=mysql,name=my-mysql,ts_ms=1730112871000,db=testdb,table=customers,server_id=111111,gtid=500bc4b7-951a-11ef-aae4-9e82de0bd73c:15,file=mysql-bin.000002,pos=2120,row=0,thread=61},op=u,ts_ms=1730112871207}
+Struct{after=Struct{id=1,first_name=John,last_name=Doe,email=jdoe@example.com},source=Struct{version=3.4.0.Final,connector=mysql,name=my-mysql,ts_ms=1783689828514,db=testdb,ts_us=1783689828514710,ts_ns=1783689828514710000,table=customers,server_id=111111,gtid=edec7133-7c61-11f1-8417-92fc9ea02330:14,file=mysql-bin.000002,pos=1676,row=0,thread=60},op=c,ts_ms=1783689828524,ts_us=1783689828524959,ts_ns=1783689828524959491}
+Struct{before=Struct{id=1,first_name=John,last_name=Doe,email=jdoe@example.com},after=Struct{id=1,first_name=Jane,last_name=Doe,email=jdoe@example.com},source=Struct{version=3.4.0.Final,connector=mysql,name=my-mysql,ts_ms=1783689828532,db=testdb,ts_us=1783689828532917,ts_ns=1783689828532917000,table=customers,server_id=111111,gtid=edec7133-7c61-11f1-8417-92fc9ea02330:15,file=mysql-bin.000002,pos=2089,row=0,thread=60},op=u,ts_ms=1783689828541,ts_us=1783689828541841,ts_ns=1783689828541841782}
+Struct{after=Struct{id=2,first_name=Max,last_name=Power,email=mpower@example.com},source=Struct{version=3.4.0.Final,connector=mysql,name=my-mysql,ts_ms=1783689828550,db=testdb,ts_us=1783689828550730,ts_ns=1783689828550730000,table=customers,server_id=111111,gtid=edec7133-7c61-11f1-8417-92fc9ea02330:16,file=mysql-bin.000002,pos=2573,row=0,thread=60},op=c,ts_ms=1783689828555,ts_us=1783689828555136,ts_ns=1783689828555136146}
 Processed a total of 3 messages
 ```
 

@@ -4,7 +4,7 @@
 [[ $- != *i* ]] && echo "Usage: source init.sh" && exit 1
 
 export NAMESPACE="test"
-export STRIMZI_VERSION="1.0.1"
+export STRIMZI_VERSION="1.1.0"
 STRIMZI_FILE="/tmp/strimzi-$STRIMZI_VERSION.yaml"
 CLUSTER_NAME="my-cluster"
 
@@ -21,7 +21,9 @@ kubectl-kafka() {
   kubectl get po kafka-tools &>/dev/null || kubectl run kafka-tools -q --restart="Never" \
     --image="apache/kafka:latest" -- sh -c "trap : TERM INT; sleep infinity & wait"
   kubectl wait --for=condition=ready po kafka-tools &>/dev/null
-  kubectl exec kafka-tools -itq -- sh -c "/opt/kafka/$*"
+  # allocate TTY only when stdin is a terminal
+  local flags="-iq"; [[ -t 0 ]] && flags="-itq"
+  kubectl exec kafka-tools $flags -- sh -c "/opt/kafka/$*"
 }
 
 if ! kubectl cluster-info &>/dev/null; then

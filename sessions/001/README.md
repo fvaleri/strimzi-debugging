@@ -13,10 +13,8 @@ Installing Strimzi x.x.x
 ```
 
 Next, create a new Kafka cluster and test topic.
-The YAML files demonstrate how to declare the desired cluster state.
-
-In addition to the Kafka pods, the deployment includes an Entity Operator (EO) pod, which contains two namespaced operators: the Topic Operator (TO) and the User Operator (UO).
-These operators are designed to manage a single namespace and a single Kafka cluster.
+The operator also deploys the Entity Operator (EO), which contains the Topic Operator (TO) and the User Operator (UO).
+On the networking side, we have a normal service for the initial connection (bootstrap) and a headless service to give each broker pod a stable DNS name.
 
 ```sh
 $ kubectl create -f sessions/001/install.yaml
@@ -25,42 +23,31 @@ kafkanodepool.kafka.strimzi.io/broker created
 kafka.kafka.strimzi.io/my-cluster created
 kafkatopic.kafka.strimzi.io/my-topic created
 
-$ kubectl get sps,knp,k,kt,po
-NAME                                                  PODS   READY PODS   CURRENT PODS   AGE
-strimzipodset.core.strimzi.io/my-cluster-broker       3      3            3              35m
-strimzipodset.core.strimzi.io/my-cluster-controller   3      3            3              35m
+$ kubectl get po
+NAME                                          READY   STATUS    RESTARTS   AGE
+kafka-tools                                   1/1     Running   0          3m52s
+my-cluster-broker-10                          1/1     Running   0          5m21s
+my-cluster-broker-11                          1/1     Running   0          5m21s
+my-cluster-broker-12                          1/1     Running   0          5m20s
+my-cluster-controller-0                       1/1     Running   0          5m20s
+my-cluster-controller-1                       1/1     Running   0          5m20s
+my-cluster-controller-2                       1/1     Running   0          5m20s
+my-cluster-entity-operator-8577d46cbc-kxzvf   2/2     Running   0          4m53s
+strimzi-cluster-operator-687687c99b-24p78     1/1     Running   0          7m14s
 
-NAME                                        DESIRED REPLICAS   ROLES            NODEIDS
-kafkanodepool.kafka.strimzi.io/broker       3                  ["broker"]       [10,11,12]
-kafkanodepool.kafka.strimzi.io/controller   3                  ["controller"]   [0,1,2]
-
-NAME                                READY   WARNINGS   KAFKA VERSION   METADATA VERSION
-kafka.kafka.strimzi.io/my-cluster   True               4.2.0           4.2-IV1
-
-NAME                                   CLUSTER      PARTITIONS   REPLICATION FACTOR   READY
-kafkatopic.kafka.strimzi.io/my-topic   my-cluster   3            3                    True
-
-NAME                                             READY   STATUS    RESTARTS   AGE
-pod/my-cluster-broker-10                         1/1     Running   0          35m
-pod/my-cluster-broker-11                         1/1     Running   0          35m
-pod/my-cluster-broker-12                         1/1     Running   0          35m
-pod/my-cluster-controller-0                      1/1     Running   0          35m
-pod/my-cluster-controller-1                      1/1     Running   0          35m
-pod/my-cluster-controller-2                      1/1     Running   0          35m
-pod/my-cluster-entity-operator-bdd594cf7-54jcs   2/2     Running   0          34m
-pod/strimzi-cluster-operator-644f44d6d8-585v5    1/1     Running   0          24m
+$ kubectl get svc
+NAME                         TYPE        CLUSTER-IP      EXTERNAL-IP   PORT(S)                                        AGE
+my-cluster-kafka-bootstrap   ClusterIP   10.103.251.91   <none>        9091/TCP,9092/TCP,9093/TCP                     5m48s
+my-cluster-kafka-brokers     ClusterIP   None            <none>        9090/TCP,9091/TCP,8443/TCP,9092/TCP,9093/TCP   5m48s
 ```
 
-Once the Kafka cluster is ready, we can try to send and receive messages.
-The operator creates a normal service for the initial connection (bootstrap) and a headless service to give each broker pod a stable DNS name.
+When the Kafka cluster is ready, we can try to send and receive some messages.
 
 ```sh
-$ kubectl-kafka bin/kafka-console-producer.sh --bootstrap-server my-cluster-kafka-bootstrap:9092 --topic my-topic \
-  --reader-property parse.key=true --reader-property key.separator="#"
->32947#hello
->24910#kafka
->45237#world
->^C
+$ echo -e "32947#hello\n24910#kafka\n45237#world" | \
+  kubectl-kafka bin/kafka-console-producer.sh --bootstrap-server my-cluster-kafka-bootstrap:9092 --topic my-topic \
+    --reader-property parse.key=true --reader-property key.separator="#"
+pod/kafka-tools created
 
 $ kubectl-kafka bin/kafka-console-consumer.sh --bootstrap-server my-cluster-kafka-bootstrap:9092 --topic my-topic \
   --group my-group --from-beginning --max-messages 3 --formatter-property print.partition=true --formatter-property print.key=true
@@ -70,7 +57,7 @@ Partition:2	45237	world
 Processed a total of 3 messages
 ```
 
-Now that message production and consumption are working, let's explore where the messages are actually stored.
+Now let's see where the messages are actually stored.
 The broker property `log.dirs` specifies the location where topic partitions are stored on disk.
 With 3 partitions, you'll find exactly 3 corresponding directories.
 
@@ -113,29 +100,21 @@ baseOffset: 0 lastOffset: 0 count: 1 baseSequence: 0 lastSequence: 0 producerId:
 The consumer group should have committed its offsets to the `__consumer_offsets` internal topic.
 Since this topic has 50 partitions by default, we need to determine which partition was used for your consumer group.
 We can use the same hashing algorithm that Kafka employs to map a `group.id` to its coordinating partition.
-The `kafka-cp` function, defined in the `init.sh` script, implements this algorithm.
-
-```sh
-$ get-cp my-group
-12
-```
-
-Knowing that the consumer group commit was sent to `__consumer_offsets-12`, let's examine this partition.
-The values are encoded for performance, so we must use the `--offsets-decoder` option to read them.
-
-This partition contains various metadata, but we're particularly interested in records with the `offset_commit` key.
-There's a batch from our consumer group containing 3 records, one for each input topic partition.
-As expected, the consumer group committed offset 1 for partition 0, offset 2 for partition 2, and offset 0 for partition 1 (which didn't receive any messages).
+The `get-cp` function, defined in the `init.sh` script, implements this algorithm.
 
 ```sh
 $ kubectl exec my-cluster-broker-10 -- bin/kafka-dump-log.sh --deep-iteration --print-data-log --offsets-decoder \
-  --files /var/lib/kafka/data/kafka-log10/__consumer_offsets-12/00000000000000000000.log
+  --files /var/lib/kafka/data/kafka-log10/__consumer_offsets-"$(get-cp my-group)"/00000000000000000000.log
 Dumping /var/lib/kafka/data/kafka-log10/__consumer_offsets-12/00000000000000000000.log
 Log starting offset: 0
 ...
-baseOffset: 1 lastOffset: 3 count: 3 baseSequence: 0 lastSequence: 2 producerId: -1 producerEpoch: -1 partitionLeaderEpoch: 0 isTransactional: false isControl: false deleteHorizonMs: OptionalLong.empty position: 344 CreateTime: 1742735956644 size: 232 magic: 2 compresscodec: none crc: 4034662502 isvalid: true
-| offset: 1 CreateTime: 1742735956644 keySize: 26 valueSize: 24 sequence: 0 headerKeys: [] key: {"type":"1","data":{"group":"my-group","topic":"my-topic","partition":0}} payload: {"version":"3","data":{"offset":1,"leaderEpoch":0,"metadata":"","commitTimestamp":1742735956641}}
-| offset: 2 CreateTime: 1742735956644 keySize: 26 valueSize: 24 sequence: 1 headerKeys: [] key: {"type":"1","data":{"group":"my-group","topic":"my-topic","partition":1}} payload: {"version":"3","data":{"offset":0,"leaderEpoch":-1,"metadata":"","commitTimestamp":1742735956641}}
-| offset: 3 CreateTime: 1742735956644 keySize: 26 valueSize: 24 sequence: 2 headerKeys: [] key: {"type":"1","data":{"group":"my-group","topic":"my-topic","partition":2}} payload: {"version":"3","data":{"offset":2,"leaderEpoch":0,"metadata":"","commitTimestamp":1742735956641}}
+baseOffset: 2 lastOffset: 4 count: 3 baseSequence: 0 lastSequence: 2 producerId: -1 producerEpoch: -1 partitionLeaderEpoch: 0 isTransactional: false isControl: false deleteHorizonMs: OptionalLong.empty position: 447 CreateTime: 1783681020912 size: 289 magic: 2 compresscodec: none crc: 1483451436 isvalid: true
+| offset: 2 CreateTime: 1783681020912 keySize: 26 valueSize: 42 sequence: 0 headerKeys: [] key: {"type":"1","data":{"group":"my-group","topic":"my-topic","partition":0}} payload: {"version":"4","data":{"offset":1,"leaderEpoch":0,"metadata":"","commitTimestamp":1783681020907,"topicId":"xveln3JnT2G8Y6wKbV5WwA"}}
+| offset: 3 CreateTime: 1783681020912 keySize: 26 valueSize: 42 sequence: 1 headerKeys: [] key: {"type":"1","data":{"group":"my-group","topic":"my-topic","partition":1}} payload: {"version":"4","data":{"offset":0,"leaderEpoch":-1,"metadata":"","commitTimestamp":1783681020907,"topicId":"xveln3JnT2G8Y6wKbV5WwA"}}
+| offset: 4 CreateTime: 1783681020912 keySize: 26 valueSize: 42 sequence: 2 headerKeys: [] key: {"type":"1","data":{"group":"my-group","topic":"my-topic","partition":2}} payload: {"version":"4","data":{"offset":2,"leaderEpoch":0,"metadata":"","commitTimestamp":1783681020907,"topicId":"xveln3JnT2G8Y6wKbV5WwA"}}
 ...
 ```
+
+This partition contains various metadata, but we're particularly interested in records with the `offset_commit` key.
+There's a batch from our consumer group containing 3 records, one for each input topic partition.
+As expected, the consumer group committed offset 1 for partition 0, offset 2 for partition 2, and offset 0 for partition 1 as it didn't receive any messages.

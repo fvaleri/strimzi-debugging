@@ -14,9 +14,7 @@ statefulset.apps/kafka-txn created
 Once the application is running, send a sentence to the input topic and verify the result from the output topic.
 
 ```sh
-$ kubectl-kafka bin/kafka-console-producer.sh --bootstrap-server my-cluster-kafka-bootstrap:9092 --topic input-topic
->this is a test
->^C
+$ echo "this is a test" | kubectl-kafka bin/kafka-console-producer.sh --bootstrap-server my-cluster-kafka-bootstrap:9092 --topic input-topic
 
 $ kubectl-kafka bin/kafka-console-consumer.sh --bootstrap-server my-cluster-kafka-bootstrap:9092 --topic output-topic --from-beginning --max-messages 1
 tset a si siht

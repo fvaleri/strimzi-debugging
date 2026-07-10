@@ -1,0 +1,27 @@
+spec:
+  kafka:
+    listeners:
+      - name: external
+        port: 9094
+        type: nodeport
+        tls: true
+        authentication:
+          type: tls
+        configuration:
+          bootstrap:
+            nodePort: 32100
+            alternativeNames:
+              - bootstrap.my-cluster.f12i.io
+          brokers:
+            - broker: 10
+              nodePort: 32110
+              advertisedHost: broker-10.my-cluster.f12i.io
+              advertisedPort: 32110
+            - broker: 11
+              nodePort: 32111
+              advertisedHost: broker-11.my-cluster.f12i.io
+              advertisedPort: 32111
+            - broker: 12
+              nodePort: 32112
+              advertisedHost: broker-12.my-cluster.f12i.io
+              advertisedPort: 32112
